@@ -649,6 +649,21 @@ const run = async () => {
     const n = parseInt(budgetText, 10);
     return { plusCount: plus.length, remaining: n, allDisabled: Array.from(document.querySelectorAll('.attr-row .icon-btn')).filter((b) => b.textContent === "+").every((b) => b.disabled) };
   });
+  // The wizard nav is sticky; while stuck it must not paint over the step content behind it.
+  const stickyOverlap = await page.evaluate(() => {
+    const nav = document.querySelector(".wizard-nav");
+    const body = document.querySelector(".wizard-body");
+    if (!nav || !body) return null;
+    const n = nav.getBoundingClientRect();
+    let worst = 0;
+    for (const ch of body.children) {
+      const r = ch.getBoundingClientRect();
+      if (r.bottom > n.top && r.top < n.bottom) worst = Math.max(worst, Math.round(r.bottom - n.top));
+    }
+    return worst;
+  });
+  ok("the sticky wizard nav does not cover step content", stickyOverlap === 0, `${stickyOverlap}px overlap`);
+
   ok("attribute points cannot be overspent", spend.remaining >= 0, `remaining ${spend.remaining}`);
   ok("every + is disabled once the budget is spent", spend.allDisabled);
   await page.locator(".wizard-step").nth(3).click();               // powers
@@ -676,8 +691,28 @@ const run = async () => {
     for (const tab of tabs) {
       await page.evaluate((t) => { location.hash = `#/${t}`; }, tab);
       await page.waitForTimeout(120);
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      ok(`no horizontal overflow at ${width}px on ${tab}`, overflow <= 0, `${overflow}px`);
+      // `body { overflow-x: hidden }` hides document-level overflow, so children can spill out of
+      // their card and never register. Measure each child against its own container instead.
+      const spill = await page.evaluate(() => {
+        const scrolls = (n) => { const o = getComputedStyle(n).overflowX; return o === "auto" || o === "scroll"; };
+        const bad = [];
+        for (const box of document.querySelectorAll("#screen .card, #screen .vitals, #screen .wizard-nav, .res-bar")) {
+          if (scrolls(box)) continue;
+          const br = box.getBoundingClientRect();
+          for (const ch of box.querySelectorAll("*")) {
+            const r = ch.getBoundingClientRect();
+            if (!r.width) continue;
+            let anc = ch.parentElement, inScroll = false;
+            while (anc && anc !== box) { if (scrolls(anc)) { inScroll = true; break; } anc = anc.parentElement; }
+            if (inScroll) continue;
+            const over = Math.round(r.right - br.right);
+            if (over > 1) bad.push(`${(ch.className || ch.tagName).toString().split(" ")[0]} +${over}px`);
+          }
+        }
+        return { doc: document.documentElement.scrollWidth - document.documentElement.clientWidth, bad: [...new Set(bad)].slice(0, 6) };
+      });
+      ok(`no horizontal overflow at ${width}px on ${tab}`, spill.doc <= 0, `${spill.doc}px`);
+      ok(`nothing spills out of its panel at ${width}px on ${tab}`, spill.bad.length === 0, spill.bad.join(", "));
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });

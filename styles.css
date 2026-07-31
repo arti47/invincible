@@ -211,12 +211,14 @@ textarea.input { min-height: 90px; }
 .kv .k { color: var(--muted); min-width: 7.5rem; }
 .kv .v { font-weight: 600; }
 
-.vitals { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
-.vital { border: 2px solid var(--line); border-radius: 8px; padding: .5rem; text-align: center; }
+.vitals { display: grid; grid-template-columns: 1fr; gap: .6rem; }
+/* Two steppers side by side need ~193px each; only widen once that actually fits. */
+@media (min-width: 480px) { .vitals { grid-template-columns: 1fr 1fr; } }
+.vital { min-width: 0; border: 2px solid var(--line); border-radius: 8px; padding: .5rem; text-align: center; }
 .vital.health { background: color-mix(in srgb, var(--danger) 12%, var(--panel)); }
 .vital.resolve { background: color-mix(in srgb, var(--accent-2) 12%, var(--panel)); }
 .vital-label { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.vital-value { font: inherit; font-size: 1.3rem; font-weight: 800; background: none; border: 0; color: inherit; cursor: pointer; min-width: 4.5rem; }
+.vital-value { font: inherit; font-size: 1.3rem; font-weight: 800; background: none; border: 0; color: inherit; cursor: pointer; min-width: 3.5rem; }
 .stepper { display: flex; align-items: center; justify-content: center; gap: .4rem; }
 
 .attr-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
@@ -284,7 +286,8 @@ textarea.input { min-height: 90px; }
 .wizard-step.current { background: var(--accent); font-weight: 700; }
 .wizard-step.done { opacity: .82; }
 .wizard-body {
-  margin: .8rem 0; padding: .9rem;
+  /* The nav below is sticky; while stuck it paints over the tail of this box, so reserve room. */
+  margin: .8rem 0; padding: .9rem .9rem 4.75rem;
   background: var(--panel); border: 3px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
