@@ -117,7 +117,7 @@ const run = async () => {
   ok("69 powers", data.powers === 69, String(data.powers));
   ok("51 talents", data.talents === 51, String(data.talents));
   ok("15 drawbacks", data.drawbacks === 15, String(data.drawbacks));
-  ok("14 archetypes (2 are a recorded source gap)", data.archetypes === 14, String(data.archetypes));
+  ok("16 archetypes (source gap closed)", data.archetypes === 16, String(data.archetypes));
   ok("22 occupations", data.occupations === 22, String(data.occupations));
   ok("36 power sources (D66)", data.sources === 36, String(data.sources));
   ok("12 critical injury rows", data.crits === 12, String(data.crits));

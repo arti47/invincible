@@ -83,7 +83,7 @@ function stepRank() {
 
 function stepArchetype() {
   const wrap = el("div", {});
-  wrap.append(el("p", { class: "lede", text: "An archetype is an optional template you customise freely. The rulebook lists sixteen; the supplied text contains fourteen, so two are missing here — building from scratch is always legal." }));
+  wrap.append(el("p", { class: "lede", text: "An archetype is an optional template you customise freely. All sixteen from the rulebook are here — building from scratch is always legal too." }));
   wrap.append(el("button", {
     class: `card selectable ${!draft.identity.archetype ? "selected" : ""}`,
     onclick: () => { draft.identity.archetype = ""; render(); },

@@ -244,7 +244,6 @@ export function renderSettings(mount) {
     el("ul", {}, ...D.HOUSE_AIDS.map((h) => el("li", { text: h })))));
   card.append(el("details", {}, el("summary", { text: "Known source gaps" }),
     el("ul", {},
-      el("li", { text: "The rulebook lists sixteen archetypes; the supplied text contains fourteen. The two missing ones are deliberately not invented." }),
       el("li", { text: "Four vehicle Durability values in the supplied table are implausible (0 or 1) and are shown as supplied, flagged with ⚠." }),
       el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
       el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));

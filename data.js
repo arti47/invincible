@@ -787,13 +787,38 @@ export const DRAWBACKS = [
 ];
 
 /* ------------------------------------------------------------------ Archetypes (Ch.2)
-   The book states sixteen; the supplied text contains fourteen. The two absent archetypes are a
-   recorded source gap (CLAUDE.md ruling R1) and are deliberately NOT invented.
+   All sixteen are now present. The Beacon and The Bruiser were absent from the original chapter
+   extract and were supplied later from the book (CLAUDE.md ruling R1); the source gap is closed
+   and nothing was invented to fill it.
    Suggested attributes are tuned for Global Guardian and are re-pointed for other ranks. */
 
-export const ARCHETYPE_SOURCE_GAP = 2;
+export const ARCHETYPE_SOURCE_GAP = 0;
 
 export const ARCHETYPES = [
+  { name: "The Beacon", role: "Leader",
+    blurb: "The heart of the team. You may doubt you deserve their faith, but courage is the power you spread furthest.",
+    attributes: { fighting: 6, agility: 5, strength: 6, reason: 4, intuition: 4, presence: 9 },
+    powers: ["DEFIANCE", "GUIDANCE", "PROTECTION"],
+    sources: ["Experimental Serum", "Specialized Gear", "Military Training"],
+    talents: ["Commander", "Compelling", "Determined", "Inspiration", "Leader", "Second Wind"],
+    drawbacks: ["Hard Times", "Gear Dependent", "Power Loss", "Reliant", "Super Suit", "Targeted"],
+    occupations: ["Adventurer", "Law Enforcer", "Soldier"],
+    personality: ["Dedicated", "Rigid", "Selfless", "Patriotic", "Humble", "Patient"],
+    drives: ["Altruism. You do good whatever it costs you.", "Idealism. You stand for a cause worth dying for.", "Mentorship. You pass on what being a hero taught you."],
+    flaws: ["Foolhardy. You are always first into danger.", "Insecure. You never quite believe in yourself.", "Overbearing. You always tell everyone else what to do."],
+    names: ["Preamble", "Mister Thrilling", "Standout"] },
+  { name: "The Bruiser", role: "Brawn",
+    blurb: "A powerhouse who settles things up close. They can hurt you and you still won't stop — collateral damage is the argument you keep losing.",
+    attributes: { fighting: 8, agility: 4, strength: 10, reason: 2, intuition: 4, presence: 4 },
+    powers: ["Major LEAPING", "Major PROTECTION"],
+    sources: ["Mutant Physiology", "Quantum-Infused Bones", "Mythic Boon"],
+    talents: ["Bigger They Are", "Charger", "Durable", "Hard Hitter", "Indomitable", "Mighty"],
+    drawbacks: ["Alternate Form", "Bloodlust", "Frightful", "Obsessed", "Phobic", "Reliant"],
+    occupations: ["Athlete", "Blue Collar", "Outsider"],
+    personality: ["Hardworking", "Funny", "Resourceful", "Stubborn", "Practical", "Loyal"],
+    drives: ["Protection. You shield those who cannot shield themselves.", "Friendship. You are looking for one true friend.", "Tenacity. You let nothing in your path stop you."],
+    flaws: ["Uncouth. Your manners offend everyone around you.", "Destructive. You want to smash things even when you shouldn't.", "Gluttonous. You never pass up something good to eat."],
+    names: ["Heavyset", "Molly Wop", "Cornerstone"] },
   { name: "The Gadgeteer", role: "Controller",
     blurb: "Cutting-edge tech is your best weapon against evil — hover boots, nano-drones and charges they never saw you set.",
     attributes: { fighting: 4, agility: 5, strength: 3, reason: 8, intuition: 4, presence: 4 },

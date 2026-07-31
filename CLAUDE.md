@@ -36,7 +36,7 @@ Answered by defaults per template §4.2 (user directed autonomous execution; def
 
 | # | Ambiguity | Ruling |
 |---|---|---|
-| R1 | Ch.2 says "sixteen core archetypes (pages 37–44)" but the supplied text contains **14**. | Ship the 14 supplied. Two archetypes are recorded as a **source gap** (ledger T-14 stays unticked-with-note); the wizard also allows "no archetype / from scratch", which the book explicitly permits, so creation is never blocked. **Never invent the missing two.** |
+| R1 | Ch.2 says "sixteen core archetypes (pages 37–44)" but the original extract contained **14**. | **Closed 2026-07-31.** The two absent archetypes (**The Beacon**, **The Bruiser**) were later supplied from the book and are now extracted; all 16 ship. Neither was invented while the gap was open — the wizard's "no archetype / from scratch" path covered it, and still does. |
 | R2 | Chapter 8 characters are setting characters, but Ch.5 explicitly sanctions playing established characters (Atom Eve, Rex Splode, Bulletproof). | Include Ch.8 **stat blocks only** (mechanics + a one-line role descriptor, paraphrased). No plot biographies, no setting prose. Hero-side entries double as **pregens** (§3.19); villain-side entries populate the adversary compendium. |
 | R3 | Ch.5 (Invincible Universe) and Ch.7 story arcs / city descriptions are setting & adventure content. | **Excluded** per §12. Ch.7's *rules* content (hero ranks, team, base upgrades, base events, random-threat generator tables, social hooks) **is** included — those are mechanical generators. |
 | R4 | The game has no skill list. | §3.6 is the **talent list** (the proficiency layer). Recorded as a genuine structural difference, not forced into a skill shape. |
@@ -175,7 +175,7 @@ Wisdom, Investigator, Analysis).
 relationship) → 10 Personality (D6 ×2) → 11 Drive → 12 Flaw → 13 Names (real + hero) →
 14 Team, base, second key relationship.
 **8 roles** (no mechanical effect, guides build): Blaster, Brains, Brawn, Controller, Defender,
-Leader, Striker, Wildcard. **14 archetypes supplied of 16** (ruling R1), each publishing role,
+Leader, Striker, Wildcard. **All 16 archetypes** (ruling R1, gap closed), each publishing role,
 suggested attributes, suggested powers, 3 power sources, 6 hero talents, 6 drawbacks, 3
 occupations, 6 personality traits, 3 drives, 3 flaws, 3 hero names.
 **22 occupations**, each with 3 occupation talents (D3), a Resources score, 3 key relationships
@@ -570,7 +570,7 @@ box in the same change** and append a changelog row; replace estimated counts wi
 - [x] T-11 Power-source D66 table (36) (Ch.3)
 - [x] T-12 Powers ×69: type, effect, levels, boosts, limits (Ch.3)
 - [x] T-13 Talents ×51 (real count) + Knowledgeable subjects D6 (Ch.3)
-- [~] T-14 Archetypes — **14 of a stated 16 supplied** (source gap, ruling R1) (Ch.2)
+- [x] T-14 Archetypes ×16 (real count — The Beacon and The Bruiser added when supplied; ruling R1) (Ch.2)
 - [x] T-15 Drawbacks ×15 (real count) (Ch.3)
 - [x] T-16 Dice conventions: D3 / 2D6 / D66, push, help, opposed (Ch.4)
 - [x] T-17 Combat: actions, movement, altitude, falling, buildings (Ch.4)
@@ -615,7 +615,8 @@ box in the same change** and append a changelog row; replace estimated counts wi
 - [x] T-75 Encounter behaviour + threat tables, escape modifiers, movement modes (Ch.9)
 
 ### Recorded source gaps (never invented)
-- 2 of 16 archetypes absent from the supplied text (T-14).
+- ~~2 of 16 archetypes absent from the supplied text (T-14).~~ **Closed 2026-07-31** — The Beacon
+  and The Bruiser supplied from the book and extracted.
 - Starter-set pregens (Metro Mayhem) not supplied.
 - Ch.9 crisis-timer proximity labels partially truncated in the supplied table.
 - Ch.7 social-hooks D66 rows 25–41 absent.
@@ -675,3 +676,4 @@ user's own book — see README for the licensing note.
 | 2026-07-31 | Fixed a boot-blocking syntax error in `wizard.js` (unbalanced parentheses in `render()` — the `host.append(` call was closed one paren short). | Root cause: the wizard nav tree closed the element chain but not the append call, so the module never parsed and the app never reached `data-ready`. | Headless boot now reaches `data-ready`; a wizard-UI walkthrough was added to the harness so a broken wizard fails the suite. | v1 |
 | 2026-07-31 | Regression harness final state: **120 checks, 0 failures**, zero console errors across every tab at 360px and 390px. | §10.4/§10.5. | `npm test` | v1 |
 | 2026-07-31 | Committed `package-lock.json` (dev-only) and listed it in the §5 file table. No app file changed. | A fresh clone had no lockfile, so `npm test` resolved `playwright-core` unpinned; pinning it keeps the suite reproducible. | `npm install` then `npm test` — 120 passed, 0 failed. | — (no shipped file changed) |
+| 2026-07-31 | **Closed the archetype source gap**: added The Beacon (Leader) and The Bruiser (Brawn) from newly supplied Ch.2 text — 14 → 16. Ruling R1 rewritten as closed, ledger T-14 ticked, §3.7 count corrected, gap struck from §9, `ARCHETYPE_SOURCE_GAP` 2 → 0, wizard and Settings gap copy updated, harness assertion 14 → 16. | The missing pages were supplied; the ledger rule requires estimated/partial counts to yield to real ones. Nothing was invented while the gap was open. | `npm test` — 120 passed, 0 failed, including "16 archetypes" and the cross-reference checks that every archetype talent/power/drawback/occupation resolves. | v2 |
