@@ -1,0 +1,14 @@
+{
+  "name": "Invincible Player",
+  "short_name": "Invincible",
+  "description": "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f1e4",
+  "theme_color": "#f2c200",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

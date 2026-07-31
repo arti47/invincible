@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2c200">
+  <meta name="description" content="Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying.">
+  <title>Invincible Player</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#screen">Skip to content</a>
+
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-name">Invincible <em>Player</em></span>
+    </div>
+    <button id="theme-toggle" class="icon-btn" aria-label="Change theme">◐</button>
+  </header>
+
+  <div id="resource-header" class="resource-header" hidden></div>
+
+  <main id="screen" class="screen" tabindex="-1"></main>
+
+  <nav id="bottom-nav" class="bottom-nav" aria-label="Main"></nav>
+
+  <div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

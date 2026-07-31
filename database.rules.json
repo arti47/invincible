@@ -1,0 +1,38 @@
+{
+  "rules": {
+    "campaigns": {
+      "$campaignId": {
+        ".read": "auth != null && data.child('members').child(auth.uid).exists()",
+        "meta": {
+          ".write": "auth != null && (!data.exists() || data.parent().child('members').child(auth.uid).child('role').val() === 'gm')"
+        },
+        "members": {
+          "$uid": {
+            ".write": "auth != null && ($uid === auth.uid || data.parent().parent().child('members').child(auth.uid).child('role').val() === 'gm')"
+          }
+        },
+        "team": {
+          ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()"
+        },
+        "combat": {
+          ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()"
+        },
+        "tasks": {
+          ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()"
+        },
+        "rollLog": {
+          ".write": "auth != null && data.parent().child('members').child(auth.uid).exists()"
+        },
+        "broadcast": {
+          ".write": "auth != null && data.parent().child('members').child(auth.uid).child('role').val() === 'gm'"
+        }
+      }
+    },
+    "characters": {
+      "$characterId": {
+        ".read": "auth != null && (data.child('owner').val() === auth.uid || root.child('campaigns').child(data.child('campaignId').val()).child('members').child(auth.uid).child('role').val() === 'gm')",
+        ".write": "auth != null && (!data.exists() || data.child('owner').val() === auth.uid || root.child('campaigns').child(data.child('campaignId').val()).child('members').child(auth.uid).child('role').val() === 'gm')"
+      }
+    }
+  }
+}
