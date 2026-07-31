@@ -674,6 +674,35 @@ const run = async () => {
   });
   ok("viewport blocks pinch zoom for installed PWAs", zoom.userScalable && zoom.maxScale);
 
+  // Contrast: check the real computed tokens in both themes, and that the halftone never
+  // inherits the text colour (which made dark mode paint near-white dots over everything).
+  for (const theme of ["light", "dark"]) {
+    const c = await page.evaluate((t) => {
+      document.documentElement.setAttribute("data-theme", t);
+      const cs = getComputedStyle(document.documentElement);
+      const v = (n) => cs.getPropertyValue(n).trim();
+      const lin = (x) => { x /= 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+      const L = (hex) => {
+        const h = hex.replace("#", "");
+        const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      };
+      const ratio = (a, b) => { const [x, y] = [L(a), L(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      const panel = v("--panel");
+      return {
+        ink: ratio(v("--ink"), panel),
+        muted: ratio(v("--muted"), panel),
+        line: ratio(v("--line"), panel),
+        dotUsesCurrentColor: getComputedStyle(document.body).backgroundImage.includes("currentcolor"),
+      };
+    }, theme);
+    ok(`${theme}: body text clears AAA on panels`, c.ink >= 7, c.ink.toFixed(2));
+    ok(`${theme}: muted text clears AA`, c.muted >= 4.5, c.muted.toFixed(2));
+    ok(`${theme}: borders clear the 3:1 UI threshold`, c.line >= 3, c.line.toFixed(2));
+    ok(`${theme}: halftone does not inherit the text colour`, c.dotUsesCurrentColor === false);
+  }
+  await page.evaluate(() => document.documentElement.removeAttribute("data-theme"));
+
   const a11y = await page.evaluate(() => {
     const iconButtons = Array.from(document.querySelectorAll("button")).filter((b) => !b.textContent.trim());
     return {
