@@ -602,16 +602,38 @@ const run = async () => {
   await page.waitForTimeout(120);
   await page.locator(".wizard-step").nth(1).click();               // archetype step
   await page.waitForTimeout(120);
-  await page.locator(".card.selectable").nth(1).click();           // pick the first archetype
+  ok("archetype is a dropdown, not a card grid", (await page.locator("select.select").count()) >= 2);
+  await page.locator("select.select").first().selectOption({ index: 1 });   // first real archetype
   await page.waitForTimeout(150);
   const afterArchetype = await page.evaluate(() => ({
     powers: document.querySelectorAll(".chosen").length,
     budget: document.querySelector(".budget")?.textContent || "",
+    archetype: document.querySelector("select.select")?.value || "",
   }));
   await page.locator(".wizard-step").nth(2).click();               // attributes
   await page.waitForTimeout(120);
   ok("archetype application fills powers and the budget line", afterArchetype.budget.includes("power slots"));
+  ok("selecting an archetype records it", !!afterArchetype.archetype, afterArchetype.archetype);
   ok("attribute steppers render", (await page.locator(".attr-row").count()) === 6);
+
+  // Attribute points can never be overspent: + is disabled once the budget is gone.
+  const spend = await page.evaluate(async () => {
+    const plus = Array.from(document.querySelectorAll('.attr-row .icon-btn'))
+      .filter((b) => b.textContent === "+");
+    let guard = 200;
+    while (guard-- > 0) {
+      const live = Array.from(document.querySelectorAll('.attr-row .icon-btn')).filter((b) => b.textContent === "+" && !b.disabled);
+      if (!live.length) break;
+      live[0].click();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const Derived = await import("/src/derived.js");
+    const budgetText = document.querySelector(".budget")?.textContent || "";
+    const n = parseInt(budgetText, 10);
+    return { plusCount: plus.length, remaining: n, allDisabled: Array.from(document.querySelectorAll('.attr-row .icon-btn')).filter((b) => b.textContent === "+").every((b) => b.disabled) };
+  });
+  ok("attribute points cannot be overspent", spend.remaining >= 0, `remaining ${spend.remaining}`);
+  ok("every + is disabled once the budget is spent", spend.allDisabled);
   await page.locator(".wizard-step").nth(3).click();               // powers
   await page.waitForTimeout(150);
   ok("power picker lists powers", (await page.locator(".power-option").count()) > 20);

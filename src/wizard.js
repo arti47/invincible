@@ -1,7 +1,7 @@
 // wizard.js — character creation (14 steps, Ch.2), the team wizard (Ch.7) and pregen instantiation.
 
 import { el, clear, d3, d6, d66, clamp, uid, deepClone } from "./core.js";
-import { modal, showToast, confirmModal, chooseModal, announce } from "./ui.js";
+import { modal, showToast, confirmModal, chooseModal, announce, selectField } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -84,31 +84,30 @@ function stepRank() {
 function stepArchetype() {
   const wrap = el("div", {});
   wrap.append(el("p", { class: "lede", text: "An archetype is an optional template you customise freely. All sixteen from the rulebook are here — building from scratch is always legal too." }));
-  wrap.append(el("button", {
-    class: `card selectable ${!draft.identity.archetype ? "selected" : ""}`,
-    onclick: () => { draft.identity.archetype = ""; render(); },
-  }, el("h3", { text: "No archetype — build from scratch" }), el("p", { text: "Choose your role, attributes, powers and talents freely." })));
+  wrap.append(selectField("Archetype",
+    [{ value: "", label: "No archetype — build from scratch" },
+      ...D.ARCHETYPES.map((a) => ({ value: a.name, label: a.name, hint: a.role }))],
+    draft.identity.archetype,
+    (v) => {
+      if (!v) { draft.identity.archetype = ""; render(); return; }
+      const a = R.findArchetype(v);
+      if (a) applyArchetype(a);
+      render();
+    }));
 
-  for (const a of D.ARCHETYPES) {
-    wrap.append(el("button", {
-      class: `card selectable ${draft.identity.archetype === a.name ? "selected" : ""}`,
-      onclick: () => { applyArchetype(a); render(); },
-    },
-      el("h3", { text: a.name }),
-      el("p", { class: "muted", text: `${a.role} · ${a.blurb}` }),
-      el("p", { class: "stat-line", text: `Suggested powers: ${a.powers.join(", ")}` })));
+  const chosen = R.findArchetype(draft.identity.archetype);
+  if (chosen) {
+    wrap.append(el("div", { class: "card tight" },
+      el("p", { text: chosen.blurb }),
+      el("p", { class: "stat-line", text: `Role: ${chosen.role}` }),
+      el("p", { class: "stat-line", text: `Suggested powers: ${chosen.powers.join(", ")}` }),
+      el("p", { class: "muted small", text: "Selecting an archetype fills your attributes and powers with its suggestions — change any of them freely in the next steps." })));
+  } else {
+    wrap.append(el("p", { class: "muted small", text: "Building from scratch: choose your role, attributes, powers and talents freely." }));
   }
 
-  wrap.append(el("h3", { class: "section", text: "Role" }));
-  const roleRow = el("div", { class: "chiprow" });
-  for (const role of D.ROLES) {
-    roleRow.append(el("button", {
-      class: `chip selectable ${draft.identity.role === role.name ? "selected" : ""}`,
-      title: role.desc,
-      onclick: () => { draft.identity.role = role.name; render(); },
-    }, role.name));
-  }
-  wrap.append(roleRow);
+  wrap.append(selectField("Role", D.ROLES.map((r) => ({ value: r.name, label: r.name, hint: r.desc })),
+    draft.identity.role, (v) => { draft.identity.role = v; render(); }, { placeholder: "Choose a role…" }));
   return wrap;
 }
 
@@ -155,14 +154,33 @@ function stepAttributes(budget) {
   const rank = budget.rank;
   wrap.append(el("p", { class: "lede", text: `Spend ${rank.points} points, nothing above ${rank.attrMax}. Trade 2 points for an extra power, gain 2 for each power you give up (minimum one), pay 1 point per extra talent or power source, and gain 1 point per drawback (maximum two).` }));
 
+  const left = budget.remaining;
+  wrap.append(el("p", { class: left > 0 ? "stat-line" : left === 0 ? "good" : "bad",
+    text: left >= 0 ? `${left} point${left === 1 ? "" : "s"} left to spend.`
+      : `Over budget by ${-left} point(s) — raise a power/talent trade or lower a score.` }));
+
   for (const attr of D.ATTRIBUTES) {
     const v = draft.attributes[attr.key];
+    // A score may only rise while points remain: the budget can never be overspent (§3.4).
+    const atMax = v >= rank.attrMax;
+    const noPoints = left <= 0;
     wrap.append(el("div", { class: "attr-row" },
       el("div", { class: "attr-name" }, el("strong", { text: attr.name }), el("span", { class: "muted", text: attr.desc })),
       el("div", { class: "stepper" },
-        el("button", { class: "icon-btn", "aria-label": `Decrease ${attr.name}`, onclick: () => { draft.attributes[attr.key] = Math.max(1, v - 1); render(); } }, "−"),
+        el("button", { class: "icon-btn", disabled: v <= 1, "aria-label": `Decrease ${attr.name}`,
+          onclick: () => { draft.attributes[attr.key] = Math.max(1, v - 1); render(); } }, "−"),
         el("span", { class: "attr-value", text: `${v}` }),
-        el("button", { class: "icon-btn", "aria-label": `Increase ${attr.name}`, onclick: () => { draft.attributes[attr.key] = Math.min(rank.attrMax, v + 1); render(); } }, "+")),
+        el("button", {
+          class: "icon-btn", disabled: atMax || noPoints,
+          "aria-label": `Increase ${attr.name}`,
+          title: atMax ? `${rank.name} caps attributes at ${rank.attrMax}.` : noPoints ? "No attribute points left." : null,
+          onclick: () => {
+            if (atMax) { showToast(`${rank.name} caps attributes at ${rank.attrMax}.`, { variant: "warn" }); return; }
+            if (noPoints) { showToast("No points left. Lower another score, add a drawback, or give up a power.", { variant: "warn", timeout: 5000 }); return; }
+            draft.attributes[attr.key] = v + 1;
+            render();
+          },
+        }, "+")),
       el("span", { class: "score-desc", text: D.SCORE_DESCRIPTIONS[v] })));
   }
 
@@ -275,22 +293,30 @@ function stepSources() {
     wrap.append(row);
   }
 
-  wrap.append(el("h4", { class: "section", text: "Power sources (D66)" }));
-  wrap.append(el("button", { class: "btn", onclick: () => {
-    const v = d66();
-    const hit = D.POWER_SOURCES.find((s) => s.roll === v);
-    if (hit) { toggleSource(hit.name); showToast(`Rolled ${v}: ${hit.name}`); }
-  } }, "Roll D66"));
-  const grid = el("div", { class: "source-grid" });
-  for (const s of D.POWER_SOURCES) {
-    grid.append(el("button", { class: `card selectable tight ${current.includes(s.name) ? "selected" : ""}`, onclick: () => toggleSource(s.name) },
-      el("strong", { text: `${s.roll} ${s.name}` }), el("p", { class: "muted small", text: s.desc })));
+  if (current.length) {
+    wrap.append(el("h4", { class: "section", text: `Chosen (${current.length})` }));
+    wrap.append(el("div", { class: "chiprow" }, ...current.map((s) =>
+      el("button", { class: "chip selectable selected", title: "Remove", onclick: () => toggleSource(s) }, `${s} ✕`))));
   }
-  wrap.append(grid);
-  wrap.append(el("button", { class: "btn ghost", onclick: async () => {
-    const own = await import("./ui.js").then((m) => m.promptModal("Describe your own power source.", { title: "Custom power source" }));
-    if (own) toggleSource(own);
-  } }, "Add your own"));
+
+  wrap.append(selectField("Add a power source (D66 table)",
+    D.POWER_SOURCES.filter((s) => !current.includes(s.name))
+      .map((s) => ({ value: s.name, label: `${s.roll} ${s.name}`, hint: s.desc })),
+    "", (v) => { if (v) toggleSource(v); }, { placeholder: "Choose a source…" }));
+
+  const picked = D.POWER_SOURCES.find((s) => current.includes(s.name));
+  if (picked) wrap.append(el("p", { class: "muted small", text: picked.desc }));
+
+  wrap.append(el("div", { class: "row-actions" },
+    el("button", { class: "btn", onclick: () => {
+      const v = d66();
+      const hit = D.POWER_SOURCES.find((s) => s.roll === v);
+      if (hit) { toggleSource(hit.name); showToast(`Rolled ${v}: ${hit.name}`); }
+    } }, "Roll D66"),
+    el("button", { class: "btn ghost", onclick: async () => {
+      const own = await import("./ui.js").then((m) => m.promptModal("Describe your own power source.", { title: "Custom power source" }));
+      if (own) toggleSource(own);
+    } }, "Add your own")));
   return wrap;
 }
 
@@ -411,15 +437,18 @@ function stepOccupation() {
     row.append(el("button", { class: "chip", onclick: () => selectOccupation(suggested[d3() - 1]) }, "Roll D3"));
     wrap.append(row);
   }
-  const grid = el("div", { class: "source-grid" });
-  for (const o of D.OCCUPATIONS) {
-    grid.append(el("button", { class: `card selectable tight ${draft.identity.occupation === o.name ? "selected" : ""}`, onclick: () => selectOccupation(o.name) },
-      el("strong", { text: o.name }), el("p", { class: "muted small", text: o.desc }),
-      el("p", { class: "stat-line", text: `Resources ${o.resources} · ${o.talents.join(" / ")}` })));
-  }
-  wrap.append(grid);
+  wrap.append(selectField("Occupation",
+    D.OCCUPATIONS.map((o) => ({ value: o.name, label: o.name, hint: `Resources ${o.resources}` })),
+    draft.identity.occupation, (v) => selectOccupation(v), { placeholder: "Choose an occupation…" }));
 
   const occ = R.findOccupation(draft.identity.occupation);
+  if (occ) {
+    wrap.append(el("div", { class: "card tight" },
+      el("p", { text: occ.desc }),
+      el("p", { class: "stat-line", text: `Resources ${occ.resources} — ${D.STANDARD_OF_LIVING[occ.resources]}` }),
+      el("p", { class: "stat-line", text: `Occupation talents (D3): ${occ.talents.join(" / ")}` })));
+  }
+
   if (occ) {
     wrap.append(el("h4", { class: "section", text: "Key relationship (D3)" }));
     const row = el("div", { class: "chiprow" });
@@ -458,19 +487,26 @@ function stepPersonality() {
   wrap.append(el("p", { class: "lede", text: "Personality (two traits), drive and flaw. Playing to each of them earns karma at the end of the session; overcoming your flaw earns two and removes it." }));
 
   if (arche) {
-    wrap.append(el("h4", { class: "section", text: "Personality (roll D6 twice)" }));
-    const row = el("div", { class: "chiprow" });
-    arche.personality.forEach((p) => {
-      const has = (draft.identity.personality || []).includes(p);
-      row.append(el("button", { class: `chip selectable ${has ? "selected" : ""}`, onclick: () => togglePersonality(p) }, p));
-    });
-    row.append(el("button", { class: "chip", onclick: () => { togglePersonality(arche.personality[d6() - 1]); togglePersonality(arche.personality[d6() - 1]); } }, "Roll ×2"));
-    wrap.append(row);
+    const traits = draft.identity.personality || [];
+    const opts = arche.personality.map((p) => ({ value: p, label: p }));
+    wrap.append(selectField("Personality trait 1 (D6)", opts, traits[0] || "",
+      (v) => { setTrait(0, v); }, { placeholder: "Choose a trait…" }));
+    wrap.append(selectField("Personality trait 2 (D6)", opts, traits[1] || "",
+      (v) => { setTrait(1, v); }, { placeholder: "Choose a trait…" }));
+    wrap.append(el("button", { class: "btn ghost", onclick: () => {
+      setTrait(0, arche.personality[d6() - 1]);
+      let second = arche.personality[d6() - 1];
+      if (second === draft.identity.personality[0]) second = arche.personality[(arche.personality.indexOf(second) + 1) % arche.personality.length];
+      setTrait(1, second);
+    } }, "Roll both (D6 ×2)"));
 
-    wrap.append(el("h4", { class: "section", text: "Drive (D3)" }));
-    wrap.append(pickRow(arche.drives, (v) => { draft.identity.drive = v; render(); }, draft.identity.drive));
-    wrap.append(el("h4", { class: "section", text: "Flaw (D3)" }));
-    wrap.append(pickRow(arche.flaws, (v) => { draft.identity.flaw = v; render(); }, draft.identity.flaw));
+    wrap.append(selectField("Drive (D3)", arche.drives.map((d) => ({ value: d, label: d })),
+      draft.identity.drive, (v) => { draft.identity.drive = v; render(); }, { placeholder: "Choose a drive…" }));
+    wrap.append(el("button", { class: "btn ghost", onclick: () => { draft.identity.drive = arche.drives[d3() - 1]; render(); } }, "Roll D3"));
+
+    wrap.append(selectField("Flaw (D3)", arche.flaws.map((f) => ({ value: f, label: f })),
+      draft.identity.flaw, (v) => { draft.identity.flaw = v; render(); }, { placeholder: "Choose a flaw…" }));
+    wrap.append(el("button", { class: "btn ghost", onclick: () => { draft.identity.flaw = arche.flaws[d3() - 1]; render(); } }, "Roll D3"));
   }
 
   wrap.append(el("h4", { class: "section", text: "Or write your own" }));
@@ -480,11 +516,14 @@ function stepPersonality() {
   return wrap;
 }
 
-function pickRow(options, onPick, current) {
-  const row = el("div", { class: "chiprow column" });
-  options.forEach((o) => row.append(el("button", { class: `chip selectable wide ${current === o ? "selected" : ""}`, onclick: () => onPick(o) }, o)));
-  row.append(el("button", { class: "chip", onclick: () => onPick(options[d3() - 1]) }, "Roll D3"));
-  return row;
+/** Set one of the two personality slots without letting the same trait fill both. */
+function setTrait(index, value) {
+  const list = draft.identity.personality || (draft.identity.personality = []);
+  const other = list[1 - index];
+  if (value && value === other) { showToast("Pick two different traits.", { variant: "warn" }); return; }
+  if (value) list[index] = value; else list.splice(index, 1);
+  draft.identity.personality = list.filter(Boolean).slice(0, 2);
+  render();
 }
 
 function togglePersonality(p) {
@@ -504,10 +543,10 @@ function stepFinish() {
   wrap.append(field("Real name", draft.identity.realName, (v) => { draft.identity.realName = v; }));
   wrap.append(field("Hero name", draft.identity.heroName, (v) => { draft.identity.heroName = v; }));
   if (arche) {
-    const row = el("div", { class: "chiprow" });
-    arche.names.forEach((n) => row.append(el("button", { class: "chip", onclick: () => { draft.identity.heroName = n; render(); } }, n)));
-    row.append(el("button", { class: "chip", onclick: () => { draft.identity.heroName = arche.names[d3() - 1]; render(); } }, "Roll D3"));
-    wrap.append(row);
+    wrap.append(selectField(`Suggested hero names — ${arche.name} (D3)`,
+      arche.names.map((n) => ({ value: n, label: n })), draft.identity.heroName,
+      (v) => { draft.identity.heroName = v; render(); }, { placeholder: "Choose a suggested name…" }));
+    wrap.append(el("button", { class: "btn ghost", onclick: () => { draft.identity.heroName = arche.names[d3() - 1]; render(); } }, "Roll D3"));
   }
   wrap.append(field("Appearance", draft.identity.appearance, (v) => { draft.identity.appearance = v; }, true));
   wrap.append(el("label", { class: "check" },

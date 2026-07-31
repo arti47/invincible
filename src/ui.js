@@ -121,6 +121,28 @@ export async function chooseModal(title, options, { allowCancel = true } = {}) {
 }
 
 /**
+ * Labelled <select> for single-choice fields. Long option lists (16 archetypes, 22 occupations,
+ * 36 power sources) are far easier to drive as a dropdown than as a grid of cards on a phone.
+ * options: [{ value, label, hint?, group? }]. A `hint` is appended to the option text.
+ */
+export function selectField(label, options, value, onChange, { placeholder = null } = {}) {
+  const sel = el("select", { class: "input select" });
+  if (placeholder) sel.append(el("option", { value: "", text: placeholder }));
+  const groups = new Map();
+  for (const o of options) {
+    const opt = el("option", { value: String(o.value), text: o.hint ? `${o.label} — ${o.hint}` : o.label });
+    if (o.value === value || String(o.value) === String(value)) opt.selected = true;
+    if (o.group) {
+      if (!groups.has(o.group)) { const g = el("optgroup", { label: o.group }); groups.set(o.group, g); sel.append(g); }
+      groups.get(o.group).append(opt);
+    } else sel.append(opt);
+  }
+  if (!options.some((o) => String(o.value) === String(value))) sel.value = "";
+  sel.addEventListener("change", () => onChange(sel.value));
+  return el("label", { class: "field" }, el("span", { text: label }), sel);
+}
+
+/**
  * Collapsed-by-default explainer for a panel: what it is for and how to drive it.
  * Every major panel carries one so nothing on screen is unexplained.
  */
