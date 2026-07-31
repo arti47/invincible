@@ -422,6 +422,33 @@ const run = async () => {
   ok("A22 end-of-scene clears per-scene conditions", lifecycle.conditionsCleared);
   ok("A23 the bundle undoes in one step", lifecycle.undoneHealth === lifecycle.beforeHealth && lifecycle.undoneConditions === 2, JSON.stringify(lifecycle));
 
+  // Session-scoped flow: karma spending must re-lock, and wrecking must survive to session end.
+  const flow2 = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Combat = await import("/src/combat.js");
+    localStorage.clear();
+    const c = Store.createCharacter({});
+    Store.updateCharacter((ch) => {
+      ch.state.session.spendUnlocked = true;                 // as if a session had already ended
+      ch.state.scene.wreckedZones = ["City street"];
+    }, { id: c.id });
+    await Combat.applyBundle("start", { id: c.id });
+    const afterStart = Store.getCharacter(c.id);
+    Store.updateCharacter((ch) => { ch.state.scene.wreckedZones = ["Office"]; }, { id: c.id });
+    await Combat.applyBundle("action", { id: c.id });
+    const afterAction = Store.getCharacter(c.id);
+    return {
+      relocked: afterStart.state.session.spendUnlocked,
+      startCleared: (afterStart.state.session.wreckedZones || []).length,
+      carried: (afterAction.state.session.wreckedZones || []),
+      sceneCleared: (afterAction.state.scene.wreckedZones || []).length,
+    };
+  });
+  ok("Start session re-locks karma spending", flow2.relocked === false, String(flow2.relocked));
+  ok("Start session clears last session's wrecking", flow2.startCleared === 0, String(flow2.startCleared));
+  ok("wrecking survives end-of-scene for the bad-karma question", flow2.carried.length === 1 && flow2.carried[0] === "Office", JSON.stringify(flow2.carried));
+  ok("end-of-scene still clears the scene-scoped wreck markers", flow2.sceneCleared === 0, String(flow2.sceneCleared));
+
   /* ---------------------------------------------------------------- solo engines */
   section("Solo (Crisis Mode) engines (audits A24, A25)");
   const solo = await page.evaluate(async () => {

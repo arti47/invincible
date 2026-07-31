@@ -1677,6 +1677,11 @@ export const LIFECYCLE = {
   actStructure: ["Act I — The First Contact: heroes and NPCs are introduced, conflicts established.",
     "Act II — The Twist: something unexpected raises the stakes.",
     "Act III — The Showdown: a climactic resolution driven by the heroes' actions."],
+  startSession: [
+    "Karma spending closes: it is only available between sessions, in a safe location.",
+    "Clear last session's karma answers and per-scene flags.",
+    "Open with a briefing — where to go and what to do — then alternate action and social scenes.",
+  ],
   endActionScene: [
     "Recover Health equal to your STRENGTH rating after a few minutes.",
     "Clear per-scene effects: temporary armor and barriers, absorbed energy dice, on-fire, stunned and afflicted states, once-per-scene power uses.",

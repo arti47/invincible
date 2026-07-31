@@ -306,6 +306,7 @@ async function contributeToTask(task, mount) {
 /* ---------------------------------------------------------------- lifecycle engine */
 
 const BUNDLES = {
+  start: { title: "Start session", steps: D.LIFECYCLE.startSession },
   action: { title: "End action scene", steps: D.LIFECYCLE.endActionScene },
   social: { title: "End social scene", steps: D.LIFECYCLE.endSocialScene },
   session: { title: "End session", steps: D.LIFECYCLE.endSession },
@@ -328,10 +329,36 @@ export async function openLifecycle(kind) {
   }).promise;
   if (!ok) return;
 
+  const summaryLines = await applyBundle(kind, { id: c.id });
+
+  showToast(`${bundle.title} applied. ${summaryLines.join(" ")}`, {
+    variant: "good", timeout: 8000,
+    action: { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
+  });
+  announce(`${bundle.title} applied.`);
+}
+
+/**
+ * Apply a lifecycle bundle's state changes. Split out of openLifecycle so the flow is testable
+ * headlessly and so nothing but the confirmation UI lives in the dialog path.
+ * Snapshots first, so every bundle is undoable in one step (audit A23).
+ */
+export async function applyBundle(kind, { id } = {}) {
+  const bundle = BUNDLES[kind];
+  if (!bundle) return [];
   Store.snapshot(bundle.title);
   const summaryLines = [];
+  let socialScenePlayed = false;
   Store.updateCharacter((ch) => {
-    if (kind === "action") {
+    if (kind === "start") {
+      ch.state.session.spendUnlocked = false;   // karma is spent only BETWEEN sessions (§3.3)
+      ch.state.session.karmaAnswers = {};
+      ch.state.session.badKarmaAnswers = {};
+      ch.state.session.wreckedZones = [];
+      ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
+      ch.state.indomitableUsed = false;
+      summaryLines.push("Session open; karma spending is locked until it ends.");
+    } else if (kind === "action") {
       const heal = Derived.effectiveAttributes(ch).strength;
       const before = ch.state.health;
       ch.state.health = Math.min(Derived.maxHealth(ch), ch.state.health + heal);
@@ -339,6 +366,13 @@ export async function openLifecycle(kind) {
       summaryLines.push(`Health ${before} → ${ch.state.health} (+${ch.state.health - before}).`);
       const cleared = Object.keys(ch.state.conditions).filter((k) => ch.state.conditions[k]);
       ch.state.conditions = {};
+      // Wrecking is scene-scoped for play but SESSION-scoped for bad karma: carry it over before
+      // clearing the scene markers, or the end-of-session question can never fire.
+      const wrecked = ch.state.scene.wreckedZones || [];
+      if (wrecked.length) {
+        ch.state.session.wreckedZones = [...(ch.state.session.wreckedZones || []), ...wrecked];
+        summaryLines.push(`${wrecked.length} wrecked zone(s) noted for bad karma.`);
+      }
       ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
       if (cleared.length) summaryLines.push(`Cleared: ${cleared.join(", ")}.`);
     } else if (kind === "social") {
@@ -346,17 +380,22 @@ export async function openLifecycle(kind) {
       ch.state.resolve = Math.min(Derived.maxResolve(ch), ch.state.resolve + Derived.effectiveAttributes(ch).presence);
       summaryLines.push(`Resolve ${before} → ${ch.state.resolve} (+${ch.state.resolve - before}).`);
       ch.state.session.karmaAnswers.social = true;
+      if (Settings.soloMode()) socialScenePlayed = true;
     } else if (kind === "adventure") {
       ch.state.session.spendUnlocked = true;
-      summaryLines.push("Adventure closed; karma spending unlocked.");
+      ch.state.session.karmaAnswers = {};
+      ch.state.session.badKarmaAnswers = {};
+      ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
+      ch.advancementLog.push({ at: Date.now(), kind: "adventure", label: "Adventure closed", cost: 0 });
+      summaryLines.push("Adventure logged and session flags cleared; karma spending unlocked.");
     }
-  }, { id: c.id });
+  }, { id });
 
-  showToast(`${bundle.title} applied. ${summaryLines.join(" ")}`, {
-    variant: "good", timeout: 8000,
-    action: { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
-  });
-  announce(`${bundle.title} applied.`);
+  if (socialScenePlayed) {
+    const Solo = await import("./solo.js");
+    Solo.markSocialScenePlayed();
+  }
+  return summaryLines;
 }
 
 async function openSessionEnd(c) {
@@ -383,7 +422,9 @@ async function openSessionEnd(c) {
 
   if (!solo) body.append(el("h4", { class: "section", text: "Karma questions" }));
   for (const q of solo ? [] : D.KARMA.earnQuestions) {
-    const cb = el("input", { type: "checkbox", onchange: (e) => { answers[q.key] = e.target.checked; update(); } });
+    // Pre-tick anything the scene bundles already answered during play (§3.12).
+    answers[q.key] = !!c.state.session.karmaAnswers?.[q.key];
+    const cb = el("input", { type: "checkbox", checked: answers[q.key], onchange: (e) => { answers[q.key] = e.target.checked; update(); } });
     body.append(el("label", { class: "check" }, cb, ` ${q.text}`));
     if (q.key === "flaw") {
       const oc = el("input", { type: "checkbox", onchange: (e) => { answers.flawOvercome = e.target.checked; if (e.target.checked) { answers.flaw = true; } update(); } });
@@ -392,7 +433,7 @@ async function openSessionEnd(c) {
   }
   if (!solo) body.append(el("h4", { class: "section", text: "Bad karma" }));
   for (const q of solo ? [] : D.KARMA.badQuestions) {
-    const pre = q.key === "wrecked" && (c.state.scene.wreckedZones || []).length > 0;
+    const pre = q.key === "wrecked" && ((c.state.session.wreckedZones || []).length > 0 || (c.state.scene.wreckedZones || []).length > 0);
     const cb = el("input", { type: "checkbox", checked: pre, onchange: (e) => { bad[q.key] = e.target.checked; update(); } });
     if (pre) bad[q.key] = true;
     body.append(el("label", { class: "check" }, cb, ` ${q.text}`));
@@ -432,6 +473,7 @@ async function openSessionEnd(c) {
     ch.state.session.badKarmaAnswers = {};
     ch.state.indomitableUsed = false;
     ch.state.scene.wreckedZones = [];
+    ch.state.session.wreckedZones = [];
     msg = `Karma ${before} → ${ch.state.karma}. Spending is now unlocked.`;
   }, { id: c.id });
 
@@ -457,7 +499,10 @@ async function openSessionEnd(c) {
 }
 
 export function lifecycleButtons() {
+  const c = Store.activeCharacter();
+  const locked = c && !c.state.session.spendUnlocked;
   return el("div", { class: "row-actions" },
+    el("button", { class: locked ? "btn ghost" : "btn", onclick: () => openLifecycle("start") }, "Start session"),
     el("button", { class: "btn ghost", onclick: () => openLifecycle("action") }, "End action scene"),
     el("button", { class: "btn ghost", onclick: () => openLifecycle("social") }, "End social scene"),
     el("button", { class: "btn ghost", onclick: () => openLifecycle("session") }, "End session"),

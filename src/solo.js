@@ -605,3 +605,16 @@ function enginesCard(state, mount) {
 }
 
 export function soloBuildNotes() { return S.SOLO_SETUP.build; }
+
+/**
+ * Called by the End social scene lifecycle bundle so a social scene played through the normal
+ * table flow also satisfies solo loop step 5 — otherwise the solo tab stays stuck on it.
+ */
+export function markSocialScenePlayed() {
+  const state = load();
+  if (!state.awaitingSocial) return false;
+  state.awaitingSocial = false;
+  logEvent(state, "Social scene played (via the session lifecycle).");
+  save(state);
+  return true;
+}

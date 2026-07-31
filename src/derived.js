@@ -316,7 +316,7 @@ export function blankCharacter(overrides = {}) {
       conditions: {}, crits: [], broken: false,
       dying: { active: false, deadline: null, stabiliseAttempted: false },
       scene: { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] },
-      session: { karmaAnswers: {}, badKarmaAnswers: {}, flawState: "active", flawlessSessions: 0, spendUnlocked: false },
+      session: { karmaAnswers: {}, badKarmaAnswers: {}, flawState: "active", flawlessSessions: 0, spendUnlocked: false, wreckedZones: [] },
       altForm: { active: false, mode: "highestThree", source: null },
       restFlags: {}, indomitableUsed: false,
     },
