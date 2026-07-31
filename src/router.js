@@ -8,6 +8,7 @@ import * as Combat from "./combat.js";
 import * as Solo from "./solo.js";
 import * as GM from "./gm.js";
 import { startWizard, isActive as wizardActive } from "./wizard.js";
+import * as Learn from "./learn.js";
 
 const ROUTES = [
   { path: "home", label: "Home", icon: "◆", render: (m) => Screens.renderHome(m) },
@@ -17,6 +18,7 @@ const ROUTES = [
   { path: "compendium", label: "NPCs", icon: "☰", render: (m) => Screens.renderCompendium(m) },
   { path: "solo", label: "Solo", icon: "◉", render: (m) => Solo.renderSolo(m), gate: () => Settings.soloMode() },
   { path: "gm", label: "GM", icon: "★", render: (m) => GM.renderGM(m), gate: () => Settings.gmScreen() },
+  { path: "learn", label: "Learn", icon: "?", render: (m) => Learn.renderLearn(m), nav: false },
   { path: "log", label: "Log", icon: "≡", render: (m) => Screens.renderRollLog(m), nav: false },
   { path: "settings", label: "Settings", icon: "⚙", render: (m) => Screens.renderSettings(m), nav: false },
   { path: "create", label: "Create", icon: "+", render: (m) => startWizard(m), nav: false },

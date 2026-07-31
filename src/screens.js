@@ -28,6 +28,14 @@ export function renderHome(mount) {
       el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
       el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team"))));
 
+  if (!chars.length) {
+    mount.append(el("section", { class: "card" },
+      el("h3", { text: "New to the game?" }),
+      el("p", { class: "muted small", text: "A step-by-step tutorial for first-time players — dice, fights, damage and karma — plus one for solo play with no GM." }),
+      el("div", { class: "row-actions" },
+        el("a", { class: "btn primary", href: "#/learn" }, "Start the tutorial"))));
+  }
+
   if (chars.length) {
     const list = el("div", { class: "char-list" });
     for (const ch of chars) {
@@ -58,7 +66,10 @@ export function renderHome(mount) {
   mount.append(el("section", { class: "card" },
     el("h3", { text: "Quick reference" }),
     el("p", { class: "muted small", text: "Roll dice equal to the attribute; one 6 succeeds and every extra 6 buys a stunt. Push once to re-roll everything that isn't a 6 or a 1 — each 1 then costs 1 stress." }),
-    el("a", { class: "btn ghost", href: "#/rules" }, "Open the rules library")));
+    el("div", { class: "row-actions" },
+      el("a", { class: "btn ghost", href: "#/rules" }, "Open the rules library"),
+      el("a", { class: "btn ghost", href: "#/learn" }, "Tutorials"),
+      el("a", { class: "btn ghost", href: "#/log" }, "Roll log"))));
 }
 
 async function openPregens() {

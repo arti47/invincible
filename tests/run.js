@@ -554,6 +554,61 @@ const run = async () => {
     return { hasCrisesCard: !!Array.from(document.querySelectorAll("#screen h3")).find((h) => /^Crises/.test(h.textContent)), before: !!before, step: Solo.currentStep({ alert: "a", eventChecks: 1, timers: [], awaitingSocial: false }) };
   });
   ok("solo tab shows a Crises panel", crisis.hasCrisesCard);
+
+  // Tutorials: content integrity, demos run without touching the roster or the roll log.
+  const learn = await page.evaluate(async () => {
+    const T = await import("/data-tutorial.js");
+    const L = await import("/src/learn.js");
+    const Derived = await import("/src/derived.js");
+    const R = await import("/src/rules.js");
+    const hero = L.exampleHero();
+    const b = Derived.creationBudget(hero);
+    const v = Derived.validateCharacter(hero);
+    return {
+      tutorials: T.TUTORIAL_INDEX.length,
+      chapters: T.TUTORIAL_INDEX.reduce((n, t) => n + t.chapters.length, 0),
+      steps: T.TUTORIAL_INDEX.reduce((n, t) => n + t.chapters.reduce((m, c) => m + c.steps.length, 0), 0),
+      remaining: b.remaining,
+      errors: v.errors,
+      health: Derived.maxHealth(hero),
+      resolve: Derived.maxResolve(hero),
+      slugfest: Derived.slugfestDamage(hero),
+      armor: Derived.armorRating(hero).value,
+      badPowers: hero.powers.filter((p) => !R.findPower(p.name)).map((p) => p.name),
+      badTalents: hero.talents.filter((t) => !R.findTalent(t.name)).map((t) => t.name),
+    };
+  });
+  ok("two tutorials with chapters and steps", learn.tutorials === 2 && learn.chapters >= 10 && learn.steps >= 40,
+    `${learn.tutorials}/${learn.chapters}/${learn.steps}`);
+  ok("the example hero is a legal build", learn.errors.length === 0 && learn.remaining === 0,
+    `${learn.errors.join("; ")} remaining ${learn.remaining}`);
+  ok("the example hero's quoted stats are correct", learn.health === 11 && learn.resolve === 7 && learn.slugfest === 5 && learn.armor === 2,
+    `H${learn.health} R${learn.resolve} S${learn.slugfest} A${learn.armor}`);
+  ok("every tutorial power and talent resolves", learn.badPowers.length === 0 && learn.badTalents.length === 0,
+    [...learn.badPowers, ...learn.badTalents].join(", "));
+
+  await page.evaluate(() => { location.hash = "#/learn"; });
+  await page.waitForTimeout(250);
+  const learnUi = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const before = { chars: Store.listCharacters().length, log: Store.rollLog().length };
+    const btns = Array.from(document.querySelectorAll("#screen button")).filter((b) => b.textContent.trim() === "Try it");
+    btns.forEach((b) => b.click());
+    await new Promise((r) => setTimeout(r, 120));
+    return {
+      demos: btns.length,
+      outputs: Array.from(document.querySelectorAll(".tut-demo-out")).filter((o) => o.textContent.trim()).length,
+      charsUnchanged: Store.listCharacters().length === before.chars,
+      logUnchanged: Store.rollLog().length === before.log,
+    };
+  });
+  ok("the basics tutorial renders live demos", learnUi.demos >= 4, String(learnUi.demos));
+  ok("every demo produces output", learnUi.outputs === learnUi.demos, `${learnUi.outputs}/${learnUi.demos}`);
+  ok("demos do not touch the player's characters", learnUi.charsUnchanged);
+  ok("demos do not write to the shared roll log", learnUi.logUnchanged);
+
+  await page.evaluate(() => { location.hash = "#/solo"; });   // restore: the checks below read the solo tab
+  await page.waitForTimeout(250);
   ok("choosing a crisis is loop step 3", crisis.step === 2, String(crisis.step));
 
   const helpUi = await page.evaluate(() => {
