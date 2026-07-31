@@ -450,7 +450,7 @@ buttons; `aria-current` nav. Phone-first, **zero horizontal overflow at 360px**.
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` |
 | `database.rules.json` | RTDB rules (player/GM roles, team write rules) |
 | `manifest.json`, `service-worker.js`, `icon.svg` | PWA |
-| `tests/`, `package.json` | Headless regression harness (`npm test`), dev-only |
+| `tests/`, `package.json`, `package-lock.json` | Headless regression harness (`npm test`), dev-only; the lockfile pins `playwright-core` so the suite is reproducible |
 | `README.md` | Setup, Firebase steps, personal-use licensing note |
 | `CLAUDE.md` | This file |
 
@@ -674,3 +674,4 @@ user's own book — see README for the licensing note.
 | 2026-07-31 | Recorded a new source gap: four Ch.4 vehicle Durability values are impossible in the supplied text (0/0/0/1). Values kept verbatim, flagged via `VEHICLE_DATA_FLAGS`, surfaced as ⚠ in the rules library and gear catalogue. | §2 hard rule — never fill gaps from memory. | Visible in the vehicles reference table. | v1 |
 | 2026-07-31 | Fixed a boot-blocking syntax error in `wizard.js` (unbalanced parentheses in `render()` — the `host.append(` call was closed one paren short). | Root cause: the wizard nav tree closed the element chain but not the append call, so the module never parsed and the app never reached `data-ready`. | Headless boot now reaches `data-ready`; a wizard-UI walkthrough was added to the harness so a broken wizard fails the suite. | v1 |
 | 2026-07-31 | Regression harness final state: **120 checks, 0 failures**, zero console errors across every tab at 360px and 390px. | §10.4/§10.5. | `npm test` | v1 |
+| 2026-07-31 | Committed `package-lock.json` (dev-only) and listed it in the §5 file table. No app file changed. | A fresh clone had no lockfile, so `npm test` resolved `playwright-core` unpinned; pinning it keeps the suite reproducible. | `npm install` then `npm test` — 120 passed, 0 failed. | — (no shipped file changed) |
