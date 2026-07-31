@@ -111,23 +111,35 @@ function stepArchetype() {
   return wrap;
 }
 
-function applyArchetype(a) {
-  draft.identity.archetype = a.name;
-  draft.identity.role = a.role;
-  const rank = R.findRank(draft.identity.rank);
-  // Suggested arrays are tuned for Global Guardian; re-point proportionally for other ranks.
-  const suggested = { ...a.attributes };
-  const total = ATTR_KEYS.reduce((n, k) => n + suggested[k], 0);
-  const target = rank.points;
-  const scaled = {};
-  for (const k of ATTR_KEYS) scaled[k] = clamp(Math.max(1, Math.round(suggested[k] * target / total)), 1, rank.attrMax);
-  balanceTo(scaled, target, rank.attrMax);
-  draft.attributes = scaled;
-  draft.powers = a.powers.slice(0, rank.powers).map((p) => {
+function applyArchetype(a, target = draft) {
+  target.identity.archetype = a.name;
+  target.identity.role = a.role;
+  const rank = R.findRank(target.identity.rank);
+
+  // Powers first. Their slot count decides how many attribute points the trade leaves: each slot
+  // over the rank's allowance costs 2 points, each slot given up returns 2 (§3.4). Scaling the
+  // array to rank.points instead would ignore that and leave the budget over- or under-spent.
+  target.powers = a.powers.slice(0, rank.powers).map((p) => {
     const parsed = R.parsePowerRef(p);
     return { name: parsed.name, level: parsed.level || 0, boosts: parsed.boost ? [parsed.boost] : [], limits: [], note: parsed.note || "" };
   });
-  draft.identity.reputationBase = rank.reputation;
+  target.identity.reputationBase = rank.reputation;
+
+  // Suggested arrays are tuned for Global Guardian; re-point proportionally to what is available.
+  const suggested = { ...a.attributes };
+  const total = ATTR_KEYS.reduce((n, k) => n + suggested[k], 0);
+  const points = creationBudget(target).available;
+  const scaled = {};
+  for (const k of ATTR_KEYS) scaled[k] = clamp(Math.max(1, Math.round(suggested[k] * points / total)), 1, rank.attrMax);
+  balanceTo(scaled, points, rank.attrMax);
+  target.attributes = scaled;
+}
+
+/** Testable entry point: apply an archetype to any character at any rank. */
+export function applyArchetypeTo(character, archetype, rankKey) {
+  if (rankKey) character.identity.rank = rankKey;
+  applyArchetype(archetype, character);
+  return character;
 }
 
 function balanceTo(attrs, target, max) {

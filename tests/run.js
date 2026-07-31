@@ -388,6 +388,23 @@ const run = async () => {
   ok("A14 a legal karma spend deducts the cost", legality.spendOk === true && legality.karmaAfter === 2, String(legality.karmaAfter));
   ok("creation budget trades points for powers and drawbacks", legality.budget === 31, String(legality.budget));
 
+  // Picking any archetype at any rank must land the budget exactly on zero.
+  const archetypeBudget = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const W = await import("/src/wizard.js");
+    const Derived = await import("/src/derived.js");
+    const bad = [];
+    for (const rank of D.RANKS) {
+      for (const a of D.ARCHETYPES) {
+        const c = W.applyArchetypeTo(Derived.blankCharacter(), a, rank.key);
+        const b = Derived.creationBudget(c);
+        if (b.remaining !== 0) bad.push(`${rank.key}/${a.name} ${b.remaining > 0 ? "+" : ""}${b.remaining}`);
+      }
+    }
+    return bad;
+  });
+  ok("every archetype at every rank spends its budget exactly", archetypeBudget.length === 0, archetypeBudget.join(", "));
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {
