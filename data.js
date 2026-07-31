@@ -1262,32 +1262,32 @@ export const PURCHASE_RULES = {
 export const VEHICLES = [
   { name: "Horse", type: "Ground", passengers: 1, maneuver: null, speed: 2, durability: 4, armor: 0, cost: 3, note: "Use the mount's AGILITY (typically 4) instead of your own." },
   { name: "Car", type: "Ground", passengers: 4, maneuver: 1, speed: 2, durability: 8, armor: 1, cost: 4 },
-  { name: "Truck", type: "Ground", passengers: 3, maneuver: -2, speed: 1, durability: 4, armor: 1, cost: 5 },
-  { name: "Van", type: "Ground", passengers: 7, maneuver: -2, speed: 1, durability: 0, armor: 1, cost: 5, sourceFlag: true },
-  { name: "Sport Utility Vehicle", type: "Ground", passengers: 5, maneuver: -1, speed: 2, durability: 1, armor: 2, cost: 5, sourceFlag: true },
-  { name: "Military Utility Vehicle", type: "Ground", passengers: 6, maneuver: -2, speed: 1, durability: 6, armor: 2, cost: 5, restricted: true },
-  { name: "Motorcycle", type: "Ground", passengers: 1, maneuver: 3, speed: 3, durability: 5, armor: 0, cost: 3 },
-  { name: "Armored carrier", type: "Ground", passengers: 8, maneuver: -2, speed: 1, durability: 6, armor: 4, cost: 6, restricted: true },
-  { name: "Battle tank", type: "Ground", passengers: 0, maneuver: null, speed: 2, durability: 0, armor: 5, cost: 7, restricted: true, sourceFlag: true },
+  { name: "Truck", type: "Ground", passengers: 3, maneuver: null, speed: 2, durability: 14, armor: 1, cost: 5 },
+  { name: "Van", type: "Ground", passengers: 7, maneuver: null, speed: 2, durability: 10, armor: 1, cost: 5 },
+  { name: "Sport Utility Vehicle", type: "Ground", passengers: 5, maneuver: null, speed: 2, durability: 12, armor: 1, cost: 5 },
+  { name: "Military Utility Vehicle", type: "Ground", passengers: 6, maneuver: null, speed: 2, durability: 16, armor: 2, cost: 5, restricted: true },
+  { name: "Motorcycle", type: "Ground", passengers: 1, maneuver: 2, speed: 3, durability: 5, armor: 0, cost: 3 },
+  { name: "Armored carrier", type: "Ground", passengers: 8, maneuver: null, speed: 2, durability: 16, armor: 4, cost: 6, restricted: true },
+  { name: "Battle tank", type: "Ground", passengers: null, maneuver: null, speed: 2, durability: 20, armor: 5, cost: 7, restricted: true },
   { name: "Rowboat", type: "Water", passengers: 4, maneuver: 1, speed: 1, durability: 5, armor: 0, cost: null },
   { name: "Motorboat, small", type: "Water", passengers: 7, maneuver: 2, speed: 2, durability: 6, armor: 1, cost: 4 },
   { name: "Helicopter", type: "Aerial", passengers: 5, maneuver: 3, speed: 3, durability: 10, armor: 1, cost: 6 },
   { name: "Light airplane", type: "Aerial", passengers: 3, maneuver: 1, speed: 3, durability: 8, armor: 1, cost: 6 },
-  { name: "Jetliner", type: "Aerial", passengers: 160, maneuver: -4, speed: 1, durability: 6, armor: 1, cost: 7 },
+  { name: "Jetliner", type: "Aerial", passengers: "160+", maneuver: null, speed: 4, durability: 16, armor: 1, cost: 7 },
   { name: "Fighter jet", type: "Aerial", passengers: 1, maneuver: 2, speed: 6, durability: 14, armor: 2, cost: 7, restricted: true },
   { name: "Hoverjet, small", type: "Aerial", passengers: 5, maneuver: 4, speed: 4, durability: 12, armor: 1, cost: 6 },
   { name: "Hoverjet, large", type: "Aerial", passengers: 12, maneuver: 3, speed: 3, durability: 20, armor: 2, cost: 7 },
   { name: "Space shuttle", type: "Space", passengers: 16, maneuver: 2, speed: 6, durability: 16, armor: 1, cost: 8 },
   { name: "Starfighter", type: "Space", passengers: 1, maneuver: 4, speed: 8, durability: 14, armor: 1, cost: 8 },
   { name: "Space transport", type: "Space", passengers: 24, maneuver: 2, speed: 7, durability: 20, armor: 2, cost: 8 },
-  { name: "Capital starship", type: "Space", passengers: 1000, maneuver: -6, speed: 3, durability: 0, armor: 4, cost: 9, sourceFlag: true },
+  { name: "Capital starship", type: "Space", passengers: "1,000+", maneuver: null, speed: 6, durability: 30, armor: 4, cost: 9 },
 ];
-// Source note (Ch.4): the supplied vehicle table lists Durability 0 for the van, battle tank and
-// capital starship, and 1 for the SUV. A vehicle is wrecked at 0 Durability, so these are almost
-// certainly transcription damage in the supplied text. They are recorded EXACTLY as supplied and
-// flagged (`sourceFlag`) rather than guessed at; the app shows a "check your book" warning on these
-// rows. No value was invented.
-export const VEHICLE_DATA_FLAGS = ["Van", "Sport Utility Vehicle", "Battle tank", "Capital starship"];
+// Source note (Ch.4): re-extracted from the printed table (page image supplied 2026-07-31). The
+// original text extract was badly damaged in this table - Durability, Speed and Maneuverability
+// were wrong on many rows (four Durability values read 0/0/0/1, and negative Maneuverability
+// values appeared that are not in the book at all; "-" in that column means no modifier, recorded
+// here as null). All values above are as printed. The source gap is closed.
+export const VEHICLE_DATA_FLAGS = [];
 
 export const VEHICLE_WEAPONS = [
   { name: "Autocannon", bonus: 2, damage: 4, range: [1, 10], cost: 5, restricted: true, features: ["full auto", "sharp"] },

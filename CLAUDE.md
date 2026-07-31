@@ -621,9 +621,11 @@ box in the same change** and append a changelog row; replace estimated counts wi
 - Ch.9 crisis-timer proximity labels partially truncated in the supplied table.
 - Ch.7 social-hooks D66 rows 25–41 absent.
 - Ch.7 complications rows 61-63 / 64-66 duplicate text in the source.
-- Ch.4 vehicle table: Durability reads 0 for van / battle tank / capital starship and 1 for the SUV
-  — impossible values (0 = already wrecked). Recorded verbatim and flagged in `VEHICLE_DATA_FLAGS`;
-  the app surfaces a "check your book" warning. **Not guessed at.**
+- ~~Ch.4 vehicle table: Durability reads 0 for van / battle tank / capital starship and 1 for the
+  SUV — impossible values.~~ **Closed 2026-07-31** — re-extracted from the printed table. The
+  damage was wider than the four flagged values: Durability, Speed and Maneuverability were wrong
+  on many rows, and the extract carried **negative Maneuverability values that are not in the book
+  at all** (a "–" in that column means no modifier). `VEHICLE_DATA_FLAGS` is now empty.
 
 ## 10. Rules-accuracy audit
 
@@ -676,4 +678,5 @@ user's own book — see README for the licensing note.
 | 2026-07-31 | Fixed a boot-blocking syntax error in `wizard.js` (unbalanced parentheses in `render()` — the `host.append(` call was closed one paren short). | Root cause: the wizard nav tree closed the element chain but not the append call, so the module never parsed and the app never reached `data-ready`. | Headless boot now reaches `data-ready`; a wizard-UI walkthrough was added to the harness so a broken wizard fails the suite. | v1 |
 | 2026-07-31 | Regression harness final state: **120 checks, 0 failures**, zero console errors across every tab at 360px and 390px. | §10.4/§10.5. | `npm test` | v1 |
 | 2026-07-31 | Committed `package-lock.json` (dev-only) and listed it in the §5 file table. No app file changed. | A fresh clone had no lockfile, so `npm test` resolved `playwright-core` unpinned; pinning it keeps the suite reproducible. | `npm install` then `npm test` — 120 passed, 0 failed. | — (no shipped file changed) |
+| 2026-07-31 | **Closed the vehicle source gap**: re-extracted all 21 Ch.4 vehicle rows from the printed table. Corrected Durability on 9 rows (incl. the four impossible 0/0/0/1), Speed on 6, Maneuverability on 7 — the old extract carried negative Maneuverability values that do not appear in the book. `VEHICLE_DATA_FLAGS` emptied; ⚠ markers and "check your book" copy removed from the rules library, gear catalogue and Settings. | The page image was supplied, so the values are now known rather than damaged. §2 — real values yield to the source. | `npm test` — 124 passed, 0 failed; new assertions: 21 vehicles, Durability ≥ 1 on every row, no negative Maneuverability, flags cleared. | v3 |
 | 2026-07-31 | **Closed the archetype source gap**: added The Beacon (Leader) and The Bruiser (Brawn) from newly supplied Ch.2 text — 14 → 16. Ruling R1 rewritten as closed, ledger T-14 ticked, §3.7 count corrected, gap struck from §9, `ARCHETYPE_SOURCE_GAP` 2 → 0, wizard and Settings gap copy updated, harness assertion 14 → 16. | The missing pages were supplied; the ledger rule requires estimated/partial counts to yield to real ones. Nothing was invented while the gap was open. | `npm test` — 120 passed, 0 failed, including "16 archetypes" and the cross-reference checks that every archetype talent/power/drawback/occupation resolves. | v2 |

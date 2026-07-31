@@ -468,7 +468,7 @@ async function openGearCatalogue(c) {
             item.damage ? `Damage ${item.damage}` : null, item.armor ? `Armor ${item.armor}` : null,
             item.durability !== undefined ? `Durability ${item.durability}` : null,
             (item.features || []).join(", ") || null, item.note || null].filter(Boolean).join(" · ") }),
-          item.sourceFlag ? el("p", { class: "warn small", text: "This row's Durability is implausible in the supplied text — check your book." }) : null),
+          null),
         el("span", { class: "tap-hint", text: "Buy ▸" })));
     }
   };

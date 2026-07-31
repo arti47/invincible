@@ -99,6 +99,9 @@ const run = async () => {
       archetypes: D.ARCHETYPES.length, occupations: D.OCCUPATIONS.length, sources: D.POWER_SOURCES.length,
       crits: D.CRITICAL_INJURIES.length, challenges: D.CHALLENGES.length, weapons: D.WEAPONS.length,
       vehicles: D.VEHICLES.length, upgrades: D.BASE_UPGRADES.length, rules: D.RULES_LIBRARY.length,
+      deadVehicles: D.VEHICLES.filter((v) => v.durability < 1).map((v) => v.name),
+      negativeManeuver: D.VEHICLES.filter((v) => v.maneuver < 0).map((v) => v.name),
+      vehicleFlags: D.VEHICLE_DATA_FLAGS.length,
       npcs: N.NPC_PROFILES.length, creatures: N.CREATURES.length,
       adversaries: M.ADVERSARIES.length, pregens: P.PREGENS.length,
       soloTimers: S.CRISIS_TIMER.ladder.length,
@@ -122,6 +125,10 @@ const run = async () => {
   ok("36 power sources (D66)", data.sources === 36, String(data.sources));
   ok("12 critical injury rows", data.crits === 12, String(data.crits));
   ok("8 published challenges", data.challenges === 8, String(data.challenges));
+  ok("21 vehicles", data.vehicles === 21, String(data.vehicles));
+  ok("no vehicle starts wrecked (Durability >= 1)", data.deadVehicles.length === 0, data.deadVehicles.join(", "));
+  ok("no negative Maneuverability (the book prints none)", data.negativeManeuver.length === 0, data.negativeManeuver.join(", "));
+  ok("vehicle source-gap flags cleared", data.vehicleFlags === 0, String(data.vehicleFlags));
   ok("31 stock NPC profiles", data.npcs === 31, String(data.npcs));
   ok("18 creatures", data.creatures === 18, String(data.creatures));
   ok("33 adversary stat blocks", data.adversaries === 33, String(data.adversaries));

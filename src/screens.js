@@ -126,8 +126,7 @@ function referenceTables() {
   card.append(detailsTable("Body armor", [["Armor", "Rating", "Cost", "Notes"]].concat(
     D.BODY_ARMOR.map((a) => [a.name, a.armor, a.cost, a.note]))));
   card.append(detailsTable("Vehicles", [["Vehicle", "Type", "Pass.", "Man.", "Speed", "Dur.", "Armor", "Cost"]].concat(
-    D.VEHICLES.map((v) => [v.name + (v.sourceFlag ? " ⚠" : ""), v.type, v.passengers, v.maneuver ?? "—", v.speed, v.durability, v.armor, v.cost ?? "—"]))));
-  card.append(el("p", { class: "muted small", text: "⚠ marks rows whose Durability is implausible in the supplied text — check your book." }));
+    D.VEHICLES.map((v) => [v.name, v.type, v.passengers ?? "—", v.maneuver ?? "—", v.speed, v.durability, v.armor, v.cost ?? "—"]))));
   card.append(detailsTable("Conditions", [["Condition", "Effect", "Removal"]].concat(
     D.CONDITIONS.map((c) => [c.name, c.desc, c.removal]))));
   return card;
@@ -244,7 +243,6 @@ export function renderSettings(mount) {
     el("ul", {}, ...D.HOUSE_AIDS.map((h) => el("li", { text: h })))));
   card.append(el("details", {}, el("summary", { text: "Known source gaps" }),
     el("ul", {},
-      el("li", { text: "Four vehicle Durability values in the supplied table are implausible (0 or 1) and are shown as supplied, flagged with ⚠." }),
       el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
       el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));
   mount.append(card);
