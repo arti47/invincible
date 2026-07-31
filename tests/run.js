@@ -94,6 +94,8 @@ const run = async () => {
     const M = await import("/data-monsters.js");
     const P = await import("/data-pregens.js");
     const S = await import("/data-solo.js");
+    const R = await import("/src/rules.js");
+    const restricted = [...D.WEAPONS, ...D.BODY_ARMOR, ...D.GENERAL_GEAR, ...D.VEHICLES, ...D.VEHICLE_WEAPONS].filter((i) => i.restricted);
     return {
       powers: D.POWERS.length, talents: D.TALENTS.length, drawbacks: D.DRAWBACKS.length,
       archetypes: D.ARCHETYPES.length, occupations: D.OCCUPATIONS.length, sources: D.POWER_SOURCES.length,
@@ -102,6 +104,8 @@ const run = async () => {
       deadVehicles: D.VEHICLES.filter((v) => v.durability < 1).map((v) => v.name),
       negativeManeuver: D.VEHICLES.filter((v) => v.maneuver < 0).map((v) => v.name),
       vehicleFlags: D.VEHICLE_DATA_FLAGS.length,
+      ungatedRestricted: restricted.length,
+      restrictedGated: restricted.filter((i) => !R.purchaseCheck({ resources: 8, cost: i.cost ?? 1, restricted: true, streetwise: false }).allowed).length,
       npcs: N.NPC_PROFILES.length, creatures: N.CREATURES.length,
       adversaries: M.ADVERSARIES.length, pregens: P.PREGENS.length,
       soloTimers: S.CRISIS_TIMER.ladder.length,
@@ -129,6 +133,8 @@ const run = async () => {
   ok("no vehicle starts wrecked (Durability >= 1)", data.deadVehicles.length === 0, data.deadVehicles.join(", "));
   ok("no negative Maneuverability (the book prints none)", data.negativeManeuver.length === 0, data.negativeManeuver.join(", "));
   ok("vehicle source-gap flags cleared", data.vehicleFlags === 0, String(data.vehicleFlags));
+  ok("Restricted items exist and every one is Streetwise-gated", data.ungatedRestricted > 0 && data.restrictedGated === data.ungatedRestricted,
+    `${data.restrictedGated}/${data.ungatedRestricted} gated`);
   ok("31 stock NPC profiles", data.npcs === 31, String(data.npcs));
   ok("18 creatures", data.creatures === 18, String(data.creatures));
   ok("33 adversary stat blocks", data.adversaries === 33, String(data.adversaries));

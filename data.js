@@ -1208,7 +1208,7 @@ export const WEAPONS = [
 
 export const BODY_ARMOR = [
   { name: "Kevlar vest", armor: 1, cost: 2, note: "Standard law enforcement gear." },
-  { name: "Riot gear", armor: 2, cost: 3, note: "Heavy duty street defense gear; -2 dice on INTUITION rolls." },
+  { name: "Riot gear", armor: 2, cost: 3, restricted: true, note: "Heavy duty street defense gear; -2 dice on INTUITION rolls." },
   { name: "Archaic armor", armor: 2, cost: 3, note: "Historical chainmail or plate; -2 dice on AGILITY and INTUITION rolls." },
 ];
 

@@ -124,7 +124,7 @@ function referenceTables() {
   card.append(detailsTable("Weapons", [["Weapon", "Bonus", "Damage", "Range", "Cost", "Features"]].concat(
     D.WEAPONS.map((w) => [w.name, `+${w.bonus}`, w.damage || "—", w.range ? (Array.isArray(w.range) ? w.range.join("/") : w.range) : "—", `${w.cost}${w.restricted ? " R" : ""}`, (w.features || []).join(", ") || "—"]))));
   card.append(detailsTable("Body armor", [["Armor", "Rating", "Cost", "Notes"]].concat(
-    D.BODY_ARMOR.map((a) => [a.name, a.armor, a.cost, a.note]))));
+    D.BODY_ARMOR.map((a) => [a.name, a.armor, `${a.cost}${a.restricted ? " R" : ""}`, a.note]))));
   card.append(detailsTable("Vehicles", [["Vehicle", "Type", "Pass.", "Man.", "Speed", "Dur.", "Armor", "Cost"]].concat(
     D.VEHICLES.map((v) => [v.name, v.type, v.passengers ?? "—", v.maneuver ?? "—", v.speed, v.durability, v.armor, v.cost ?? "—"]))));
   card.append(detailsTable("Conditions", [["Condition", "Effect", "Removal"]].concat(
