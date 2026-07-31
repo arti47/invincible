@@ -77,6 +77,8 @@ function renderNav() {
     el("span", { class: "nav-icon", "aria-hidden": "true", text: "≡" }), el("span", { class: "nav-label", text: "Log" })));
   navHost.append(el("a", { class: "nav-item", href: "#/settings", "data-path": "settings" },
     el("span", { class: "nav-icon", "aria-hidden": "true", text: "⚙" }), el("span", { class: "nav-label", text: "Settings" })));
+  // Enabling Solo and/or GM pushes the bar to 8-9 tabs; tighten so nothing is clipped at 360px.
+  navHost.classList.toggle("compact", navHost.querySelectorAll(".nav-item").length > 6);
 }
 
 function updateNavState(path) {

@@ -120,6 +120,17 @@ export async function chooseModal(title, options, { allowCancel = true } = {}) {
   return m.promise;
 }
 
+/**
+ * Collapsed-by-default explainer for a panel: what it is for and how to drive it.
+ * Every major panel carries one so nothing on screen is unexplained.
+ */
+export function helpPanel(body, { title = "What is this panel for?" } = {}) {
+  const lines = Array.isArray(body) ? body : [body];
+  return el("details", { class: "help" },
+    el("summary", { text: title }),
+    ...lines.map((t) => el("p", { class: "small", text: t })));
+}
+
 /** Announce to screen readers without opening anything. */
 export function announce(text) {
   let live = $("#live-region");

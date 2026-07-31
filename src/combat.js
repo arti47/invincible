@@ -2,7 +2,7 @@
 // and the scene / session / adventure lifecycle engine with confirmation + one-step undo.
 
 import { el, clear, uid, clamp, d6 } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, chooseModal, announce } from "./ui.js";
+import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -231,6 +231,7 @@ export function renderTasks(mount) {
   const tasks = Store.getTasks();
   const section = el("section", { class: "card" },
     el("h3", { text: "Challenges & progress" }),
+    helpPanel(["A challenge is an obstacle with a rating and a time limit rather than an enemy to hit.", "Every 6 anyone rolls removes 1 point from the rating. Clear it to 0 inside the limit and you succeed; run out of time and the stated failure happens.", "Handling an objective always needs a roll, even if a power would obviously solve it."]),
     el("p", { class: "muted small", text: "Every 6 rolled removes 1 point from the Challenge rating. Handling an objective always needs a roll, even with a power." }));
   for (const t of tasks) {
     section.append(el("div", { class: "task" },

@@ -184,13 +184,17 @@ textarea.input { min-height: 90px; }
   display: flex; justify-content: space-around; align-items: stretch;
   background: var(--panel); border-top: 3px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
-  overflow-x: auto;
+  overflow: hidden;   /* items shrink to fit instead of scrolling off-screen */
 }
 .nav-item {
-  flex: 1 0 auto; min-width: 56px; min-height: 60px;
+  flex: 1 1 0; min-width: 0; min-height: 60px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--muted); text-decoration: none; font-size: .7rem; padding: .3rem;
+  color: var(--muted); text-decoration: none; font-size: .7rem; padding: .3rem .1rem;
 }
+.nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Solo and GM are opt-in, so the bar can hold up to nine tabs. Tighten past six. */
+.bottom-nav.compact .nav-item { font-size: .56rem; min-height: 54px; gap: 1px; }
+.bottom-nav.compact .nav-icon { font-size: .95rem; }
 .nav-item[aria-current="page"] { color: var(--ink); background: color-mix(in srgb, var(--accent) 35%, transparent); font-weight: 700; }
 .nav-icon { font-size: 1.15rem; }
 
@@ -378,3 +382,17 @@ summary { cursor: pointer; padding: .3rem 0; font-weight: 600; }
 .movement-modes { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
 .bonus-six { margin-top: .6rem; }
 .bonus-six .choice { width: 100%; }
+
+/* ---- collapsed panel help ---- */
+.help { margin: .35rem 0 .6rem; border-left: 3px solid var(--line); padding-left: .55rem; }
+.help > summary { cursor: pointer; font-size: .74rem; font-weight: 700; color: var(--muted);
+  letter-spacing: .02em; text-transform: uppercase; padding: .15rem 0; list-style: none; }
+.help > summary::-webkit-details-marker { display: none; }
+.help > summary::before { content: "? "; font-weight: 900; color: var(--accent); }
+.help[open] > summary { color: var(--ink); margin-bottom: .3rem; }
+.help p { margin: .25rem 0; color: var(--muted); }
+
+/* ---- no accidental zoom on installed PWAs ---- */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: manipulation; }
+body { touch-action: manipulation; }
+input, select, textarea { font-size: max(16px, 1rem); }   /* iOS zooms fields under 16px */

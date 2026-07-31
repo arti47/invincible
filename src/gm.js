@@ -1,7 +1,7 @@
 // gm.js — the opt-in GM screen: party panel, adversary drop-ins and every rollable table.
 
 import { el, clear, d6 } from "./core.js";
-import { modal, showToast, promptModal, chooseModal } from "./ui.js";
+import { modal, showToast, promptModal, chooseModal, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -24,7 +24,8 @@ export function renderGM(mount) {
 function partyPanel() {
   const chars = Store.listCharacters();
   const team = Store.getTeam();
-  const card = el("section", { class: "card" }, el("h3", { text: "Party" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Party" }),
+    helpPanel(["Every hero saved on this device, at a glance — vitals, karma, Reputation and armor.", "Peek opens a read-only summary of a hero's attributes, powers, talents and drawbacks."]));
   if (!chars.length) card.append(el("p", { class: "muted", text: "No heroes on this device yet." }));
   for (const c of chars) {
     const s = Derived.summary(c);
@@ -67,6 +68,7 @@ function threatGenerator() {
   const out = el("div", { class: "generator-output" });
   const card = el("section", { class: "card" },
     el("h3", { text: "Random threats" }),
+    helpPanel(["The book's threat generators, chained the way the rules chain them.", "Criminal activity rolls a crime, a complication and a reward. City incident rolls a catalyst, incident, location and complication. Global danger rolls a category then that category's own table.", "Rolling here never changes character state."]),
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => { clear(out); out.append(...criminalActivity()); } }, "Criminal activity"),
       el("button", { class: "btn", onclick: () => { clear(out); out.append(...cityIncident()); } }, "City incident"),
@@ -107,7 +109,8 @@ function globalDanger() {
 }
 
 function tablesPanel() {
-  const card = el("section", { class: "card" }, el("h3", { text: "Rollable tables" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Rollable tables" }),
+    helpPanel(["Every generator table in the core rules, individually rollable.", "Tables with a documented gap in the source re-roll automatically when a roll lands in it."]));
   const row = el("div", { class: "chiprow" });
   const tables = [
     ...R.gmTableList(),
@@ -138,7 +141,8 @@ function tablesPanel() {
 }
 
 function adversaryPanel() {
-  const card = el("section", { class: "card" }, el("h3", { text: "Adversaries & NPCs" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Adversaries & NPCs" }),
+    helpPanel(["Stock NPC profiles, animals, published adversaries and hero stat blocks.", "Open one to see its full stat block. Minion groups use a single Health equal to the number of minions."]));
   const search = el("input", { class: "input", type: "search", placeholder: "Search NPC profiles, creatures and adversaries…" });
   const list = el("div", { class: "npc-list" });
   const all = R.compendium();

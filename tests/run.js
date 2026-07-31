@@ -529,6 +529,23 @@ const run = async () => {
   ok("solo actions are laid out in loop order", soloUi.order.every((n, i, a) => n >= 0 && (i === 0 || n > a[i - 1])), JSON.stringify(soloUi.order));
   ok("social scene control exists on the solo tab", soloUi.labels.includes("Social scene"));
 
+  // Choosing a crisis: the alert seeds one, event checks add more, engaging turns it into a timer.
+  const crisis = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const before = JSON.parse(localStorage.getItem("invincible:solo") || "{}");
+    document.querySelector('#screen button')?.click();      // no-op guard
+    return { hasCrisesCard: !!Array.from(document.querySelectorAll("#screen h3")).find((h) => /^Crises/.test(h.textContent)), before: !!before, step: Solo.currentStep({ alert: "a", eventChecks: 1, timers: [], awaitingSocial: false }) };
+  });
+  ok("solo tab shows a Crises panel", crisis.hasCrisesCard);
+  ok("choosing a crisis is loop step 3", crisis.step === 2, String(crisis.step));
+
+  const helpUi = await page.evaluate(() => {
+    const h = Array.from(document.querySelectorAll("#screen details.help"));
+    return { count: h.length, allCollapsed: h.every((d) => !d.open) };
+  });
+  ok("solo panels carry help accordions", helpUi.count >= 5, String(helpUi.count));
+  ok("help accordions default to collapsed", helpUi.allCollapsed);
+
   /* ---------------------------------------------------------------- end-to-end play flow */
   section("First Session Playable — end-to-end");
   await page.evaluate(() => localStorage.clear());
@@ -625,6 +642,37 @@ const run = async () => {
     }
   }
   await page.setViewportSize({ width: 390, height: 844 });
+
+  // Nav must fit with every optional tab enabled — Solo + GM push it to nine items.
+  const navFit = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    Settings.set("gmScreen", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    await new Promise((r) => setTimeout(r, 120));
+    const nav = document.querySelector("#bottom-nav");
+    const items = Array.from(nav.querySelectorAll(".nav-item"));
+    const out = {
+      count: items.length,
+      compact: nav.classList.contains("compact"),
+      overflow: nav.scrollWidth - nav.clientWidth,
+      clipped: items.filter((a) => a.getBoundingClientRect().right > nav.getBoundingClientRect().right + 1).length,
+    };
+    Settings.set("soloMode", false);      // restore: the gating section below asserts the defaults
+    Settings.set("gmScreen", false);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    return out;
+  });
+  ok("nav holds nine tabs with Solo and GM on", navFit.count === 9, String(navFit.count));
+  ok("nav switches to compact past six tabs", navFit.compact);
+  ok("nav does not overflow its own width", navFit.overflow <= 0, `${navFit.overflow}px`);
+  ok("no nav item is clipped off the bar", navFit.clipped === 0, String(navFit.clipped));
+
+  const zoom = await page.evaluate(() => {
+    const vp = document.querySelector('meta[name="viewport"]').content;
+    return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };
+  });
+  ok("viewport blocks pinch zoom for installed PWAs", zoom.userScalable && zoom.maxScale);
 
   const a11y = await page.evaluate(() => {
     const iconButtons = Array.from(document.querySelectorAll("button")).filter((b) => !b.textContent.trim());

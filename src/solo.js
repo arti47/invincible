@@ -1,7 +1,7 @@
 // solo.js — Crisis Mode assistant (Ch.9): event checks, response engines, and the four timers.
 
 import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup } from "./core.js";
-import { modal, showToast, promptModal, chooseModal, announce } from "./ui.js";
+import { modal, showToast, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as S from "../data-solo.js";
 import { D } from "./rules.js";
 import * as R from "./rules.js";
@@ -16,7 +16,7 @@ function load() {
 }
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
-  return { crisisLevel: 0, alert: "", timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
+  return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
     eventChecks: 0, awaitingSocial: false };
 }
 
@@ -123,13 +123,67 @@ export function renderSolo(mount) {
     state.alert ? el("p", { class: "alert-box", text: state.alert }) : null,
     state.alert ? el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }) : null));
 
+  mount.append(crisesCard(state, mount));
   mount.append(timersCard(state, mount));
   mount.append(objectivesCard(state, mount));
   mount.append(alliesCard(state, mount));
   mount.append(encounterCard(state, mount));
   mount.append(enginesCard(state, mount));
   mount.append(el("section", { class: "card" }, el("h3", { text: "Crisis log" }),
+    helpPanel(["Everything that has happened this crisis, newest first — alerts, checks, timer results, oracle answers and karma.", "Use it to reconstruct the story afterwards, or to remind yourself what a timer was counting down to."]),
     el("ul", { class: "muted small" }, ...state.log.slice(0, 12).map((l) => el("li", { text: l.text })))));
+}
+
+/* ---------------------------------------------------------------- loop step 3: choosing a crisis */
+
+/**
+ * Crises are the things you can engage. The alert seeds the first; every event check that fires
+ * adds more. Loop step 3 is "choose a crisis and start a crisis timer" — engaging one turns it
+ * into a running timer, which is what the rest of the loop tracks.
+ */
+function addCrisis(state, text, source) {
+  state.crises = state.crises || [];
+  state.crises.push({ id: uid("crisis"), text, source, at: Date.now() });
+  return state.crises[state.crises.length - 1];
+}
+
+function crisesCard(state, mount) {
+  const card = el("section", { class: "card" }, el("h3", { text: `Crises (${(state.crises || []).length})` }));
+  card.append(helpPanel([
+    "Every danger you could engage right now. The crisis alert seeds the first one; each event check that fires adds another.",
+    "Step 3 of the loop is choosing one. Engage a crisis to turn it into a running crisis timer — the timer counts down to it happening.",
+    "You do not have to take them in order. Ignoring a crisis is a legitimate choice; it stays on the list until you engage or drop it.",
+  ]));
+  if (!(state.crises || []).length) {
+    card.append(el("p", { class: "muted small", text: state.alert
+      ? "Nothing pending. Make an event check to turn up a new crisis, or start a timer directly."
+      : "Generate a crisis alert to seed the first crisis." }));
+    return card;
+  }
+  for (const c of state.crises) {
+    card.append(el("div", { class: "timer" },
+      el("div", {}, el("strong", { text: c.source === "alert" ? "From the alert" : "From an event check" }),
+        el("p", { class: "small", text: c.text })),
+      el("div", { class: "chosen-actions" },
+        el("button", { class: currentStep(state) === 2 ? "btn tiny primary" : "btn tiny", onclick: () => engageCrisis(state, c, mount) }, "Engage"),
+        el("button", { class: "btn tiny ghost", onclick: () => {
+          state.crises = state.crises.filter((x) => x.id !== c.id);
+          logEvent(state, `Crisis ignored: ${c.text}`);
+          save(state); renderSolo(mount);
+        } }, "Ignore"))));
+  }
+  return card;
+}
+
+function engageCrisis(state, crisis, mount) {
+  const phase = phaseFor(state.crisisLevel);
+  const start = S.CRISIS_TIMER.startByPhase[phase.key];
+  state.timers.push({ id: uid("timer"), name: crisis.text, proximity: start, crisisId: crisis.id });
+  state.crises = state.crises.filter((x) => x.id !== crisis.id);
+  logEvent(state, `Engaged: ${crisis.text} (timer starts ${start})`);
+  save(state);
+  showToast(`Crisis timer started at "${start}". Check it as time passes.`, { variant: "good" });
+  renderSolo(mount);
 }
 
 /* ---------------------------------------------------------------- loop steps 5 & 6 */
@@ -169,6 +223,7 @@ async function socialScene(state, mount) {
 async function resolveCrisis(state, mount) {
   const lines = [
     "Clear the crisis alert.",
+    `Drop ${(state.crises || []).length} pending crisis/crises.`,
     `Stop ${state.timers.length} running timer(s).`,
     `Reset the crisis level from ${state.crisisLevel} to 0.`,
     state.encounter ? "Clear the encounter timer." : null,
@@ -183,6 +238,7 @@ async function resolveCrisis(state, mount) {
   if (!ok) return;
   snapshot(state, "Resolve crisis");
   state.alert = "";
+  state.crises = [];
   state.timers = [];
   state.encounter = null;
   state.crisisLevel = 0;
@@ -203,13 +259,22 @@ function doEventCheck(state, mount) {
   const value = roll2d6();
   const entry = tableLookup(S.EVENT_CHECK.entries, value);
   let extra = "";
-  if (value === 2) { state.crisisLevel = clamp(state.crisisLevel + 2, 0, 10); extra = twoEvents(); }
-  else if (value <= 4) { state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10); extra = oneEvent(); }
-  else if (value >= 11) extra = `Opportunity: ${complexPhrase()}`;
+  if (value === 2) {
+    state.crisisLevel = clamp(state.crisisLevel + 2, 0, 10);
+    const a = complexPhrase(), b = complexPhrase();
+    addCrisis(state, a, "event"); addCrisis(state, b, "event");
+    extra = `${a} / ${b}`;
+  } else if (value <= 4) {
+    state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
+    const one = complexPhrase();
+    addCrisis(state, one, "event");
+    extra = one;
+  } else if (value >= 11) extra = `Opportunity: ${complexPhrase()}`;
   logEvent(state, `Event check ${value}: ${entry.text}${extra ? ` — ${extra}` : ""}`);
   save(state);
   modal({ title: `Event check — ${value}`,
-    body: el("div", {}, el("p", { text: entry.text }), extra ? el("p", { class: "lede", text: extra }) : null),
+    body: el("div", {}, el("p", { text: entry.text }), extra ? el("p", { class: "lede", text: extra }) : null,
+      value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -295,16 +360,19 @@ async function generateAlert(state, mount) {
   state.crisisLevel = 0;
   state.eventChecks = 0;
   state.awaitingSocial = false;
+  state.crises = [];
+  addCrisis(state, text, "alert");
   logEvent(state, `New crisis alert: ${text}`);
   save(state);
   renderSolo(mount);
-  showToast("Crisis alert generated. Start a crisis timer.", { variant: "good" });
+  showToast("Crisis alert generated. Make an event check, then engage a crisis.", { variant: "good", timeout: 6000 });
 }
 
 /* ---------------------------------------------------------------- crisis timers */
 
 function timersCard(state, mount) {
   const card = el("section", { class: "card" }, el("h3", { text: "Crisis timers" }),
+    helpPanel(["A crisis timer counts down to something bad happening. Check it whenever time passes in the fiction.", "Each 6 rolled moves it closer. When it reaches 'now' the event fires, the crisis level rises by 1, and the timer is removed.", "Keep at least one running at all times — that is what drives solo play forward without a GM."]),
     el("p", { class: "muted small", text: S.CRISIS_TIMER.sourceGap ? "Proximity labels follow the surrounding rules text; the supplied table was partly truncated." : "" }));
   for (const t of state.timers) {
     const rung = S.CRISIS_TIMER.ladder.find((l) => l.key === t.proximity) || S.CRISIS_TIMER.ladder[0];
@@ -366,7 +434,8 @@ function checkTimer(state, timer, mount) {
 /* ---------------------------------------------------------------- objectives */
 
 function objectivesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Objectives" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Objectives" }),
+    helpPanel(["What your hero is trying to achieve. Objectives are how you earn karma in solo play, replacing the end-of-session questions.", "Roll Progress to advance along the ladder. 1s cancel 6s, and a net-negative result pushes the objective one step back.", "When it reaches the top of the ladder, claim the karma shown on the row."]));
   for (const o of state.objectives) {
     const rung = S.OBJECTIVE_TIMER.ladder.find((l) => l.key === o.status);
     card.append(el("div", { class: "timer" },
@@ -443,7 +512,8 @@ function completeObjective(state, obj, mount) {
 /* ---------------------------------------------------------------- allies */
 
 function alliesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Allies" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Allies" }),
+    helpPanel(["A group helping you, tracked as one unit rather than as individual NPCs.", "Check them to see how they hold up: each 6 is a success (2 damage each in a fight), each 1 drops their status one step toward Alone.", "Allies aiding you directly give +2 dice to your own roll."]));
   for (const a of state.allies) {
     const rung = S.ALLY_TIMER.ladder.find((l) => l.key === a.status);
     card.append(el("div", { class: "timer" },
@@ -509,7 +579,8 @@ async function allyCheck(state, ally, mount, inFight) {
 /* ---------------------------------------------------------------- encounters */
 
 function encounterCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Encounter timer" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Encounter timer" }),
+    helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.", "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.", "At 'Encountered' the highest die sets enemy behaviour and the number of 6s sets how big the threat is."]));
   const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
   if (!state.encounter) {
@@ -580,7 +651,8 @@ function encounterCheck(state, mount) {
 /* ---------------------------------------------------------------- engines reference */
 
 function enginesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Location engines" }));
+  const card = el("section", { class: "card" }, el("h3", { text: "Location engines" }),
+    helpPanel(["Oracles for describing where you are when there is no GM to tell you.", "Roll the engine matching the scale you need; the Atmosphere engine is mixed in automatically to colour the result.", "Bonus-6 effects, solo combat reminders and power guidance live here too."]));
   const row = el("div", { class: "chiprow" });
   for (const [key, engine] of Object.entries(S.LOCATION_ENGINES)) {
     row.append(el("button", { class: "chip", onclick: () => {

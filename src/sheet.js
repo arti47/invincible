@@ -1,7 +1,7 @@
 // sheet.js — the live character sheet, persistent resource header and all in-play tracking.
 
 import { el, clear, clamp, uid } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, chooseModal, announce } from "./ui.js";
+import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -160,6 +160,7 @@ function vitalsCard(c, s) {
   const critList = (c.state.crits || []).filter((x) => !x.healed);
   return el("section", { class: "card" },
     el("h3", { text: "Vitals" }),
+    helpPanel(["Health is physical punishment, Resolve is mental strain. At 0 Health you are broken and roll a critical injury; at 0 Resolve you are stressed out and cannot push rolls.", "Take damage routes through the dice engine so armor, critical injuries and the dying procedure fire correctly — prefer it over editing the number directly.", "Rest & recover applies the book's recovery table: Health returns after an action scene, Resolve in a social scene."]),
     el("div", { class: "vitals" },
       vitalStepper("Health", c.state.health, s.maxHealth, "health"),
       vitalStepper("Resolve", c.state.resolve, s.maxResolve, "resolve")),
@@ -260,6 +261,7 @@ function attributesCard(c, s) {
   }
   return el("section", { class: "card" },
     el("h3", { text: "Attributes" }),
+    helpPanel(["Your six attributes are your dice pools. Tap one to roll it — pool size equals the score, and a single 6 succeeds.", "Critical injuries and active conditions are already subtracted from the number of dice shown; a pool never drops below 1.", "Attack opens the four attack types, each rolling the attribute the rules require."]),
     el("p", { class: "muted small", text: "Tap to roll. Critical injuries and conditions are applied automatically." }),
     grid,
     el("div", { class: "row-actions" },
@@ -401,6 +403,7 @@ function conditionsCard(c) {
   const pen = Derived.conditionPenalty(c);
   return el("section", { class: "card" },
     el("h3", { text: "Conditions" }),
+    helpPanel(["Temporary states from powers, stunts and hazards. Tap to toggle one on or off.", "Anything with a dice penalty is applied automatically to every affected roll — you do not subtract it yourself.", "Afflicted is the heaviest: −3 dice (−4 if Potent) to all attribute rolls, including the PRESENCE roll to shake it off."]),
     grid,
     pen.notes.length ? el("p", { class: "warn small", text: pen.notes.join(" · ") }) : el("p", { class: "muted small", text: "No conditions active." }),
     c.state.conditions.afflicted ? el("button", { class: "btn", onclick: () => shakeOffAffliction(c) }, "Shake off (PRESENCE, no action)") : null);
@@ -444,6 +447,7 @@ function inventoryCard(c, s) {
 
   return el("section", { class: "card" },
     el("h3", { text: "Gear" }),
+    helpPanel(["What you are carrying. This game has no encumbrance — the GM simply disallows the absurd.", "Buying compares your Resources against an item's Cost: higher buys it outright, equal needs a roll of at least one 6, lower needs a loan.", "Restricted items need the Streetwise talent no matter how wealthy you are."]),
     el("p", { class: "stat-line", text: `Resources ${s.resources} — ${D.STANDARD_OF_LIVING[s.resources]}` }),
     list,
     el("div", { class: "row-actions" },

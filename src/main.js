@@ -27,9 +27,30 @@ function boot() {
     });
   }
 
+  lockZoom();
   registerServiceWorker();
   window.__invincibleReady = true;
   document.body.dataset.ready = "true";
+}
+
+/**
+ * iOS ignores user-scalable=no in Safari tabs but honours it once installed to the home screen.
+ * Pinch and double-tap still fire gesture events there, so block those too — the app is a
+ * fixed-layout tracker and an accidental zoom strands the bottom nav off-screen.
+ */
+function lockZoom() {
+  for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+    document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+  }
+  let lastTouch = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouch <= 300) e.preventDefault();   // double-tap zoom
+    lastTouch = now;
+  }, { passive: false });
+  document.addEventListener("touchmove", (e) => {
+    if (e.touches.length > 1) e.preventDefault();     // pinch zoom
+  }, { passive: false });
 }
 
 function registerServiceWorker() {
