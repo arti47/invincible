@@ -363,3 +363,18 @@ summary { cursor: pointer; padding: .3rem 0; font-weight: 600; }
 .toast-action { margin-left: auto; background: none; border: 2px solid currentColor; border-radius: 6px; color: inherit; font: inherit; padding: .15rem .5rem; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---- solo: sequence of play strip ---- */
+.solo-steps { list-style: none; margin: .6rem 0; padding: 0; display: grid; gap: .25rem; counter-reset: none; }
+.solo-step { display: flex; gap: .5rem; align-items: flex-start; font-size: .82rem;
+  padding: .3rem .45rem; border-radius: .4rem; border: 2px solid transparent; opacity: .65; }
+.solo-step-n { flex: 0 0 1.35rem; height: 1.35rem; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 700; font-size: .72rem; background: var(--ink-soft, #d8d8d8); color: var(--ink, #111); }
+.solo-step.done { opacity: .45; }
+.solo-step.done .solo-step-n { background: var(--good, #3a7d44); color: #fff; }
+.solo-step.current { opacity: 1; border-color: var(--accent, #f2c200); background: color-mix(in srgb, var(--accent, #f2c200) 14%, transparent); }
+.solo-step.current .solo-step-n { background: var(--accent, #f2c200); color: #111; }
+.solo-step-t { min-width: 0; }
+.movement-modes { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
+.bonus-six { margin-top: .6rem; }
+.bonus-six .choice { width: 100%; }

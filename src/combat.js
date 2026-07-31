@@ -8,6 +8,7 @@ import { D } from "./rules.js";
 import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import * as Roller from "./roller.js";
+import { Settings } from "./settings.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
 
@@ -361,17 +362,27 @@ export async function openLifecycle(kind) {
 async function openSessionEnd(c) {
   const answers = {};
   const bad = {};
+  // Solo heroes earn karma from objective timers, not the session questions (§3.20) — asking both
+  // would double-count.
+  const solo = Settings.soloMode();
   const body = el("div", { class: "session-end" });
   const total = el("p", { class: "stat-line", "aria-live": "polite" });
 
   const update = () => {
-    const gained = D.KARMA.earnQuestions.reduce((n, q) => n + (answers[q.key] ? (q.key === "flaw" && answers.flawOvercome ? D.KARMA.overcomeFlawBonus : 1) : 0), 0);
-    const lost = D.KARMA.badQuestions.reduce((n, q) => n + (bad[q.key] ? 1 : 0), 0);
-    total.textContent = `Karma this session: +${gained} − ${lost} = ${Math.max(0, gained - lost)} (current total ${c.state.karma})`;
+    const gained = solo ? 0 : D.KARMA.earnQuestions.reduce((n, q) => n + (answers[q.key] ? (q.key === "flaw" && answers.flawOvercome ? D.KARMA.overcomeFlawBonus : 1) : 0), 0);
+    const lost = solo ? 0 : D.KARMA.badQuestions.reduce((n, q) => n + (bad[q.key] ? 1 : 0), 0);
+    total.textContent = solo
+      ? `Solo play: karma comes from completed objectives on the Solo tab (current total ${c.state.karma}).`
+      : `Karma this session: +${gained} − ${lost} = ${Math.max(0, gained - lost)} (current total ${c.state.karma})`;
   };
 
-  body.append(el("h4", { class: "section", text: "Karma questions" }));
-  for (const q of D.KARMA.earnQuestions) {
+  if (solo) {
+    body.append(el("p", { class: "muted", text: "Crisis Mode is on. In solo play karma is earned by reaching objectives on the objective timer, so the ten session questions do not apply — claim objective karma on the Solo tab instead." }));
+    body.append(el("p", { class: "cite" }, el("a", { href: "#/solo", class: "rules-link" }, "Open the Solo tab")));
+  }
+
+  if (!solo) body.append(el("h4", { class: "section", text: "Karma questions" }));
+  for (const q of solo ? [] : D.KARMA.earnQuestions) {
     const cb = el("input", { type: "checkbox", onchange: (e) => { answers[q.key] = e.target.checked; update(); } });
     body.append(el("label", { class: "check" }, cb, ` ${q.text}`));
     if (q.key === "flaw") {
@@ -379,8 +390,8 @@ async function openSessionEnd(c) {
       body.append(el("label", { class: "check indent" }, oc, " I overcame my flaw instead (2 karma, and the flaw is removed)"));
     }
   }
-  body.append(el("h4", { class: "section", text: "Bad karma" }));
-  for (const q of D.KARMA.badQuestions) {
+  if (!solo) body.append(el("h4", { class: "section", text: "Bad karma" }));
+  for (const q of solo ? [] : D.KARMA.badQuestions) {
     const pre = q.key === "wrecked" && (c.state.scene.wreckedZones || []).length > 0;
     const cb = el("input", { type: "checkbox", checked: pre, onchange: (e) => { bad[q.key] = e.target.checked; update(); } });
     if (pre) bad[q.key] = true;
@@ -402,8 +413,8 @@ async function openSessionEnd(c) {
   Store.snapshot("End session");
   let msg = "";
   Store.updateCharacter((ch) => {
-    const gained = D.KARMA.earnQuestions.reduce((n, q) => n + (answers[q.key] ? (q.key === "flaw" && answers.flawOvercome ? D.KARMA.overcomeFlawBonus : 1) : 0), 0);
-    const lost = D.KARMA.badQuestions.reduce((n, q) => n + (bad[q.key] ? 1 : 0), 0);
+    const gained = solo ? 0 : D.KARMA.earnQuestions.reduce((n, q) => n + (answers[q.key] ? (q.key === "flaw" && answers.flawOvercome ? D.KARMA.overcomeFlawBonus : 1) : 0), 0);
+    const lost = solo ? 0 : D.KARMA.badQuestions.reduce((n, q) => n + (bad[q.key] ? 1 : 0), 0);
     const before = ch.state.karma;
     ch.state.karma = Math.max(D.KARMA.floor, ch.state.karma + gained - lost);
     if (repUp.checked) ch.state.reputationGained = (ch.state.reputationGained || 0) + 1;

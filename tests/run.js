@@ -460,6 +460,48 @@ const run = async () => {
   ok("A24 objective arithmetic (advance / regress / hold)", JSON.stringify(solo.a24) === "[4,1,2]", JSON.stringify(solo.a24));
   ok("A25 ally successes convert to 2 damage each", solo.a25.damage === 6);
 
+  // Sequence of play: the step strip must track SOLO_SETUP.loop, and every loop step must be
+  // reachable from a control on the tab.
+  const soloFlow = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const S = await import("/data-solo.js");
+    const step = (s) => Solo.currentStep({ alert: "", timers: [], eventChecks: 0, awaitingSocial: false, ...s });
+    return {
+      loopSteps: S.SOLO_SETUP.loop.length,
+      noAlert: step({}),
+      afterAlert: step({ alert: "x" }),
+      afterEventCheck: step({ alert: "x", eventChecks: 1 }),
+      running: step({ alert: "x", eventChecks: 1, timers: [{ id: "t" }] }),
+      awaitingSocial: step({ alert: "x", eventChecks: 1, timers: [{ id: "t" }], awaitingSocial: true }),
+    };
+  });
+  ok("solo loop has six steps", soloFlow.loopSteps === 6, String(soloFlow.loopSteps));
+  ok("step 1 is generating an alert", soloFlow.noAlert === 0);
+  ok("step 2 is event checks once an alert exists", soloFlow.afterAlert === 1);
+  ok("step 3 is starting a timer", soloFlow.afterEventCheck === 2);
+  ok("step 4 is running checks with a timer up", soloFlow.running === 3);
+  ok("step 5 (social scene) takes priority once something resolves", soloFlow.awaitingSocial === 4);
+
+  await page.evaluate(async () => {
+    localStorage.clear();
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);                       // the tab is gated off by default
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/solo";
+  });
+  await page.waitForTimeout(300);
+  const soloUi = await page.evaluate(() => {
+    const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    const strip = Array.from(document.querySelectorAll(".solo-step")).map((s) => s.className);
+    const order = ["Generate crisis alert", "Event check", "Ask yes / no", "Complex answer", "Social scene"]
+      .map((l) => labels.indexOf(l));
+    return { labels, strip, order, current: strip.filter((c) => c.includes("current")).length };
+  });
+  ok("solo step strip renders six steps", soloUi.strip.length === 6, String(soloUi.strip.length));
+  ok("exactly one step is marked current", soloUi.current === 1, String(soloUi.current));
+  ok("solo actions are laid out in loop order", soloUi.order.every((n, i, a) => n >= 0 && (i === 0 || n > a[i - 1])), JSON.stringify(soloUi.order));
+  ok("social scene control exists on the solo tab", soloUi.labels.includes("Social scene"));
+
   /* ---------------------------------------------------------------- end-to-end play flow */
   section("First Session Playable — end-to-end");
   await page.evaluate(() => localStorage.clear());

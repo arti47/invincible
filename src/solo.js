@@ -5,17 +5,74 @@ import { modal, showToast, promptModal, chooseModal, announce } from "./ui.js";
 import * as S from "../data-solo.js";
 import { D } from "./rules.js";
 import * as R from "./rules.js";
+import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import { STORAGE_PREFIX } from "./core.js";
 
 const KEY = `${STORAGE_PREFIX}solo`;
 
 function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || defaults(); } catch { return defaults(); }
+  try { return { ...defaults(), ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { return defaults(); }
 }
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
-  return { crisisLevel: 0, alert: "", timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [] };
+  return { crisisLevel: 0, alert: "", timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
+    eventChecks: 0, awaitingSocial: false };
+}
+
+/* ---------------------------------------------------------------- sequence of play (SOLO_SETUP.loop) */
+
+let undoSnapshot = null;
+function snapshot(state, label) { undoSnapshot = { label, data: JSON.stringify(state) }; }
+function undoSolo(mount) {
+  if (!undoSnapshot) return false;
+  save(JSON.parse(undoSnapshot.data));
+  undoSnapshot = null;
+  showToast("Undone.");
+  renderSolo(mount);
+  return true;
+}
+
+/** Which of the six loop steps the player is on. Guidance only — nothing is ever blocked. */
+export function currentStep(state) {
+  if (!state.alert) return 0;              // 1. generate a crisis alert
+  if (state.awaitingSocial) return 4;      // 5. play a social scene
+  if (!state.eventChecks) return 1;        // 2. crisis level 0, begin event checks
+  if (!state.timers.length) return 2;      // 3. choose a crisis, start timers
+  return 3;                                // 4. make checks, track timers
+}
+
+function stepStrip(state) {
+  const cur = currentStep(state);
+  return el("ol", { class: "solo-steps", "aria-label": "Sequence of play" },
+    ...S.SOLO_SETUP.loop.map((text, i) => el("li", {
+      class: `solo-step ${i === cur ? "current" : ""} ${i < cur ? "done" : ""}`,
+      "aria-current": i === cur ? "step" : null,
+    }, el("span", { class: "solo-step-n", "aria-hidden": "true", text: String(i + 1) }), el("span", { class: "solo-step-t", text }))));
+}
+
+/** Guide, don't block: warn when acting out of order, then run the action anyway. */
+function offSequence(state, want, label) {
+  const cur = currentStep(state);
+  if (cur === want) return;
+  showToast(`Out of sequence — step ${cur + 1} is "${S.SOLO_SETUP.loop[cur]}". Running ${label} anyway.`,
+    { variant: "warn", timeout: 5500 });
+}
+
+/** Bonus-6 effects: offered wherever a solo roll leaves a spare 6 (one per roll). */
+function bonusSixBlock(state, sixes) {
+  if (sixes < 2) return null;
+  const spare = sixes - 1;
+  const wrap = el("details", { class: "bonus-six", open: true },
+    el("summary", { text: `${spare} spare 6 — choose one bonus effect` }));
+  for (const b of S.BONUS_SIX_EFFECTS) {
+    wrap.append(el("button", { class: "choice", onclick: () => {
+      logEvent(state, `Bonus 6 — ${b.name}: ${b.effect}`);
+      save(state);
+      showToast(`${b.name}: ${b.effect}`, { timeout: 6000 });
+    } }, el("span", { class: "choice-label", text: b.name }), el("span", { class: "choice-hint", text: b.effect })));
+  }
+  return wrap;
 }
 
 export function phaseFor(level) {
@@ -35,20 +92,36 @@ export function renderSolo(mount) {
   clear(mount);
   const phase = phaseFor(state.crisisLevel);
 
+  const step = currentStep(state);
+  const primary = (n) => (step === n ? "btn primary" : "btn");
+
   mount.append(el("section", { class: "card" },
     el("h2", { text: "Crisis Mode" }),
     el("p", { class: "muted small", text: "Solo play without a GM. Keep at least one timer running at all times." }),
+    stepStrip(state),
     el("div", { class: "crisis-level" },
       el("span", { class: "crisis-label", text: "Crisis level" }),
       el("button", { class: "icon-btn", "aria-label": "Lower crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel - 1, 0, 10); save(state); renderSolo(mount); } }, "−"),
       el("strong", { class: `crisis-value ${phase.key}`, "aria-live": "polite", text: `${state.crisisLevel} — ${phase.name}` }),
       el("button", { class: "icon-btn", "aria-label": "Raise crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10); save(state); renderSolo(mount); } }, "+")),
+    // Actions in loop order: alert → event check → oracles → social scene → resolve.
     el("div", { class: "row-actions" },
-      el("button", { class: "btn primary", onclick: () => doEventCheck(state, mount) }, "Event check"),
-      el("button", { class: "btn", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
-      el("button", { class: "btn", onclick: () => askComplex(state, mount) }, "Complex answer"),
-      el("button", { class: "btn ghost", onclick: () => generateAlert(state, mount) }, "New crisis alert")),
-    state.alert ? el("p", { class: "alert-box", text: state.alert }) : null));
+      el("button", { class: primary(0), onclick: () => generateAlert(state, mount) }, state.alert ? "New crisis alert" : "Generate crisis alert"),
+      el("button", { class: primary(1), onclick: () => doEventCheck(state, mount) }, "Event check"),
+      el("button", { class: "btn ghost", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
+      el("button", { class: "btn ghost", onclick: () => askComplex(state, mount) }, "Complex answer"),
+      el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
+      state.alert ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
+      undoSnapshot ? el("button", { class: "btn ghost", onclick: () => undoSolo(mount) }, `Undo ${undoSnapshot.label}`) : null),
+    el("div", { class: "movement-modes" },
+      el("span", { class: "crisis-label", text: "Moving" }),
+      el("div", { class: "chiprow" }, ...S.MOVEMENT_MODES.map((m) => el("button", {
+        class: `chip selectable ${state.mode === m.key ? "selected" : ""}`, title: m.desc,
+        onclick: () => { state.mode = m.key; save(state); renderSolo(mount); },
+      }, m.name)))),
+    el("p", { class: "muted small", text: "Movement mode shifts both the crisis timer and the encounter timer." }),
+    state.alert ? el("p", { class: "alert-box", text: state.alert }) : null,
+    state.alert ? el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }) : null));
 
   mount.append(timersCard(state, mount));
   mount.append(objectivesCard(state, mount));
@@ -59,9 +132,74 @@ export function renderSolo(mount) {
     el("ul", { class: "muted small" }, ...state.log.slice(0, 12).map((l) => el("li", { text: l.text })))));
 }
 
+/* ---------------------------------------------------------------- loop steps 5 & 6 */
+
+/** Step 5: social scene. Restores Resolve equal to PRESENCE (Ch.4 recovery table). */
+async function socialScene(state, mount) {
+  const hero = Store.activeCharacter();
+  let restored = 0;
+  if (hero) {
+    Store.updateCharacter((ch) => {
+      const before = ch.state.resolve;
+      ch.state.resolve = clamp(ch.state.resolve + Derived.effectiveAttributes(ch).presence, 0, Derived.maxResolve(ch));
+      restored = ch.state.resolve - before;
+    }, { id: hero.id });
+  }
+  state.awaitingSocial = false;
+  logEvent(state, `Social scene${restored ? ` — Resolve +${restored}` : ""}`);
+  save(state);
+  const hook = el("p", { class: "lede" });
+  modal({ title: "Social scene",
+    body: el("div", {},
+      hero ? el("p", { class: "good", text: `Resolve restored equal to your PRESENCE: +${restored}.` })
+        : el("p", { class: "warn small", text: "No active hero — no Resolve restored." }),
+      ...S.SOLO_SETUP.socialScenes.map((t) => el("p", { class: "small", text: t })),
+      el("button", { class: "btn ghost", onclick: () => {
+        const r = R.rollNamedTable(D.GM_TABLES.socialHooks);
+        hook.textContent = `Hook (${r.value}): ${r.entry.text}`;
+        logEvent(state, `Social hook: ${r.entry.text}`);
+        save(state);
+      } }, "Roll a social hook"),
+      hook),
+    actions: [{ label: "Done", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** Step 6: close the crisis out. Confirmation summary + one-step undo. */
+async function resolveCrisis(state, mount) {
+  const lines = [
+    "Clear the crisis alert.",
+    `Stop ${state.timers.length} running timer(s).`,
+    `Reset the crisis level from ${state.crisisLevel} to 0.`,
+    state.encounter ? "Clear the encounter timer." : null,
+    "Prompt a social scene (step 5), then a new alert (step 1).",
+  ].filter(Boolean);
+  const ok = await modal({ title: "Resolve crisis",
+    body: el("div", {},
+      el("p", { class: "muted", text: "This applies the whole bundle. You can undo it in one step." }),
+      el("ul", {}, ...lines.map((t) => el("li", { text: t }))),
+      el("p", { class: "muted small", text: "Objectives and allies are left alone — claim any objective karma first." })),
+    actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Resolve", value: true, variant: "primary" }] }).promise;
+  if (!ok) return;
+  snapshot(state, "Resolve crisis");
+  state.alert = "";
+  state.timers = [];
+  state.encounter = null;
+  state.crisisLevel = 0;
+  state.eventChecks = 0;
+  state.awaitingSocial = true;
+  logEvent(state, "Crisis resolved — play a social scene, then generate a new alert.");
+  save(state);
+  showToast("Crisis resolved. Social scene next.", { variant: "good", timeout: 8000,
+    action: { label: "Undo", onClick: () => undoSolo(mount) } });
+  renderSolo(mount);
+}
+
 /* ---------------------------------------------------------------- FATE tools */
 
 function doEventCheck(state, mount) {
+  offSequence(state, 1, "an event check");
+  state.eventChecks = (state.eventChecks || 0) + 1;
   const value = roll2d6();
   const entry = tableLookup(S.EVENT_CHECK.entries, value);
   let extra = "";
@@ -126,6 +264,7 @@ async function askComplex(state, mount) {
 }
 
 async function generateAlert(state, mount) {
+  offSequence(state, 0, "a new alert");
   const hero = Store.activeCharacter();
   const rankKey = hero?.identity?.rank || "global";
   const sources = S.SOLO_SETUP.alertsByRank[rankKey] || S.SOLO_SETUP.alertsByRank.global;
@@ -154,6 +293,8 @@ async function generateAlert(state, mount) {
   }
   state.alert = text;
   state.crisisLevel = 0;
+  state.eventChecks = 0;
+  state.awaitingSocial = false;
   logEvent(state, `New crisis alert: ${text}`);
   save(state);
   renderSolo(mount);
@@ -174,12 +315,10 @@ function timersCard(state, mount) {
         el("button", { class: "btn tiny ghost", onclick: () => { state.timers = state.timers.filter((x) => x.id !== t.id); logEvent(state, `Timer stopped: ${t.name}`); save(state); renderSolo(mount); } }, "Stop"))));
   }
   if (!state.timers.length) card.append(el("p", { class: "warn small", text: "No timer running. Always keep at least one." }));
+  const mode = S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0];
+  card.append(el("p", { class: "muted small", text: `Moving ${mode.name.toLowerCase()}: ${mode.crisis > 0 ? "+" : ""}${mode.crisis} crisis dice.` }));
   card.append(el("div", { class: "row-actions" },
-    el("button", { class: "btn", onclick: () => addTimer(state, mount) }, "Start a crisis timer"),
-    el("div", { class: "chiprow" }, ...S.MOVEMENT_MODES.map((m) => el("button", {
-      class: `chip selectable ${state.mode === m.key ? "selected" : ""}`, title: m.desc,
-      onclick: () => { state.mode = m.key; save(state); renderSolo(mount); },
-    }, m.name)))));
+    el("button", { class: currentStep(state) === 2 ? "btn primary" : "btn", onclick: () => addTimer(state, mount) }, "Start a crisis timer")));
   return card;
 }
 
@@ -210,6 +349,7 @@ function checkTimer(state, timer, mount) {
     fired = true;
     state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
     state.timers = state.timers.filter((t) => t.id !== timer.id);
+    state.awaitingSocial = true;   // step 5: a resolved event calls for a social scene
   }
   logEvent(state, `Timer "${timer.name}": rolled ${sixes} → ${ladder[next].name}${fired ? " — IT HAPPENS" : ""}`);
   save(state);
@@ -217,7 +357,8 @@ function checkTimer(state, timer, mount) {
     body: el("div", {},
       el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
       el("p", { text: `${timer.name}: now ${ladder[next].name}.` }),
-      fired ? el("p", { class: "bad", text: "Deal with the consequences. Crisis level +1. Start another timer." }) : null),
+      fired ? el("p", { class: "bad", text: "Deal with the consequences. Crisis level +1. Start another timer, then play a social scene." }) : null,
+      bonusSixBlock(state, sixes)),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -283,7 +424,8 @@ function objectiveCheck(state, obj, mount) {
     body: el("div", {},
       el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
       penalty ? el("p", { class: "warn small", text: `${phase.name}: ${penalty} progress dice.` }) : null,
-      el("p", { text: message })),
+      el("p", { text: message }),
+      bonusSixBlock(state, sixes)),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -291,9 +433,10 @@ function objectiveCheck(state, obj, mount) {
 function completeObjective(state, obj, mount) {
   Store.updateCharacter((ch) => { ch.state.karma += obj.karma; });
   state.objectives = state.objectives.filter((x) => x.id !== obj.id);
+  state.awaitingSocial = true;   // step 5: a completed objective calls for a social scene
   logEvent(state, `Objective complete: ${obj.name} (+${obj.karma} karma)`);
   save(state);
-  showToast(`Objective complete: +${obj.karma} karma.`, { variant: "good" });
+  showToast(`Objective complete: +${obj.karma} karma. Social scene next.`, { variant: "good" });
   renderSolo(mount);
 }
 
@@ -357,7 +500,8 @@ async function allyCheck(state, ally, mount, inFight) {
     body: el("div", {},
       el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
       el("p", { text }),
-      ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null),
+      ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null,
+      bonusSixBlock(state, sixes)),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -366,11 +510,15 @@ async function allyCheck(state, ally, mount, inFight) {
 
 function encounterCard(state, mount) {
   const card = el("section", { class: "card" }, el("h3", { text: "Encounter timer" }));
+  const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
+    el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
   if (!state.encounter) {
     card.append(el("p", { class: "muted small", text: "Start an encounter timer when exploring an unknown location or evading enemies." }));
     card.append(el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"));
+    card.append(sequence);
     return card;
   }
+  card.append(sequence);
   const rung = S.ENCOUNTER_TIMER.ladder.find((l) => l.key === state.encounter.presence);
   card.append(el("p", { class: "stat-line", text: `${rung.name} · ${rung.dice} enemy dice · moving ${state.mode}` }));
   card.append(el("div", { class: "row-actions" },
@@ -421,6 +569,8 @@ function encounterCheck(state, mount) {
         el("ul", { class: "small" }, ...S.ESCAPE_MODIFIERS.map((m) => el("li", { text: `${m.text}: ${m.dice > 0 ? "+" : ""}${m.dice} dice` })))));
     state.encounter.presence = "encountered";
   }
+  const bonus = bonusSixBlock(state, sixes);
+  if (bonus) body.append(bonus);
   logEvent(state, `Encounter check: ${sixes} sixes → ${ladder[next].name}`);
   save(state);
   modal({ title: "Encounter check", body, actions: [{ label: "OK", variant: "primary" }] });
@@ -449,6 +599,8 @@ function enginesCard(state, mount) {
   card.append(el("details", {}, el("summary", { text: "Solo combat and recovery reminders" }),
     ...S.SOLO_COMBAT.map((t) => el("p", { class: "small", text: t })),
     ...S.SOLO_SETUP.recovery.map((t) => el("p", { class: "small good", text: t }))));
+  card.append(el("details", {}, el("summary", { text: "Using powers without a GM" }),
+    ...S.SOLO_POWER_USE.map((t) => el("p", { class: "small", text: t }))));
   return card;
 }
 
