@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Invincible Player">
+  <rect width="512" height="512" rx="96" fill="#f2c200"/>
+  <g fill="none" stroke="#14131a" stroke-width="26" stroke-linejoin="round">
+    <path d="M256 56 L436 150 V300 C436 386 352 440 256 468 C160 440 76 386 76 300 V150 Z"/>
+  </g>
+  <path d="M256 120 L196 300 h44 l16 92 60 -180 h-44 z" fill="#14131a"/>
+  <circle cx="128" cy="118" r="14" fill="#14131a" opacity=".5"/>
+  <circle cx="384" cy="118" r="14" fill="#14131a" opacity=".5"/>
+</svg>
