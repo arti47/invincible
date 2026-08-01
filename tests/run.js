@@ -1225,6 +1225,97 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- the Ch.9 encounter sequence, step by step */
+  const encounter = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const S = await import("/data-solo.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+
+    const enc = (phase, extra = {}) => ({ presence: "encountered", phase, ...extra });
+    const base = { crisisLevel: 0, alert: "x", crises: [], timers: [], allies: [], objectives: [],
+      mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 };
+
+    const steps = {
+      moving: Solo.sequenceIndex({ encounter: { presence: "allClear", phase: "moving" } }),
+      afterCheck: Solo.sequenceIndex({ encounter: { presence: "uncertain", phase: "moving", lastCheck: { sixes: 1 } } }),
+      revealed: Solo.sequenceIndex({ encounter: enc("revealed") }),
+      unspotted: Solo.sequenceIndex({ encounter: enc("standoff", { spotted: { hero: false } }) }),
+      spotted: Solo.sequenceIndex({ encounter: enc("standoff", { spotted: { hero: true } }) }),
+      fight: Solo.sequenceIndex({ encounter: enc("fight") }),
+      reset: Solo.sequenceIndex({ encounter: enc("reset") }),
+      advance: Solo.sequenceIndex({ encounter: enc("advance") }),
+    };
+
+    const hero = Derived.blankCharacter();
+    hero.id = "enc_hero";
+    hero.identity.heroName = "Scout";
+    hero.powers = [{ name: "DETECTION", level: 0, boosts: [], limits: [] }];
+    Store.saveCharacter(hero);
+    Store.setActiveCharacter("enc_hero");
+    const opt = {
+      good: !!Solo.powerOptionAvailable({ encounter: { presence: "near", lastCheck: { sixes: 1, ones: 0 } } }),
+      tooManyOnes: !!Solo.powerOptionAvailable({ encounter: { presence: "near", lastCheck: { sixes: 1, ones: 2 } } }),
+      noSix: !!Solo.powerOptionAvailable({ encounter: { presence: "near", lastCheck: { sixes: 0, ones: 0 } } }),
+      tooFar: !!Solo.powerOptionAvailable({ encounter: { presence: "uncertain", lastCheck: { sixes: 2, ones: 0 } } }),
+      triggered: !!Solo.powerOptionAvailable({ encounter: { presence: "encountered", lastCheck: { sixes: 2, ones: 0 } } }),
+    };
+
+    const controlsFor = async (encounter, mode = "alert") => {
+      localStorage.setItem("invincible:solo", JSON.stringify({ ...base, mode, encounter }));
+      location.hash = "#/home"; location.hash = "#/solo";
+      await new Promise((r) => setTimeout(r, 220));
+      const panel = document.querySelector("#solo-encounter");
+      return {
+        labels: Array.from(panel.querySelectorAll(".row-actions button, .row-actions a")).map((b) => b.textContent.trim()),
+        step: panel.querySelector(".stage-label")?.textContent || "",
+        stats: panel.querySelector(".stat-line")?.textContent || "",
+      };
+    };
+    const moving = await controlsFor({ presence: "confirmed", phase: "moving" });
+    const revealed = await controlsFor(enc("revealed", { behaviour: S.ENEMY_BEHAVIOUR[1], threat: S.ENEMY_THREAT[0] }));
+    const unspotted = await controlsFor(enc("standoff", { spotted: { hero: false, npcs: true } }));
+    const spotted = await controlsFor(enc("standoff", { spotted: { hero: true, npcs: true } }));
+    const surprised = await controlsFor(enc("standoff", { surprised: true, spotted: { hero: true } }));
+    const resetPhase = await controlsFor(enc("reset"));
+    const advance = await controlsFor(enc("advance"));
+    const cautious = await controlsFor({ presence: "confirmed", phase: "moving" }, "cautious");
+    const rushed = await controlsFor({ presence: "confirmed", phase: "moving" }, "rushed");
+    localStorage.removeItem("invincible:solo");
+    return { steps, opt, moving, revealed, unspotted, spotted, surprised, resetPhase, advance, cautious, rushed,
+      printed: S.ENCOUNTER_SEQUENCE.length };
+  });
+  ok("the printed sequence has twelve steps", encounter.printed === 12, String(encounter.printed));
+  ok("every encounter phase maps onto a printed step",
+    JSON.stringify(encounter.steps) === JSON.stringify({ moving: 1, afterCheck: 3, revealed: 4, unspotted: 6, spotted: 7, fight: 8, reset: 9, advance: 10 }),
+    JSON.stringify(encounter.steps));
+  ok("the panel names the step it is standing on", /^Step \d+ of 12 — /.test(encounter.moving.step), encounter.moving.step);
+  ok("moving offers the check and a search",
+    encounter.moving.labels.includes("Move / linger — check") && encounter.moving.labels.includes("Search this zone"),
+    encounter.moving.labels.join(" | "));
+  ok("an encounter asks for the spotting check", encounter.revealed.labels.includes("Spotting check"), encounter.revealed.labels.join(" | "));
+  ok("an unspotted hero may reveal, ambush, hide, back out or sneak past",
+    ["Reveal yourself", "Ambush them", "Hide", "Back out", "Sneak past"].every((l) => encounter.unspotted.labels.includes(l)),
+    encounter.unspotted.labels.join(" | "));
+  ok("a spotted hero may escape or draw initiative",
+    encounter.spotted.labels.includes("Escape (AGILITY)") && encounter.spotted.labels.includes("Draw initiative"),
+    encounter.spotted.labels.join(" | "));
+  ok("a surprised hero may only draw initiative",
+    encounter.surprised.labels.some((l) => /surprised/.test(l)) && !encounter.surprised.labels.includes("Escape (AGILITY)"),
+    encounter.surprised.labels.join(" | "));
+  ok("a resolved encounter resets the timer, then advances time",
+    encounter.resetPhase.labels.includes("Reset the encounter timer")
+      && encounter.advance.labels.includes("Advance time — check crisis timers"));
+  ok("movement mode changes the enemy dice on the panel",
+    /4 enemy dice/.test(encounter.moving.stats) && /3 enemy dice/.test(encounter.cautious.stats) && /5 enemy dice/.test(encounter.rushed.stats),
+    `${encounter.moving.stats} || ${encounter.cautious.stats} || ${encounter.rushed.stats}`);
+  ok("the powers option needs a power, a 6 and at most one 1, with the enemy closing",
+    encounter.opt.good && !encounter.opt.tooManyOnes && !encounter.opt.noSix && !encounter.opt.tooFar && !encounter.opt.triggered,
+    JSON.stringify(encounter.opt));
+
   /* ---------------------------------------------------------------- wizard UI */
   section("Creation wizard UI");
   await page.evaluate(() => localStorage.clear());

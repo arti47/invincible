@@ -9,6 +9,7 @@ import * as R from "./rules.js";
 import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import { setLearnTab } from "./learn.js";
+import * as Combat from "./combat.js";
 import { STORAGE_PREFIX } from "./core.js";
 
 const KEY = `${STORAGE_PREFIX}solo`;
@@ -559,6 +560,14 @@ function complexPhrase() {
   return `${dir} ${sub}`;
 }
 
+/** The Binary Response Engine as a plain roll, so other procedures can consult it. */
+function binaryRoll(odds = "even") {
+  let value;
+  if (odds === "even") value = d6();
+  else { const a = d6(), b = d6(); value = odds === "yes" ? Math.max(a, b) : Math.min(a, b); }
+  return { value, entry: tableLookup(S.BINARY_ENGINE.entries, value) };
+}
+
 async function askBinary(state, mount) {
   const question = await promptModal("What are you asking?", { title: "Yes / no question" });
   if (question === null) return;
@@ -897,13 +906,57 @@ async function allyCheck(state, ally, mount, inFight) {
 
 /* ---------------------------------------------------------------- encounters */
 
-function encounterCard(state, mount) {
-  const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Encounter timer" }),
-    helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.", "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.", "At 'Encountered' the highest die sets enemy behaviour and the number of 6s sets how big the threat is."]));
-  const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
-    el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
+/* ---------------------------------------------------------------- encounters (Ch.9 sequence) */
 
-  // The rolled location sits directly under the button that produced it.
+/**
+ * The Encounter Check Sequence, driven rather than printed. `state.encounter.phase` walks the
+ * chapter's numbered steps and each phase offers only the controls that step allows:
+ *   moving   1-4  choose a mode, check, shift the presence (or use a power to outmaneuver/prepare)
+ *   revealed 5-6  behaviour and threat are known
+ *   standoff 7-8  spotting resolved: reveal, ambush, back out, hide — or escape
+ *   fight    9    draw initiative
+ *   reset    10   reset the timer to fit the situation
+ *   advance  11   check active crisis timers, then 12: round again
+ */
+const ENCOUNTER_PHASES = ["moving", "revealed", "standoff", "fight", "reset", "advance"];
+const SPOT_POWERS = ["DETECTION", "ENHANCED SENSES", "TELEPATHY"];
+
+function encMode(state) { return S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0]; }
+function encRung(key) { return S.ENCOUNTER_TIMER.ladder.find((l) => l.key === key) || S.ENCOUNTER_TIMER.ladder[0]; }
+function encIndex(key) { return S.ENCOUNTER_TIMER.ladder.findIndex((l) => l.key === key); }
+
+/** Does the hero hold one of the powers that unlock Outmaneuver / Prepare? */
+function spotPower(character = Store.activeCharacter()) {
+  const names = (character?.powers || []).map((p) => String(p.name).toUpperCase());
+  return SPOT_POWERS.find((n) => names.includes(n)) || null;
+}
+
+/** The powers option: at least one 6, no more than one 1, and no encounter triggered. */
+export function powerOptionAvailable(state) {
+  const last = state.encounter?.lastCheck;
+  if (!last || state.encounter.presence === "encountered") return null;
+  if (!(last.sixes >= 1 && last.ones <= 1)) return null;
+  const power = spotPower();
+  if (!power) return null;
+  const i = encIndex(state.encounter.presence);
+  const closing = encIndex("closing");
+  const canOutmaneuver = i >= closing;
+  const canPrepare = i >= closing && i <= encIndex("near");
+  if (!canOutmaneuver && !canPrepare) return null;   // the option exists only from 'closing' on
+  return { power, canOutmaneuver, canPrepare };
+}
+
+function encounterCard(state, mount) {
+  const card = el("div", { class: "timer-group", id: "solo-encounter" },
+    el("h4", { class: "group-head", text: "Encounter timer" }),
+    helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.",
+      "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.",
+      "The panel walks the chapter's encounter sequence: check, reveal, spot, avoid or escape, fight, reset, advance time.",
+      "Searching a zone takes minutes — it rolls INTUITION and prompts a crisis timer check."]));
+  const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
+    el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t, i) => el("li", {
+      class: state.encounter ? (i === sequenceIndex(state) ? "current-step" : "") : "", text: t }))));
+
   const placeBlock = () => (state.place
     ? el("div", { class: "oracle-answer place" },
       el("span", { class: "oracle-kind", text: `This place · ${state.place.engine}` }),
@@ -916,43 +969,111 @@ function encounterCard(state, mount) {
     card.append(el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
       el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
-    const p = placeBlock();
-    if (p) card.append(p);
+    const p0 = placeBlock();
+    if (p0) card.append(p0);
     card.append(sequence);
     return card;
   }
-  card.append(sequence);
-  const rung = S.ENCOUNTER_TIMER.ladder.find((l) => l.key === state.encounter.presence);
-  card.append(el("p", { class: "stat-line", text: `${rung.name} · ${rung.dice} enemy dice · moving ${state.mode}` }));
-  card.append(el("div", { class: "row-actions" },
-    el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"),
-    el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
-    el("button", { class: "btn ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Clear")));
+
+  const enc = state.encounter;
+  const phase = enc.phase || "moving";
+  const rung = encRung(enc.presence);
+  const mode = encMode(state);
+  const dice = Math.max(1, rung.dice + mode.encounter);
+  card.append(el("p", { class: "stat-line", text: `${rung.name}${rung.dice ? ` · ${dice} enemy dice` : ""} · moving ${mode.name.replace(" (default)", "")}` }));
+  card.append(el("p", { class: "stage-label", text: `Step ${sequenceIndex(state) + 1} of 12 — ${S.ENCOUNTER_SEQUENCE[sequenceIndex(state)]}` }));
+
+  const row = el("div", { class: "row-actions" });
+
+  if (phase === "moving") {
+    row.append(el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"));
+    row.append(el("button", { class: "btn", onclick: () => searchZone(state, mount) }, "Search this zone"));
+    const opt = powerOptionAvailable(state);
+    if (opt) {
+      if (opt.canOutmaneuver) row.append(el("button", { class: "btn warn", onclick: () => usePowerOption(state, mount, "outmaneuver", opt.power) }, "Outmaneuver"));
+      if (opt.canPrepare) row.append(el("button", { class: "btn warn", onclick: () => usePowerOption(state, mount, "prepare", opt.power) }, "Prepare"));
+    }
+  } else if (phase === "revealed") {
+    row.append(el("button", { class: "btn primary", onclick: () => spottingCheck(state, mount) }, "Spotting check"));
+  } else if (phase === "standoff") {
+    if (enc.surprised) {
+      row.append(el("button", { class: "btn danger", onclick: () => drawForEncounter(state, mount) }, "Draw initiative — you are surprised"));
+    } else {
+      if (!enc.spotted?.hero) {
+        row.append(el("button", { class: "btn", onclick: () => standoffChoice(state, mount, "reveal") }, "Reveal yourself"));
+        row.append(el("button", { class: "btn danger", onclick: () => standoffChoice(state, mount, "ambush") }, "Ambush them"));
+        row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "hide") }, "Hide"));
+        row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "backOut") }, "Back out"));
+        row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "sneak") }, "Sneak past"));
+      } else {
+        row.append(el("button", { class: "btn", onclick: () => escapeEncounter(state, mount) }, "Escape (AGILITY)"));
+        row.append(el("button", { class: "btn danger", onclick: () => drawForEncounter(state, mount) }, "Draw initiative"));
+      }
+    }
+  } else if (phase === "fight") {
+    row.append(el("button", { class: "btn primary", onclick: () => { enc.phase = "reset"; save(state); renderSolo(mount); } }, "Encounter resolved"));
+    row.append(el("a", { class: "btn ghost", href: "#/combat" }, "Go to the action scene"));
+  } else if (phase === "reset") {
+    row.append(el("button", { class: "btn primary", onclick: () => resetEncounter(state, mount) }, "Reset the encounter timer"));
+  } else if (phase === "advance") {
+    row.append(el("button", { class: "btn primary", onclick: () => advanceTime(state, mount) }, "Advance time — check crisis timers"));
+  }
+
+  row.append(el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"));
+  row.append(el("button", { class: "btn ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Clear"));
+  card.append(row);
+
   const p = placeBlock();
   if (p) card.append(p);
+
+  if (enc.detail) {
+    card.append(el("div", { class: "oracle-answer" },
+      el("span", { class: "oracle-kind", text: enc.detail.kind }),
+      el("p", { class: "lede", text: enc.detail.text }),
+      enc.detail.note ? el("p", { class: "muted small", text: enc.detail.note }) : null));
+  }
+  card.append(sequence);
   return card;
+}
+
+/** Which of the twelve printed steps the panel is standing on. */
+export function sequenceIndex(state) {
+  const enc = state.encounter;
+  if (!enc) return 0;
+  switch (enc.phase || "moving") {
+    case "revealed": return 4;
+    case "standoff": return enc.spotted?.hero ? 7 : 6;
+    case "fight": return 8;
+    case "reset": return 9;
+    case "advance": return 10;
+    default: return enc.lastCheck ? 3 : 1;
+  }
 }
 
 async function startEncounter(state, mount) {
   const presence = await chooseModal("Starting enemy presence", S.ENCOUNTER_TIMER.ladder.slice(0, 6).map((l) => ({
-    label: l.name, hint: `${l.dice} enemy dice`, value: l.key })));
+    label: l.name, hint: `${l.dice} enemy dice`, value: l.key })), { allowCancel: true });
   if (!presence) return;
-  state.encounter = { presence };
+  state.encounter = { presence, phase: "moving", lastCheck: null, detail: null };
+  logEvent(state, `Encounter timer started at ${encRung(presence).name}.`);
   save(state);
   renderSolo(mount);
 }
 
+/** Steps 2-4, and 5-6 when the presence reaches 'encountered'. */
 function encounterCheck(state, mount) {
+  const enc = state.encounter;
   const ladder = S.ENCOUNTER_TIMER.ladder;
-  const idx = ladder.findIndex((l) => l.key === state.encounter.presence);
-  const rung = ladder[idx];
-  const mode = S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0];
-  const dice = Math.max(1, rung.dice + mode.encounter);
+  const idx = encIndex(enc.presence);
+  const mode = encMode(state);
+  const dice = Math.max(1, ladder[idx].dice + mode.encounter);
   const faces = Array.from({ length: dice }, () => d6());
   const sixes = faces.filter((f) => f === 6).length;
+  const ones = faces.filter((f) => f === 1).length;
   const highest = Math.max(...faces, 0);
   const next = Math.min(ladder.length - 1, idx + sixes);
-  state.encounter.presence = ladder[next].key;
+  enc.presence = ladder[next].key;
+  enc.lastCheck = { faces, sixes, ones, highest };
 
   const body = el("div", {},
     el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
@@ -962,24 +1083,313 @@ function encounterCheck(state, mount) {
     const ev = S.ENCOUNTER_TIMER.evidence.find((e) => e.sixes === Math.min(3, sixes));
     body.append(el("p", { class: "muted", text: ev.text }));
   }
+
   if (ladder[next].key === "encountered") {
     const behaviour = S.ENEMY_BEHAVIOUR.find((b) => b.highest === highest) || S.ENEMY_BEHAVIOUR.find((b) => b.highest === 0);
     const threat = S.ENEMY_THREAT.find((t) => t.sixes === Math.min(3, sixes)) || S.ENEMY_THREAT[0];
+    enc.behaviour = behaviour;
+    enc.threat = threat;
+    enc.surprised = behaviour.highest === 0;
+    enc.phase = "revealed";
+    enc.detail = { kind: `${behaviour.name} · ${threat.name}`, text: behaviour.effect, note: threat.examples };
     body.append(
       el("h4", { class: "section", text: "Encounter!" }),
-      el("p", {}, el("strong", { text: behaviour.name + ": " }), behaviour.effect),
-      el("p", {}, el("strong", { text: threat.name + ": " }), threat.examples),
-      el("details", {}, el("summary", { text: "Avoiding or escaping" }),
-        ...S.AVOIDING_ENCOUNTERS.map((t) => el("p", { class: "small", text: t })),
-        el("p", { class: "small", text: "Escape needs an AGILITY roll; modifiers:" }),
-        el("ul", { class: "small" }, ...S.ESCAPE_MODIFIERS.map((m) => el("li", { text: `${m.text}: ${m.dice > 0 ? "+" : ""}${m.dice} dice` })))));
-    state.encounter.presence = "encountered";
+      el("p", {}, el("strong", { text: `${behaviour.name}: ` }), behaviour.effect),
+      el("p", {}, el("strong", { text: `${threat.name}: ` }), threat.examples),
+      el("p", { class: "small", text: /False alarm/.test(behaviour.name)
+        ? "A false alarm — no hostile enemy. Reset the timer and move on."
+        : "Next: make the spotting check, then decide how the encounter opens." }));
+    if (/False alarm/.test(behaviour.name)) enc.phase = "reset";
+  } else {
+    enc.phase = "moving";
+    const opt = powerOptionAvailable(state);
+    if (opt) {
+      body.append(el("p", { class: "warn small", text: `${opt.power} lets you Outmaneuver${opt.canPrepare ? " or Prepare" : ""} instead of rolling the next check.` }));
+    }
   }
+
   const bonus = bonusSixBlock(state, sixes);
   if (bonus) body.append(bonus);
   logEvent(state, `Encounter check: ${sixes} sixes → ${ladder[next].name}`);
   save(state);
   modal({ title: "Encounter check", body, actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** Step 7: who sees whom, with the movement mode applied to both INTUITION rolls. */
+async function spottingCheck(state, mount) {
+  const enc = state.encounter;
+  const mode = encMode(state);
+  const c = Store.activeCharacter();
+  const b = enc.behaviour || S.ENEMY_BEHAVIOUR[0];
+  const spotted = { hero: false, npcs: false };
+  const body = el("div", {}, el("p", {}, el("strong", { text: `${b.name}: ` }), b.effect));
+
+  if (b.highest === 4) {                      // passive: you see them, they are unaware
+    spotted.npcs = true;
+  } else if (b.highest === 5) {               // searching: you see them, they roll to see you
+    spotted.npcs = true;
+    const n = Number(await promptModal("Their INTUITION score?", { title: "They roll to spot you", value: "3" })) || 3;
+    const dice = Math.max(1, n + mode.vsIntuition);
+    const faces = Array.from({ length: dice }, () => d6());
+    spotted.hero = faces.some((f) => f === 6);
+    body.append(diceLine(faces, `They roll ${dice} INTUITION dice${mode.vsIntuition ? ` (${mode.vsIntuition > 0 ? "+" : ""}${mode.vsIntuition} for moving ${mode.key})` : ""} — ${spotted.hero ? "they spot you" : "they miss you"}.`));
+  } else if (b.highest === 6) {               // stalking: they see you, you roll to see them
+    spotted.hero = true;
+    const pool = Math.max(1, (c ? Derived.attributePool(c, "intuition") : 3) + mode.ownIntuition);
+    const faces = Array.from({ length: pool }, () => d6());
+    spotted.npcs = faces.some((f) => f === 6);
+    body.append(diceLine(faces, `You roll ${pool} INTUITION dice${mode.ownIntuition ? ` (${mode.ownIntuition > 0 ? "+" : ""}${mode.ownIntuition} for moving ${mode.key})` : ""} — ${spotted.npcs ? "you spot them" : "you cannot find them"}.`));
+  } else {
+    spotted.hero = true; spotted.npcs = true;
+  }
+
+  enc.spotted = spotted;
+  enc.phase = "standoff";
+  enc.detail = { kind: "Spotting", text: spotted.hero ? "You have been spotted." : "You are still unspotted.",
+    note: spotted.npcs ? "You know where they are." : "You have not pinned them down." };
+  body.append(el("p", { class: spotted.hero ? "warn" : "good",
+    text: spotted.hero ? "You are spotted — escape with AGILITY, or draw initiative." : "You are unspotted — reveal yourself, ambush, hide, back out or sneak past." }));
+  logEvent(state, `Spotting: hero ${spotted.hero ? "spotted" : "unspotted"}, enemies ${spotted.npcs ? "located" : "unlocated"}.`);
+  save(state);
+  modal({ title: "Spotting check", body, actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+function diceLine(faces, text) {
+  return el("div", {},
+    el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
+    el("p", { text }));
+}
+
+/** Step 7's options for an unspotted hero, plus the book's avoidance procedures. */
+async function standoffChoice(state, mount, choice) {
+  const enc = state.encounter;
+  const mode = encMode(state);
+  if (choice === "reveal") {
+    enc.spotted = { hero: true, npcs: true };
+    enc.detail = { kind: "Revealed", text: "You step into the open. They know you are here." };
+    logEvent(state, "Revealed yourself to the enemy.");
+    save(state); renderSolo(mount);
+    return;
+  }
+  if (choice === "ambush") {
+    enc.detail = { kind: "Ambush", text: "You strike first — draw initiative with the enemy surprised." };
+    logEvent(state, "Ambushed the enemy.");
+    enc.ambush = true;
+    save(state);
+    drawForEncounter(state, mount, { enemySurprised: true });
+    return;
+  }
+  if (choice === "backOut") {
+    enc.detail = { kind: "Backed out", text: "You retreat from the zone without risk — but consider what that costs you in the location." };
+    logEvent(state, "Backed out of the zone.");
+    enc.phase = "reset";
+    save(state); renderSolo(mount);
+    return;
+  }
+  // Hide and Sneak past both hinge on an enemy INTUITION roll.
+  let searches = true;
+  if (choice === "hide") {
+    const r = binaryRoll("even");
+    searches = /yes/i.test(r.entry.text);
+    if (!searches) {
+      enc.detail = { kind: "Hidden", text: `They do not search (${r.entry.text}) — they move out of the zone within minutes.` };
+      logEvent(state, "Hid successfully; the enemy did not search.");
+      enc.phase = "reset";
+      save(state); renderSolo(mount);
+      modal({ title: "Hide", body: el("div", {}, el("p", { text: `Binary Engine: ${r.entry.text} — they do not make an active search.` })), actions: [{ label: "OK", variant: "primary" }] });
+      return;
+    }
+  }
+  const n = Number(await promptModal("Their INTUITION score?", { title: choice === "hide" ? "They search for you" : "Sneak past", value: "3" })) || 3;
+  const dice = Math.max(1, n + mode.vsIntuition);
+  const faces = Array.from({ length: dice }, () => d6());
+  const found = faces.some((f) => f === 6);
+  const body = diceLine(faces, found
+    ? "They spot you — the encounter is on."
+    : (choice === "hide" ? "They fail to find you and move on within minutes." : "You slip through to the next zone."));
+  if (found) {
+    enc.spotted = { hero: true, npcs: true };
+    enc.detail = { kind: choice === "hide" ? "Hiding failed" : "Sneaking failed", text: "They spotted you." };
+  } else {
+    enc.detail = { kind: choice === "hide" ? "Hidden" : "Snuck past", text: choice === "hide" ? "They searched and missed you." : "You reached the next zone unseen." };
+    enc.phase = "reset";
+  }
+  logEvent(state, `${choice === "hide" ? "Hide" : "Sneak past"}: ${found ? "spotted" : "clean"}.`);
+  save(state);
+  modal({ title: choice === "hide" ? "Hide" : "Sneak past", body, actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** Step 8: escape with an AGILITY roll and the printed modifier list. */
+async function escapeEncounter(state, mount) {
+  const enc = state.encounter;
+  const c = Store.activeCharacter();
+  const boxes = S.ESCAPE_MODIFIERS.map((m) => {
+    const input = el("input", { type: "checkbox" });
+    return { m, input, row: el("label", { class: "toggle-row" }, input,
+      el("span", { text: `${m.text} (${m.dice > 0 ? "+" : ""}${m.dice} dice)` })) };
+  });
+  const base = c ? Derived.attributePool(c, "agility") : 3;
+  const body = el("div", {},
+    el("p", { text: `AGILITY ${base} dice. Tick anything that applies:` }),
+    ...boxes.map((b) => b.row),
+    el("p", { class: "muted small", text: "Success places you up to two zones away (or as far as a movement power allows) and the timer resets. Failure draws initiative." }));
+  const go = await modal({ title: "Escape the encounter", body,
+    actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Roll AGILITY", value: true, variant: "primary" }] }).promise;
+  if (!go) return;
+  const mod = boxes.reduce((n, b) => n + (b.input.checked ? b.m.dice : 0), 0);
+  const dice = Math.max(1, base + mod);
+  const faces = Array.from({ length: dice }, () => d6());
+  const sixes = faces.filter((f) => f === 6).length;
+  const escaped = sixes > 0;
+  enc.detail = { kind: escaped ? "Escaped" : "Caught", text: escaped
+    ? "You break away — place yourself up to two zones off, then reset the timer."
+    : "You are caught up in the encounter — draw initiative." };
+  enc.phase = escaped ? "reset" : "standoff";
+  if (!escaped) enc.spotted = { hero: true, npcs: true };
+  logEvent(state, `Escape roll: ${dice} dice, ${sixes} sixes — ${escaped ? "escaped" : "caught"}.`);
+  save(state);
+  const body2 = diceLine(faces, `${dice} AGILITY dice${mod ? ` (${mod > 0 ? "+" : ""}${mod})` : ""} — ${escaped ? "you escape" : "you are caught"}.`);
+  const bonus = bonusSixBlock(state, sixes);
+  if (bonus) body2.append(bonus);
+  modal({ title: "Escape", body: body2, actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** Step 9: draw initiative. Starts a real action scene, carrying the surprise across. */
+function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
+  const enc = state.encounter;
+  enc.phase = "fight";
+  enc.detail = { kind: "Initiative drawn", text: enc.surprised
+    ? "You are surprised — you take the worst card in round 1."
+    : enemySurprised ? "You have the drop on them." : "The fight is on." };
+  logEvent(state, `Encounter joined${enc.surprised ? " (hero surprised)" : enemySurprised ? " (enemy surprised)" : ""}.`);
+  save(state);
+  const combat = Combat.startActionScene();
+  if (enc.surprised && combat) {
+    const cb = combat.combatants.find((x) => x.side === "hero");
+    if (cb) { cb.surprised = true; Combat.drawInitiative(combat); Store.saveCombat(combat); }
+  }
+  showToast("Action scene started — the Action tab has initiative and the combatants.", { variant: "good", timeout: 6000 });
+  renderSolo(mount);
+}
+
+/** Step 10: reset the timer to fit what just happened. */
+async function resetEncounter(state, mount) {
+  const pick = await chooseModal("Reset the encounter timer", S.ENCOUNTER_TIMER.resets.map((t) => {
+    const [label, hint] = t.split(" — ");
+    const rung = S.ENCOUNTER_TIMER.ladder.find((l) => l.name.toLowerCase() === label.toLowerCase());
+    return { label, hint, value: rung ? rung.key : "allClear" };
+  }));
+  if (!pick) return;
+  const enc = state.encounter;
+  enc.presence = pick;
+  enc.phase = "advance";
+  enc.lastCheck = null;
+  enc.behaviour = null; enc.threat = null; enc.spotted = null; enc.surprised = false; enc.ambush = false;
+  enc.detail = { kind: "Timer reset", text: `Enemy presence set to ${encRung(pick).name}.` };
+  logEvent(state, `Encounter timer reset to ${encRung(pick).name}.`);
+  save(state);
+  renderSolo(mount);
+}
+
+/**
+ * Step 11: time passes. Crisis timer checks take the movement-mode modifier, plus another +1 die
+ * if the encounter, a careful search or another delay held you up — the chapter stacks these.
+ */
+async function advanceTime(state, mount, { delayed = true } = {}) {
+  const mode = encMode(state);
+  const extra = (delayed ? 1 : 0) + mode.crisis;
+  if (!state.timers.length) {
+    state.encounter.phase = "moving";
+    state.encounter.detail = { kind: "Time passes", text: "No crisis timer is running — start one; always keep at least one going." };
+    save(state);
+    renderSolo(mount);
+    return;
+  }
+  const lines = [];
+  for (const t of state.timers) {
+    const idx = S.CRISIS_TIMER.ladder.findIndex((l) => l.key === t.proximity);
+    const rung = S.CRISIS_TIMER.ladder[idx];
+    const dice = Math.max(1, rung.dice + extra);
+    const faces = Array.from({ length: dice }, () => d6());
+    const sixes = faces.filter((f) => f === 6).length;
+    const next = Math.min(S.CRISIS_TIMER.ladder.length - 1, idx + sixes);
+    t.proximity = S.CRISIS_TIMER.ladder[next].key;
+    lines.push(`${t.name}: ${dice} dice, ${sixes} sixes → ${S.CRISIS_TIMER.ladder[next].name}`);
+    if (S.CRISIS_TIMER.ladder[next].key === "now") {
+      state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
+      lines.push(`${t.name} fires! Crisis level ${state.crisisLevel}.`);
+      t.fired = true;
+    }
+  }
+  state.timers = state.timers.filter((t) => !t.fired);
+  state.encounter.phase = "moving";
+  state.encounter.detail = { kind: "Time passes", text: lines.join(" · ") };
+  logEvent(state, `Advanced time (${extra >= 0 ? "+" : ""}${extra} dice): ${lines.join("; ")}`);
+  save(state);
+  modal({ title: "Crisis timers", body: el("div", {}, ...lines.map((l) => el("p", { text: l })),
+    el("p", { class: "muted small", text: `Rolled with ${extra >= 0 ? "+" : ""}${extra} dice: moving ${mode.name.replace(" (default)", "")}${delayed ? " plus the delay" : ""}.` })),
+    actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** The powers option: Outmaneuver or Prepare instead of rolling the next check. */
+function usePowerOption(state, mount, kind, power) {
+  const enc = state.encounter;
+  const ladder = S.ENCOUNTER_TIMER.ladder;
+  const i = encIndex(enc.presence);
+  if (kind === "outmaneuver") {
+    enc.presence = ladder[Math.max(0, i - 1)].key;
+    enc.detail = { kind: `${power} — outmaneuver`, text: `You put distance between you and them as you move on: ${encRung(enc.presence).name}.` };
+  } else {
+    enc.presence = "encountered";
+    enc.behaviour = { highest: 5, name: "Prepared", effect: "You automatically spot them; they must roll INTUITION to spot you." };
+    enc.threat = S.ENEMY_THREAT.find((t) => t.sixes === Math.min(3, enc.lastCheck?.sixes || 1)) || S.ENEMY_THREAT[0];
+    enc.surprised = false;
+    enc.phase = "revealed";
+    enc.detail = { kind: `${power} — prepare`, text: "You force the meeting on your terms: the behaviour table is ignored." };
+  }
+  enc.lastCheck = null;
+  logEvent(state, `${power}: ${kind}.`);
+  save(state);
+  renderSolo(mount);
+}
+
+/** Searching a zone: an INTUITION check that costs time, per the chapter's search rules. */
+async function searchZone(state, mount) {
+  const c = Store.activeCharacter();
+  const mode = encMode(state);
+  const looking = await promptModal("What are you looking for? Leave blank for a general sweep.", {
+    title: "Search this zone",
+    hints: ["Looking for something specific: the roll tells you whether you find it.",
+      "A general sweep: roll the Complex Response Engine and interpret what turns up.",
+      "Searching takes a few minutes or more, so it advances your crisis timers afterwards."],
+  });
+  if (looking === null) return;
+  const pool = Math.max(1, (c ? Derived.attributePool(c, "intuition") : 3) + mode.ownIntuition);
+  const faces = Array.from({ length: pool }, () => d6());
+  const sixes = faces.filter((f) => f === 6).length;
+  const found = sixes > 0;
+  const body = diceLine(faces, `${pool} INTUITION dice — ${found ? "you find something" : "nothing turns up"}.`);
+  let text = found ? "You find what you were after." : "Nothing here, or nothing you can reach.";
+  if (found && !looking) {
+    const phrase = complexPhrase();
+    text = `The sweep turns up: ${phrase}`;
+    body.append(el("p", { class: "lede", text: phrase }),
+      el("p", { class: "muted small", text: "Complex Response Engine — interpret it for what the search uncovered." }));
+  } else if (looking) {
+    text = found ? `You find it: ${looking}.` : `No sign of ${looking} here.`;
+  }
+  const bonus = bonusSixBlock(state, sixes);
+  if (bonus) body.append(bonus);
+  state.encounter.detail = { kind: "Search", text, note: "Searching takes time — check your crisis timers." };
+  state.encounter.phase = "advance";
+  logEvent(state, `Searched the zone: ${sixes} sixes.`);
+  save(state);
+  modal({ title: "Search", body, actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
 
