@@ -1225,6 +1225,87 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- solo rules audit (Ch.9) */
+  const soloRules = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const S = await import("/data-solo.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+
+    // step 5 must be reachable after resolving a crisis, even though that clears the alert
+    const afterResolve = Solo.currentStep({ alert: "", awaitingSocial: true, eventChecks: 0, timers: [], crises: [], resolved: 1 });
+
+    // the bonus-6 table is for attribute rolls: it must not hang off threat/progress/support dice
+    const src = await (await fetch("/src/solo.js")).text();
+    const fn = (name) => {
+      const i = src.indexOf(`function ${name}(`);
+      if (i < 0) return "";
+      return src.slice(i, src.indexOf("\n}\n", i));
+    };
+    const bonusIn = (name) => fn(name).includes("bonusSixBlock");
+
+    // a hero broken by stress gets the recovery panel and its rally control
+    const hero = Derived.blankCharacter();
+    hero.id = "solo_broken";
+    hero.identity.heroName = "Worn";
+    Store.saveCharacter(hero);
+    Store.setActiveCharacter("solo_broken");
+    Store.updateCharacter((ch) => { ch.state.health = Derived.maxHealth(ch); ch.state.resolve = 0; ch.state.broken = false; }, { id: "solo_broken" });
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 0, alert: "x", crises: [], timers: [],
+      allies: [{ id: "a", name: "Gone", status: "alone" }], objectives: [], encounter: null, mode: "alert", log: [],
+      eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 }));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const recovery = !!document.querySelector("#solo-recovery");
+    const rally = Array.from(document.querySelectorAll("#solo-recovery button")).some((b) => /Rally on a memory/.test(b.textContent));
+    Store.updateCharacter((ch) => { ch.state.health = Derived.maxHealth(ch); ch.state.resolve = Derived.maxResolve(ch); }, { id: "solo_broken" });
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const hiddenWhenWell = !document.querySelector("#solo-recovery");
+    localStorage.removeItem("invincible:solo");
+
+    return {
+      afterResolve,
+      bonusOnTimer: bonusIn("rollTimer") || bonusIn("checkTimer"),
+      bonusOnObjective: bonusIn("objectiveCheck"),
+      bonusOnAlly: bonusIn("allyCheck"),
+      bonusOnEncounter: bonusIn("encounterCheck"),
+      bonusOnSpotting: bonusIn("spottingCheck"),
+      bonusOnEscape: bonusIn("escapeEncounter"),
+      bonusOnSearch: bonusIn("searchZone"),
+      timerPace: /askDuration/.test(fn("checkTimer")) && /checkAllTimers/.test(src),
+      proximityChosen: /chooseProximity/.test(fn("addTimer")) && /chooseProximity/.test(fn("engageCrisis")),
+      firedTimerNoSocial: !/awaitingSocial/.test(fn("rollTimer")),
+      homeAwardsKarma: /ch\.state\.karma \+= owed/.test(fn("headHome")),
+      aloneKey: S.ALLY_TIMER.ladder[S.ALLY_TIMER.ladder.length - 1].key,
+      recovery, rally, hiddenWhenWell,
+    };
+  });
+  ok("a resolved crisis still reaches the social-scene step", soloRules.afterResolve === 4, String(soloRules.afterResolve));
+  ok("bonus-6 effects are offered only on attribute rolls",
+    !soloRules.bonusOnTimer && !soloRules.bonusOnObjective && !soloRules.bonusOnAlly && !soloRules.bonusOnEncounter
+      && soloRules.bonusOnSpotting && soloRules.bonusOnEscape && soloRules.bonusOnSearch,
+    JSON.stringify(soloRules));
+  ok("timer checks take the prolonged / speedy modifier, and every timer can be checked at once", soloRules.timerPace);
+  ok("a new timer's proximity is chosen or rolled, not assumed", soloRules.proximityChosen);
+  ok("a fired timer is not treated as a resolution", soloRules.firedTimerNoSocial);
+  ok("heading home actually pays the objective karma it reports", soloRules.homeAwardsKarma);
+  ok("a broken hero gets the Ch.9 recovery panel with the memory rally",
+    soloRules.recovery && soloRules.rally && soloRules.hiddenWhenWell);
+
+  const allyAlone = await page.evaluate(async () => {
+    const S = await import("/data-solo.js");
+    const alone = S.ALLY_TIMER.ladder.find((l) => l.key === "alone");
+    const src = await (await fetch("/src/solo.js")).text();
+    const i = src.indexOf("async function allyCheck(");
+    const body = src.slice(i, src.indexOf("\n}\n", i));
+    return { dice: alone.dice, guarded: /rung\.dice === 0/.test(body) };
+  });
+  ok("'You are Alone' cannot be rolled even with a bonus", allyAlone.dice === 0 && allyAlone.guarded);
+
   /* ------------------------------------------------- the Ch.9 encounter sequence, step by step */
   const encounter = await page.evaluate(async () => {
     const Solo = await import("/src/solo.js");
