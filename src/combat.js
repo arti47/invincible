@@ -84,7 +84,9 @@ export function renderCombat(mount) {
     mount.append(el("div", { class: "empty" },
       el("h2", { text: "No action scene running" }),
       el("p", { text: "Start a scene to draw initiative, track combatants and apply damage." }),
-      el("button", { class: "btn primary", onclick: () => { const c = newCombat(); const hero = Store.activeCharacter(); if (hero) c.combatants.push(combatantFromCharacter(hero)); save(drawInitiative(c)); renderCombat(mount); } }, "Start action scene"),
+      el("button", { class: "btn primary", onclick: () => { startActionScene(); renderCombat(mount); } }, "Start action scene"),
+      // Between scenes, not next steps: these close stages you have already played.
+      el("p", { class: "stage-label", text: "Between scenes" }),
       el("div", { class: "row-actions" },
         el("button", { class: "btn ghost", onclick: () => openLifecycle("social") }, "End social scene"),
         el("button", { class: "btn ghost", onclick: () => openLifecycle("session") }, "End session"))));
@@ -94,10 +96,11 @@ export function renderCombat(mount) {
 
   mount.append(el("div", { class: "combat-head" },
     el("h2", { text: `Round ${combat.round}` }),
+    // Round order: set the board, take actions (wrecking is one), then advance, then finish.
     el("div", { class: "row-actions" },
-      el("button", { class: "btn", onclick: () => { combat.round += 1; save(drawInitiative(combat)); renderCombat(mount); } }, "Next round"),
       el("button", { class: "btn ghost", onclick: () => openAddCombatant(mount) }, "Add combatant"),
       el("button", { class: "btn ghost", onclick: () => openWreck(combat, mount) }, "Wreck a zone"),
+      el("button", { class: "btn", onclick: () => { combat.round += 1; save(drawInitiative(combat)); renderCombat(mount); } }, "Next round"),
       el("button", { class: "btn danger", onclick: async () => {
         if (await confirmModal("End the action scene and run the end-of-scene recovery?", { title: "End action scene", confirmLabel: "End scene" })) {
           Store.clearCombat(); openLifecycle("action"); renderCombat(mount);
@@ -127,11 +130,12 @@ function combatantCard(cb, combat, mount) {
       cb.armor ? el("span", { text: `Armor ${cb.armor}` }) : null,
       el("span", { text: `Slugfest ${cb.slugfest}` }),
       el("span", { text: cb.altitude })),
+    // A turn in order: pass your place, move, resolve what hits you, then mark the turn spent.
     el("div", { class: "cbt-actions" },
+      el("button", { class: "btn tiny ghost", onclick: () => holdOff(cb, combat, mount) }, "Hold off"),
+      el("button", { class: "btn tiny ghost", onclick: () => cycleAltitude(cb, combat, mount) }, "Altitude"),
       el("button", { class: "btn tiny danger", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
       el("button", { class: "btn tiny", onclick: () => { cb.acted = !cb.acted; save(combat); renderCombat(mount); } }, cb.acted ? "Un-act" : "Acted"),
-      el("button", { class: "btn tiny ghost", onclick: () => cycleAltitude(cb, combat, mount) }, "Altitude"),
-      el("button", { class: "btn tiny ghost", onclick: () => holdOff(cb, combat, mount) }, "Hold off"),
       el("button", { class: "btn tiny ghost", onclick: () => { combat.combatants = combat.combatants.filter((x) => x.id !== cb.id); save(combat); renderCombat(mount); } }, "Remove")));
 }
 
@@ -499,14 +503,39 @@ async function openSessionEnd(c) {
   }
 }
 
+/**
+ * The session in the order it is played (§3.12): open the session, then alternate scenes, then
+ * close out. The scene bundles are all "end" bundles in the book, so the only start control the
+ * rules give us is the action scene itself — it is here so the row never asks you to end a scene
+ * you were never offered a way to begin.
+ */
 export function lifecycleButtons() {
   const c = Store.activeCharacter();
-  const locked = c && !c.state.session.spendUnlocked;
-  return el("div", { class: "row-actions" },
-    el("button", { class: locked ? "btn ghost" : "btn", onclick: () => openLifecycle("start") }, "Start session"),
-    el("button", { class: "btn ghost", onclick: () => openLifecycle("action") }, "End action scene"),
-    el("button", { class: "btn ghost", onclick: () => openLifecycle("social") }, "End social scene"),
-    el("button", { class: "btn ghost", onclick: () => openLifecycle("session") }, "End session"),
-    el("button", { class: "btn ghost", onclick: () => openLifecycle("adventure") }, "End adventure"),
-    Store.canUndo() ? el("button", { class: "btn warn", onclick: () => { Store.undo(); showToast("Last lifecycle change undone."); } }, `Undo ${Store.undoLabel()}`) : null);
+  const running = !!(c && !c.state.session.spendUnlocked);
+  const inScene = !!getCombat()?.active;
+  return el("div", { class: "lifecycle" },
+    el("p", { class: "stage-label", text: "1 · Open the session" }),
+    el("div", { class: "row-actions" },
+      el("button", { class: running ? "btn ghost" : "btn primary", onclick: () => openLifecycle("start") }, "Start session")),
+    el("p", { class: "stage-label", text: "2 · Alternate scenes — briefing, action, social" }),
+    el("div", { class: "row-actions" },
+      inScene
+        ? el("a", { class: "btn", href: "#/combat" }, "Go to the action scene")
+        : el("button", { class: "btn", onclick: () => { startActionScene(); location.hash = "#/combat"; } }, "Start action scene"),
+      el("button", { class: "btn ghost", onclick: () => openLifecycle("action") }, "End action scene"),
+      el("button", { class: "btn ghost", onclick: () => openLifecycle("social") }, "End social scene")),
+    el("p", { class: "stage-label", text: "3 · Close out" }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn ghost", onclick: () => openLifecycle("session") }, "End session"),
+      el("button", { class: "btn ghost", onclick: () => openLifecycle("adventure") }, "End adventure"),
+      Store.canUndo() ? el("button", { class: "btn warn", onclick: () => { Store.undo(); showToast("Last lifecycle change undone."); } }, `Undo ${Store.undoLabel()}`) : null));
+}
+
+/** Start an action scene: new combat, the active hero in it, initiative drawn. */
+export function startActionScene() {
+  const c = newCombat();
+  const hero = Store.activeCharacter();
+  if (hero) c.combatants.push(combatantFromCharacter(hero));
+  save(drawInitiative(c));
+  return c;
 }

@@ -20,21 +20,23 @@ export function renderHome(mount) {
   const chars = Store.listCharacters();
   const team = Store.getTeam();
 
-  mount.append(el("section", { class: "card hero-card" },
-    el("h1", { text: "Invincible Player" }),
-    el("p", { class: "muted", text: "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying." }),
-    el("div", { class: "row-actions" },
-      el("a", { class: "btn primary", href: "#/create" }, c ? "Create another hero" : "Create your hero"),
-      el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
-      el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team"))));
-
+  // With an empty roster, learning the game comes before building a hero for it.
   if (!chars.length) {
     mount.append(el("section", { class: "card" },
+      el("h1", { text: "Invincible Player" }),
       el("h3", { text: "New to the game?" }),
       el("p", { class: "muted small", text: "A step-by-step tutorial for first-time players — dice, fights, damage and karma — plus one for solo play with no GM." }),
       el("div", { class: "row-actions" },
         el("a", { class: "btn primary", href: "#/learn" }, "Start the tutorial"))));
   }
+
+  mount.append(el("section", { class: "card hero-card" },
+    chars.length ? el("h1", { text: "Invincible Player" }) : el("h2", { text: "Make a hero" }),
+    el("p", { class: "muted", text: "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying." }),
+    el("div", { class: "row-actions" },
+      el("a", { class: `btn ${chars.length ? "primary" : ""}`, href: "#/create" }, c ? "Create another hero" : "Create your hero"),
+      el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
+      el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team"))));
 
   if (chars.length) {
     const list = el("div", { class: "char-list" });

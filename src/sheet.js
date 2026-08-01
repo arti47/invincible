@@ -120,7 +120,8 @@ export function renderSheet(mount) {
     drawbacksCard(c),
     conditionsCard(c),
     inventoryCard(c, s),
-    notesCard(c));
+    notesCard(c),
+    advancementCard(c));
 }
 
 function identityCard(c, s) {
@@ -149,9 +150,19 @@ function identityCard(c, s) {
             if (name !== null) Store.updateCharacter((ch) => { ch.identity.keyRelationships[i].name = name; });
           } }, "Name"))))
       : null,
+    // Only the scene-entry action belongs here. Karma is spent between sessions, so its control
+    // sits in the advancement card at the foot of the sheet, where the sequence of play puts it.
     el("div", { class: "row-actions" },
-      el("button", { class: "btn", onclick: () => rollReputation(c) }, "Reputation roll"),
-      el("button", { class: "btn ghost", onclick: () => openKarma(c) }, "Karma & advancement")));
+      el("button", { class: "btn", onclick: () => rollReputation(c) }, "Reputation roll")));
+}
+
+/** End of the sheet, end of the session: karma is only spendable between sessions (§3.3). */
+function advancementCard(c) {
+  return el("section", { class: "card" },
+    el("h3", { text: "Between sessions" }),
+    el("p", { class: "muted small", text: `Karma ${c.state.karma}. Earned at the end of a session and spent only between sessions, in a safe location.` }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => openKarma(c) }, "Karma & advancement")));
 }
 
 const kv = (k, v) => el("div", { class: "kv" }, el("span", { class: "k", text: k }), el("span", { class: "v", text: String(v) }));

@@ -453,3 +453,7 @@ select.select option { background: var(--panel); color: var(--ink); }
 .oracle-answer .lede { margin: .2rem 0; }
 .oracle-kind { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .oracle-answer.place { border-left-width: 6px; border-left-color: var(--accent); }
+
+/* ---- lifecycle: the session in the order it is played ---- */
+.stage-label { margin: .8rem 0 .1rem; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.lifecycle > .stage-label:first-child { margin-top: .2rem; }

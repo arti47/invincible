@@ -601,8 +601,8 @@ const run = async () => {
   ok("exactly one step is marked current", soloUi.current === 1, String(soloUi.current));
   ok("solo actions are laid out in loop order", soloUi.order.every((n, i, a) => n >= 0 && (i === 0 || n > a[i - 1])), JSON.stringify(soloUi.order));
   ok("social scene control exists on the solo tab", soloUi.labels.includes("Social scene"));
-  ok("all four timer types sit in one Timers card",
-    JSON.stringify(soloUi.groups) === JSON.stringify(["Crisis timers", "Objectives", "Allies", "Encounter timer"]),
+  ok("timer groups follow loop step 3's own order (crisis, ally, objective, encounter)",
+    JSON.stringify(soloUi.groups) === JSON.stringify(["Crisis timers", "Allies", "Objectives", "Encounter timer"]),
     soloUi.groups.join(" | "));
   ok("timers card counts what is running", soloUi.heads.some((h) => /^Timers \(\d+ running\)/.test(h)), soloUi.heads.join(" | "));
   ok("oracles have their own card", soloUi.heads.includes("Ask the oracles"), soloUi.heads.join(" | "));
@@ -871,6 +871,72 @@ const run = async () => {
     return { n, chars: Store.listCharacters().length };
   });
   ok("JSON import restores characters", importOk.n === 1 && importOk.chars === 1);
+
+  /* ---------------------------------------------------------------- sequence of play */
+  // Every screen's controls have to read in the order the game is actually played (§3.12, §3.17).
+  section("Sequence of play");
+
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(`${base}#/home`);
+  await page.waitForFunction(() => document.body.dataset.ready === "true");
+  await page.waitForTimeout(200);
+  const homeSeq = await page.evaluate(() => {
+    const heads = Array.from(document.querySelectorAll("#screen .card")).map((c) => c.querySelector("h1,h2,h3")?.textContent || "");
+    const labels = Array.from(document.querySelectorAll("#screen .card a, #screen .card button")).map((b) => b.textContent.trim());
+    const stages = Array.from(document.querySelectorAll("#screen .lifecycle .stage-label")).map((p) => p.textContent);
+    const i = (l) => labels.indexOf(l);
+    return { heads, stages, tutorial: i("Start the tutorial"), create: i("Create your hero"),
+      start: i("Start session"), startAction: i("Start action scene"), endAction: i("End action scene"),
+      endSocial: i("End social scene"), endSession: i("End session"), endAdv: i("End adventure") };
+  });
+  ok("an empty roster meets the tutorial before the creation card", homeSeq.tutorial >= 0 && homeSeq.tutorial < homeSeq.create,
+    `${homeSeq.tutorial} < ${homeSeq.create}`);
+  ok("the lifecycle row is staged open → play → close out", homeSeq.stages.length === 3 && /^1 ·/.test(homeSeq.stages[0]) && /^3 ·/.test(homeSeq.stages[2]),
+    homeSeq.stages.join(" | "));
+  ok("a scene can be started before it can be ended", homeSeq.startAction >= 0 && homeSeq.startAction < homeSeq.endAction);
+  ok("lifecycle controls run in session order",
+    [homeSeq.start, homeSeq.startAction, homeSeq.endAction, homeSeq.endSocial, homeSeq.endSession, homeSeq.endAdv]
+      .every((n, i, a) => n >= 0 && (i === 0 || n > a[i - 1])),
+    JSON.stringify(homeSeq));
+
+  const combatSeq = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const Combat = await import("/src/combat.js");
+    const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0]));
+    Store.setActiveCharacter(c.id);
+    const idle = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    Combat.startActionScene();
+    location.hash = "#/combat";
+    await new Promise((r) => setTimeout(r, 250));
+    const head = Array.from(document.querySelectorAll("#screen .combat-head .row-actions button")).map((b) => b.textContent.trim());
+    const turn = Array.from(document.querySelectorAll("#screen .cbt-actions button")).map((b) => b.textContent.trim());
+    return { idle, head, turn };
+  });
+  ok("round controls run set up → act → advance → finish",
+    JSON.stringify(combatSeq.head) === JSON.stringify(["Add combatant", "Wreck a zone", "Next round", "End scene"]),
+    combatSeq.head.join(" | "));
+  ok("a combatant's controls run hold off → move → take damage → mark acted",
+    JSON.stringify(combatSeq.turn) === JSON.stringify(["Hold off", "Altitude", "Damage", "Acted", "Remove"]),
+    combatSeq.turn.join(" | "));
+
+  const sheetSeq = await page.evaluate(async () => {
+    location.hash = "#/sheet";
+    await new Promise((r) => setTimeout(r, 250));
+    const cards = Array.from(document.querySelectorAll("#screen .card"));
+    const heads = cards.map((c) => c.querySelector("h2,h3")?.textContent || "");
+    const karmaCard = cards.findIndex((c) => Array.from(c.querySelectorAll("button")).some((b) => b.textContent.trim() === "Karma & advancement"));
+    const vitals = Array.from(document.querySelectorAll("#screen .card")).find((c) => c.querySelector("h3")?.textContent === "Vitals");
+    const vitalOrder = Array.from(vitals.querySelectorAll(".row-actions button")).map((b) => b.textContent.trim());
+    return { heads, karmaCard, last: cards.length - 1, vitalOrder };
+  });
+  ok("karma sits at the foot of the sheet, not above the in-play blocks",
+    sheetSeq.karmaCard === sheetSeq.last && sheetSeq.heads[sheetSeq.last] === "Between sessions",
+    `${sheetSeq.karmaCard}/${sheetSeq.last} — ${sheetSeq.heads[sheetSeq.last]}`);
+  ok("vitals run harm before recovery",
+    sheetSeq.vitalOrder.indexOf("Take damage") < sheetSeq.vitalOrder.indexOf("Rest & recover"),
+    sheetSeq.vitalOrder.join(" | "));
 
   /* ---------------------------------------------------------------- wizard UI */
   section("Creation wizard UI");

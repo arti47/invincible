@@ -207,9 +207,10 @@ function allTimersCard(state, mount) {
     running === 0
       ? el("p", { class: "warn small", text: "Nothing is running. Engage a crisis, or start a timer below." })
       : null);
+  // Loop step 3's own order: "a crisis timer, plus any ally, objective or encounter timers".
   card.append(timersCard(state, mount));
-  card.append(objectivesCard(state, mount));
   card.append(alliesCard(state, mount));
+  card.append(objectivesCard(state, mount));
   card.append(encounterCard(state, mount));
   return card;
 }
