@@ -108,6 +108,7 @@ export function renderSolo(mount) {
     el("div", { class: "row-actions" },
       el("button", { class: primary(0), onclick: () => generateAlert(state, mount) }, state.alert ? "New crisis alert" : "Generate crisis alert"),
       el("button", { class: primary(1), onclick: () => doEventCheck(state, mount) }, "Event check"),
+      el("button", { class: "btn ghost", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event"),
       el("button", { class: "btn ghost", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
       el("button", { class: "btn ghost", onclick: () => askComplex(state, mount) }, "Complex answer"),
       el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
@@ -251,6 +252,48 @@ async function resolveCrisis(state, mount) {
   renderSolo(mount);
 }
 
+/* ---------------------------------------------------------------- crisis & opportunity engines */
+
+/**
+ * Crisis Event Engine (Ch.9): D66 for the focus, 2D6 + the current crisis level for the detail.
+ * The level is read after the event check has applied its own increase, so an escalating crisis
+ * pushes the detail into the harsher bands.
+ */
+export function rollCrisisEvent(state) {
+  const focusRoll = d66();
+  const row = S.CRISIS_EVENT_ENGINE.entries.find((e) => e.roll === focusRoll) || S.CRISIS_EVENT_ENGINE.entries[0];
+  const detailRoll = roll2d6() + (state.crisisLevel || 0);
+  let i = S.CRISIS_EVENT_ENGINE.bands.findIndex((b) => detailRoll <= b.max);
+  if (i < 0) i = S.CRISIS_EVENT_ENGINE.bands.length - 1;
+  return {
+    focusRoll, detailRoll, focus: row.focus, detail: row.details[i],
+    band: S.CRISIS_EVENT_ENGINE.bands[i], text: `${row.focus}: ${row.details[i]}`,
+  };
+}
+
+export function rollOpportunity() {
+  const value = d66();
+  const entry = tableLookup(S.OPPORTUNITY_ENGINE.entries, value) || S.OPPORTUNITY_ENGINE.entries[0];
+  return { value, text: entry.text };
+}
+
+/** "If you are ever unsure what happens next": +1 crisis level and roll a crisis event (Ch.9). */
+function joltCrisisEvent(state, mount) {
+  state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
+  const ev = rollCrisisEvent(state);
+  addCrisis(state, ev.text, "event");
+  logEvent(state, `Crisis event (${ev.focusRoll}/${ev.detailRoll}): ${ev.text}`);
+  save(state);
+  modal({ title: `Crisis event — ${ev.focus}`,
+    body: el("div", {},
+      el("p", { class: "lede big", text: ev.detail }),
+      el("p", { class: "muted small", text: `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}.` }),
+      el("p", { class: "muted small", text: S.CRISIS_EVENT_ENGINE.note }),
+      el("p", { class: "small", text: "Added to Crises — engage it there to start a timer." })),
+    actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
 /* ---------------------------------------------------------------- FATE tools */
 
 function doEventCheck(state, mount) {
@@ -259,21 +302,29 @@ function doEventCheck(state, mount) {
   const value = roll2d6();
   const entry = tableLookup(S.EVENT_CHECK.entries, value);
   let extra = "";
+  let rolls = "";
   if (value === 2) {
     state.crisisLevel = clamp(state.crisisLevel + 2, 0, 10);
-    const a = complexPhrase(), b = complexPhrase();
-    addCrisis(state, a, "event"); addCrisis(state, b, "event");
-    extra = `${a} / ${b}`;
+    const a = rollCrisisEvent(state), b = rollCrisisEvent(state);
+    addCrisis(state, a.text, "event"); addCrisis(state, b.text, "event");
+    extra = `${a.text} / ${b.text}`;
+    rolls = `Focus ${a.focusRoll}/${b.focusRoll} · detail ${a.detailRoll}/${b.detailRoll}`;
   } else if (value <= 4) {
     state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
-    const one = complexPhrase();
-    addCrisis(state, one, "event");
-    extra = one;
-  } else if (value >= 11) extra = `Opportunity: ${complexPhrase()}`;
+    const one = rollCrisisEvent(state);
+    addCrisis(state, one.text, "event");
+    extra = one.text;
+    rolls = `Focus D66 ${one.focusRoll} · detail 2D6 + crisis level = ${one.detailRoll} (${one.band.label})`;
+  } else if (value >= 11) {
+    const opp = rollOpportunity();
+    extra = `Opportunity: ${opp.text}`;
+    rolls = `Opportunity D66 ${opp.value}. These should stay rare, and may count as a milestone for an objective check.`;
+  }
   logEvent(state, `Event check ${value}: ${entry.text}${extra ? ` — ${extra}` : ""}`);
   save(state);
   modal({ title: `Event check — ${value}`,
     body: el("div", {}, el("p", { text: entry.text }), extra ? el("p", { class: "lede", text: extra }) : null,
+      rolls ? el("p", { class: "muted small", text: rolls }) : null,
       value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
@@ -671,6 +722,21 @@ function enginesCard(state, mount) {
   card.append(el("details", {}, el("summary", { text: "Solo combat and recovery reminders" }),
     ...S.SOLO_COMBAT.map((t) => el("p", { class: "small", text: t })),
     ...S.SOLO_SETUP.recovery.map((t) => el("p", { class: "small good", text: t }))));
+  card.append(el("details", {}, el("summary", { text: "Crisis Event Engine (D66 focus, 2D6 + crisis level)" }),
+    el("p", { class: "small", text: S.CRISIS_EVENT_ENGINE.note }),
+    el("div", { class: "table-scroll" }, el("table", { class: "data-table" },
+      el("tr", {}, el("th", { text: "D66" }), el("th", { text: "Focus" }),
+        ...S.CRISIS_EVENT_ENGINE.bands.map((b) => el("th", { text: b.label }))),
+      ...S.CRISIS_EVENT_ENGINE.entries.map((e) => el("tr", {},
+        el("td", { text: String(e.roll) }), el("td", { text: e.focus }),
+        ...e.details.map((d) => el("td", { text: d }))))))));
+  card.append(el("details", {}, el("summary", { text: "Opportunity Event Engine (D66)" }),
+    el("p", { class: "small", text: "A positive twist or helpful asset. Prompted by 11-12 on the event check, or whenever a FATE response points at a positive turn. Keep these rare; one may count as a milestone that triggers an objective check." }),
+    el("div", { class: "table-scroll" }, el("table", { class: "data-table" },
+      el("tr", {}, el("th", { text: "D66" }), el("th", { text: "Opportunity" })),
+      ...S.OPPORTUNITY_ENGINE.entries.map((e) => el("tr", {},
+        el("td", { text: e.range[0] === e.range[1] ? String(e.range[0]) : `${e.range[0]}-${e.range[1]}` }),
+        el("td", { text: e.text })))))));
   card.append(el("details", {}, el("summary", { text: "Using powers without a GM" }),
     ...S.SOLO_POWER_USE.map((t) => el("p", { class: "small", text: t }))));
   return card;

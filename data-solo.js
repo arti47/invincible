@@ -339,3 +339,74 @@ export const SOLO_COMBAT = [
   "Most sentient NPCs value self-preservation: when things go badly they defend or flee. Check their willingness with the Binary Engine.",
   "When an NPC is broken you need not roll a critical injury — declare them knocked out or killed as fits the moment.",
 ];
+
+/* ------------------------------------------------------------------ Crisis Event Engine (Ch.9)
+   Roll D66 for the focus, then 2D6 + the current crisis level for the detail band.
+   Bands: 2-10 / 11-15 / 16+. Rolling a crisis event also raises the crisis level by 1. */
+
+export const CRISIS_EVENT_ENGINE = {
+  name: "Crisis Event Engine",
+  die: "D66",
+  detail: "2D6 + crisis level",
+  bands: [{ key: "low", label: "2-10", max: 10 }, { key: "mid", label: "11-15", max: 15 }, { key: "high", label: "16+", max: Infinity }],
+  note: "If the event does not fit your situation, read the adjacent rows for inspiration, or choose a focus deliberately and roll only the detail.",
+  entries: [
+    { roll: 11, focus: "Adversary", details: ["Adversary revealed", "Adversary gains an advantage", "Adversary seizes an objective"] },
+    { roll: 12, focus: "Alert", details: ["Under surveillance", "Security protocols activated", "Blaring alarms"] },
+    { roll: 13, focus: "Alien", details: ["Reported abductions", "First contact", "Major presence"] },
+    { roll: 14, focus: "Ally", details: ["Ally in danger", "Separated from each other", "True identity or motive revealed"] },
+    { roll: 15, focus: "City", details: ["Crime witnessed", "Structural instability", "Panic in the streets"] },
+    { roll: 16, focus: "Command", details: ["New orders", "Incompetent leaders", "Left for dead"] },
+    { roll: 21, focus: "Communication", details: ["Distress signal", "Desperate plea", "Comms go quiet"] },
+    { roll: 22, focus: "Community", details: ["Isolated community", "Threatened habitat", "Abandoned or destroyed"] },
+    { roll: 23, focus: "Contamination", details: ["Signs of contamination", "Quarantined", "Sudden outbreak"] },
+    { roll: 24, focus: "Corporation", details: ["Scheming influence", "Company takes control", "True motivation revealed"] },
+    { roll: 25, focus: "Creatures", details: ["Lone creature", "Creature group", "Swarming creatures"] },
+    { roll: 26, focus: "Dimension", details: ["Extradimensional visitor", "Portal opened", "Full-scale invasion"] },
+    { roll: 31, focus: "Environment", details: ["Minor environmental hazard", "Hostile environment", "Environmental disaster"] },
+    { roll: 32, focus: "Fear", details: ["Fears kindled", "Fear overrides logic", "Widespread hysteria"] },
+    { roll: 33, focus: "Gear", details: ["Depleted or malfunctioning item", "Lost or broken equipment", "Vital gear lost or broken"] },
+    { roll: 34, focus: "Heroes", details: ["Strange disappearances", "Casualties", "Wiped out"] },
+    { roll: 35, focus: "Information", details: ["Troubling intel", "False leads", "Distressing revelation"] },
+    { roll: 36, focus: "Isolation", details: ["Cut off", "Left behind", "Outnumbered"] },
+    { roll: 41, focus: "Machine", details: ["Minor malfunction", "Dangerous malfunction", "Total failure"] },
+    { roll: 42, focus: "Magic", details: ["Amateur in over their head", "Dangerous occult ritual", "Magical devastation"] },
+    { roll: 43, focus: "Military", details: ["Minor military presence", "Major intervention", "Scorched earth"] },
+    { roll: 44, focus: "Mission", details: ["Minor complication", "Major complication", "Mission undone"] },
+    { roll: 45, focus: "Mutation", details: ["Parasitic infestation", "Emerging lifeforms", "Body remade"] },
+    { roll: 46, focus: "Organization", details: ["Antagonistic organization revealed", "Organization exerts force or influence", "Organizations at war"] },
+    { roll: 51, focus: "Power", details: ["Power fluctuations", "Power fails", "Reactor meltdown"] },
+    { roll: 52, focus: "Robot", details: ["Malfunctioning or damaged", "Twitchy", "Corrupted or destructive"] },
+    { roll: 53, focus: "Route", details: ["Treacherous route", "Blocked or sealed route", "Deadly route"] },
+    { roll: 54, focus: "Science", details: ["Unexplained phenomenon", "Dangerous experiment", "Containment breach"] },
+    { roll: 55, focus: "Sound", details: ["Mysterious sound", "Unsettling sound", "Horrifying sound"] },
+    { roll: 56, focus: "Space", details: ["Oppressive void", "Collision course", "Celestial catastrophe"] },
+    { roll: 61, focus: "Supernatural", details: ["Mysterious sighting", "Paranormal activity", "Otherworldly incursion"] },
+    { roll: 62, focus: "Supervillain", details: ["Supervillain's minions", "Supervillain's enforcers", "Supervillain showdown"] },
+    { roll: 63, focus: "Team", details: ["Squabbling teammates", "Infighting", "Betrayal or abandonment"] },
+    { roll: 64, focus: "Technology", details: ["Failing technology", "Sabotaged technology", "Rogue technology"] },
+    { roll: 65, focus: "Time", details: ["Wasted time", "Impending deadline", "Time runs out"] },
+    { roll: 66, focus: "Violence", details: ["Signs of violence", "Grisly remains", "Carnage"] },
+  ],
+};
+
+/* ------------------------------------------------------------------ Opportunity Event Engine (Ch.9)
+   A positive twist or helpful asset. Prompted by an 11-12 on the event check, or whenever a FATE
+   response points at a positive turn. Rewards of this kind should stay rare. May itself count as a
+   milestone that triggers an objective check. */
+
+export const OPPORTUNITY_ENGINE = {
+  name: "Opportunity Event Engine",
+  die: "D66",
+  entries: [
+    { range: [11, 16], text: "Early warning of a danger" },
+    { range: [21, 26], text: "Helpful item or technology" },
+    { range: [31, 36], text: "Needed clue or intel" },
+    { range: [41, 43], text: "Secure location" },
+    { range: [44, 46], text: "Shortcut or safer path" },
+    { range: [51, 53], text: "Significant device or artifact" },
+    { range: [54, 56], text: "Timely communication" },
+    { range: [61, 63], text: "Unexpected ally" },
+    { range: [64, 66], text: "Useful supplies or support" },
+  ],
+};

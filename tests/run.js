@@ -480,6 +480,25 @@ const run = async () => {
     out.bonusEffects = S.BONUS_SIX_EFFECTS.length;
     out.engines = Object.keys(S.LOCATION_ENGINES).length;
 
+    // Crisis Event Engine: a complete D66 focus table, three detail bands each.
+    const want = [];
+    for (let t = 1; t <= 6; t++) for (let o = 1; o <= 6; o++) want.push(t * 10 + o);
+    out.crisisFocus = S.CRISIS_EVENT_ENGINE.entries.length;
+    out.crisisD66Complete = JSON.stringify(S.CRISIS_EVENT_ENGINE.entries.map((e) => e.roll)) === JSON.stringify(want);
+    out.crisisBands = S.CRISIS_EVENT_ENGINE.entries.every((e) => e.details.length === 3);
+    out.opportunityGaps = want.filter((v) => !S.OPPORTUNITY_ENGINE.entries.some((e) => v >= e.range[0] && v <= e.range[1]));
+
+    // Band selection reads 2D6 + crisis level: 2-10 low, 11-15 mid, 16+ high.
+    const Solo = await import("/src/solo.js");
+    const bandOf = (level) => {
+      const seen = new Set();
+      for (let i = 0; i < 400; i++) seen.add(Solo.rollCrisisEvent({ crisisLevel: level }).band.key);
+      return [...seen].sort();
+    };
+    out.bandsLow = bandOf(0);
+    out.bandsHigh = bandOf(10);
+    out.opportunityText = Solo.rollOpportunity().text;
+
     // A24 arithmetic: 1s cancel 6s; net-negative pushes the objective one step back.
     const ladder = S.OBJECTIVE_TIMER.ladder;
     const simulate = (idx, sixes, ones) => {
@@ -503,6 +522,12 @@ const run = async () => {
   ok("five location engines", solo.engines === 5);
   ok("A24 objective arithmetic (advance / regress / hold)", JSON.stringify(solo.a24) === "[4,1,2]", JSON.stringify(solo.a24));
   ok("A25 ally successes convert to 2 damage each", solo.a25.damage === 6);
+  ok("Crisis Event Engine covers all 36 D66 focuses", solo.crisisFocus === 36 && solo.crisisD66Complete, String(solo.crisisFocus));
+  ok("every crisis focus publishes three detail bands", solo.crisisBands);
+  ok("Opportunity Event Engine covers every D66 result", solo.opportunityGaps.length === 0, solo.opportunityGaps.join(","));
+  ok("crisis level pushes the detail into harsher bands", !solo.bandsLow.includes("high") && solo.bandsHigh.includes("high"),
+    `level 0 → ${solo.bandsLow.join("/")}, level 10 → ${solo.bandsHigh.join("/")}`);
+  ok("opportunity rolls return a result", !!solo.opportunityText, solo.opportunityText);
 
   // Sequence of play: the step strip must track SOLO_SETUP.loop, and every loop step must be
   // reachable from a control on the tab.
