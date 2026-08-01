@@ -857,18 +857,21 @@ function encounterCard(state, mount) {
   const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
 
-  if (state.place) {
-    card.append(el("div", { class: "oracle-answer place" },
+  // The rolled location sits directly under the button that produced it.
+  const placeBlock = () => (state.place
+    ? el("div", { class: "oracle-answer place" },
       el("span", { class: "oracle-kind", text: `This place · ${state.place.engine}` }),
       el("p", { class: "lede", text: state.place.text }),
-      el("button", { class: "btn tiny ghost", onclick: () => { state.place = null; save(state); renderSolo(mount); } }, "Somewhere else")));
-  }
+      el("button", { class: "btn tiny ghost", onclick: () => { state.place = null; save(state); renderSolo(mount); } }, "Somewhere else"))
+    : null);
 
   if (!state.encounter) {
     card.append(el("p", { class: "muted small", text: "Start an encounter timer when exploring an unknown location or evading enemies." }));
     card.append(el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
       el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
+    const p = placeBlock();
+    if (p) card.append(p);
     card.append(sequence);
     return card;
   }
@@ -879,6 +882,8 @@ function encounterCard(state, mount) {
     el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"),
     el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
     el("button", { class: "btn ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Clear")));
+  const p = placeBlock();
+  if (p) card.append(p);
   return card;
 }
 

@@ -732,16 +732,21 @@ const run = async () => {
     Array.from(document.querySelectorAll(".modal-actions button")).find((b) => b.textContent.trim() === "OK")?.click();
     const after = groupOf("Encounter timer").querySelector(".oracle-answer.place");
     const shown = after ? after.querySelector(".lede").textContent : "";
+    // and it must sit below the button that rolled it, not above the controls
+    const btn = Array.from(groupOf("Encounter timer").querySelectorAll("button"))
+      .find((b) => b.textContent.trim() === "Describe this place");
+    const below = after && btn ? after.getBoundingClientRect().top >= btn.getBoundingClientRect().bottom : false;
     const stored = JSON.parse(localStorage.getItem("invincible:solo") || "{}").place;
     // and it survives a re-render, rather than living only in the modal that produced it
     document.dispatchEvent(new CustomEvent("nav-refresh"));
     location.hash = "#/home"; location.hash = "#/solo";
     await new Promise((r) => setTimeout(r, 120));
     const persisted = !!groupOf("Encounter timer").querySelector(".oracle-answer.place");
-    return { before, shown, stored, persisted };
+    return { before, shown, stored, persisted, below };
   });
   ok("the Encounter panel's place can be cleared and starts empty", place.before === false);
   ok("a place rolled from the Encounter panel renders in that panel", place.shown.length > 0, place.shown);
+  ok("the place sits under the button that rolled it", place.below);
   ok("the place matches the stored roll", !!place.stored && place.stored.text === place.shown, JSON.stringify(place.stored));
   ok("the place survives leaving and returning to the tab", place.persisted);
 
