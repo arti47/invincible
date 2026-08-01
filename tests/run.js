@@ -591,7 +591,8 @@ const run = async () => {
     const strip = Array.from(document.querySelectorAll(".solo-step")).map((s) => s.className);
     // The header carries only the sequence-critical actions, in loop order; the oracles and the
     // four timer types live in their own cards below it.
-    const order = ["Generate crisis alert", "Event check", "Social scene"].map((l) => labels.indexOf(l));
+    const headerLabels = Array.from(document.querySelectorAll(".solo-header .row-actions button")).map((b) => b.textContent.trim());
+    const order = ["Generate crisis alert", "Event check", "Social scene"].map((l) => headerLabels.indexOf(l));
     const heads = Array.from(document.querySelectorAll("#screen h3")).map((h) => h.textContent);
     const groups = Array.from(document.querySelectorAll("#screen .timer-group .group-head")).map((h) => h.textContent);
     return { labels, strip, order, groups, heads, current: strip.filter((c) => c.includes("current")).length };
@@ -607,6 +608,121 @@ const run = async () => {
   ok("oracles have their own card", soloUi.heads.includes("Ask the oracles"), soloUi.heads.join(" | "));
   ok("location engines are reachable as oracles", soloUi.labels.includes("City") && soloUi.labels.includes("Facility"));
   ok("the jolt crisis-event control is with the oracles", soloUi.labels.includes("Crisis event"));
+
+  /* -------- the Solo tab has to tell a first-time player what to do, and both event engines
+              have to be reachable by hand, laid out so neither collides with the next heading. */
+  const soloGuide = await page.evaluate(() => {
+    const card = document.querySelector("#screen .card.next-step");
+    const btn = card?.querySelector(".row-actions .btn.primary");
+    const labels = Array.from(document.querySelectorAll("#solo-oracles button")).map((b) => b.textContent.trim());
+    // The gap the screenshot showed as a collision: the "Find out what happens" button row and
+    // the heading of the next oracle group.
+    const rows = Array.from(document.querySelectorAll("#solo-oracles .oracle-group"));
+    const findOut = rows.find((r) => /Find out what happens/.test(r.textContent));
+    const describe = rows.find((r) => /Describe a place/.test(r.textContent));
+    const lastBtn = findOut?.querySelector(".row-actions button:last-child");
+    const nextHead = describe?.querySelector(".group-head");
+    const gap = lastBtn && nextHead
+      ? nextHead.getBoundingClientRect().top - lastBtn.getBoundingClientRect().bottom : -1;
+    return {
+      hasCard: !!card,
+      eyebrow: card?.querySelector(".next-step-eyebrow")?.textContent || "",
+      why: (card?.querySelector(".next-step-why")?.textContent || "").length,
+      action: btn?.textContent.trim() || "",
+      labels, gap,
+      learnHref: card?.querySelector('a[href="#/learn"]')?.getAttribute("href") || "",
+    };
+  });
+  ok("solo tab opens with a 'do this next' card", soloGuide.hasCard);
+  ok("the next-step card names the step number", /Step 1 of 6/.test(soloGuide.eyebrow), soloGuide.eyebrow);
+  ok("the next-step card explains why", soloGuide.why > 40, String(soloGuide.why));
+  ok("the next-step action matches step 1", soloGuide.action === "Generate crisis alert", soloGuide.action);
+  ok("both event engines have their own control", soloGuide.labels.includes("Crisis event") && soloGuide.labels.includes("Opportunity"),
+    soloGuide.labels.join(" | "));
+  ok("oracle buttons do not collide with the next heading", soloGuide.gap >= 12, `${Math.round(soloGuide.gap)}px`);
+  ok("the next-step card links to the solo walkthrough", soloGuide.learnHref === "#/learn", soloGuide.learnHref);
+
+  const learnDeepLink = await page.evaluate(async () => {
+    const L = await import("/src/learn.js");
+    L.setLearnTab("solo");
+    const host = document.createElement("div");
+    L.renderLearn(host);
+    const selected = host.querySelector(".chip.selectable.selected")?.textContent || "";
+    L.setLearnTab("basics");
+    return selected;
+  });
+  ok("the walkthrough link opens the solo tutorial", /solo/i.test(learnDeepLink), learnDeepLink);
+
+  // Oracle answers must survive their modal — a location roll describes the scene you are still in.
+  const oracle = await page.evaluate(async () => {
+    const click = (label, root = "#screen") => {
+      const b = Array.from(document.querySelectorAll(`${root} button`)).find((x) => x.textContent.trim() === label);
+      b?.click();
+      return !!b;
+    };
+    const dismiss = () => {
+      const b = Array.from(document.querySelectorAll(".modal-actions button")).find((x) => x.textContent.trim() === "OK");
+      b?.click();
+    };
+    const read = () => {
+      const box = document.querySelector("#solo-oracles .oracle-answer");
+      return box ? { kind: box.querySelector(".oracle-kind").textContent, text: box.querySelector(".lede").textContent } : null;
+    };
+    const before = read();
+    click("City");
+    dismiss();
+    const place = read();
+    const stored = JSON.parse(localStorage.getItem("invincible:solo") || "{}").lastOracle;
+    click("Opportunity");
+    dismiss();
+    const opp = read();
+    const oppStored = JSON.parse(localStorage.getItem("invincible:solo") || "{}").lastOracle;
+    const level = JSON.parse(localStorage.getItem("invincible:solo") || "{}").crisisLevel;
+    click("Crisis event");
+    dismiss();
+    const crisisStored = JSON.parse(localStorage.getItem("invincible:solo") || "{}");
+    return { before, place, stored, opp, oppStored, level, crisis: read(), crisisStored };
+  });
+  ok("no oracle answer is shown before one is rolled", oracle.before === null);
+  ok("a location roll shows its result in the main panel", oracle.place && oracle.place.text.length > 0,
+    JSON.stringify(oracle.place));
+  ok("the location answer is persisted", !!oracle.stored && oracle.stored.text === oracle.place.text);
+  ok("the Opportunity engine rolls and shows a result", oracle.opp && oracle.opp.kind === "Opportunity" && oracle.opp.text.length > 0,
+    JSON.stringify(oracle.opp));
+  ok("the Crisis Event engine rolls, raises the level and files a crisis",
+    oracle.crisis && oracle.crisis.kind === "Crisis event"
+      && oracle.crisisStored.crisisLevel === oracle.level + 1
+      && oracle.crisisStored.crises.some((c) => c.text === oracle.crisis.text),
+    JSON.stringify({ kind: oracle.crisis && oracle.crisis.kind, level: oracle.crisisStored.crisisLevel }));
+
+  // "How do I write an objective / where do allies come from?" both need an in-app answer.
+  const guidance = await page.evaluate(async () => {
+    const open = (label) => Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === label)?.click();
+    const readDialog = () => {
+      const d = document.querySelector(".modal");
+      return { hints: Array.from(d.querySelectorAll(".modal-body p.muted")).map((p) => p.textContent),
+        suggest: d.querySelector(".modal-body .row-actions button")?.textContent.trim() || "",
+        input: d.querySelector(".modal-body input") };
+    };
+    const closeDialog = () => document.querySelector(".modal .modal-head .icon-btn")?.click();
+    open("Set an objective");
+    const obj = readDialog();
+    closeDialog();
+    open("Add an ally group");
+    const ally = readDialog();
+    ally.suggestBtn = document.querySelector(".modal-body .row-actions button");
+    ally.suggestBtn.click();
+    await new Promise((r) => setTimeout(r, 30));
+    const generated = ally.input.value;
+    closeDialog();
+    const NPCs = (await import("/data-npcs.js")).NPC_PROFILES.filter((n) => n.minion).map((n) => n.name);
+    return { objHints: obj.hints.length, objSuggest: obj.suggest, allyHints: ally.hints.length,
+      allySuggest: ally.suggest, generated, fromBook: NPCs.some((n) => generated.startsWith(n)) };
+  });
+  ok("the objective dialog states the guiding principle", guidance.objHints >= 3, String(guidance.objHints));
+  ok("the objective dialog offers a generator", /Complex Engine/.test(guidance.objSuggest), guidance.objSuggest);
+  ok("the ally dialog explains what a group is", guidance.allyHints >= 3, String(guidance.allyHints));
+  ok("allies can be generated from the Ch.6 minion profiles", guidance.fromBook, guidance.generated);
 
   // Choosing a crisis: the alert seeds one, event checks add more, engaging turns it into a timer.
   const crisis = await page.evaluate(async () => {

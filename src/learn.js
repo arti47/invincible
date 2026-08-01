@@ -27,6 +27,11 @@ export function exampleHero() {
 
 let activeTab = "basics";
 
+/** Lets another screen deep-link a specific tutorial — the Solo tab points at the solo walkthrough. */
+export function setLearnTab(key) {
+  if (TUTORIAL_INDEX.some((t) => t.key === key)) activeTab = key;
+}
+
 /* ---------------------------------------------------------------- render */
 
 export function renderLearn(mount) {

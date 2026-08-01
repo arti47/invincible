@@ -91,14 +91,27 @@ export async function confirmModal(message, { title = "Are you sure?", confirmLa
   return (await m.promise) === true;
 }
 
-export async function promptModal(message, { title = "Enter a value", value = "", placeholder = "", multiline = false } = {}) {
+/**
+ * `hints` are guidance lines shown under the field — used where the rules give a principle for
+ * what to write (objectives, ally groups). `suggest` is a { label, fn } generator button that
+ * fills the field, so "how do I come up with one?" has an in-app answer.
+ */
+export async function promptModal(message, { title = "Enter a value", value = "", placeholder = "", multiline = false, hints = [], suggest = null } = {}) {
   const input = multiline
     ? el("textarea", { class: "input", rows: 5, placeholder })
     : el("input", { class: "input", type: "text", placeholder });
   input.value = value;
+  const wrap = el("div", {}, el("p", { text: message }), input);
+  if (suggest) {
+    wrap.append(el("div", { class: "row-actions" }, el("button", { class: "btn ghost tiny", onclick: async () => {
+      const v = await suggest.fn();
+      if (v != null) { input.value = v; input.focus(); }
+    } }, suggest.label)));
+  }
+  for (const h of (Array.isArray(hints) ? hints : [hints])) wrap.append(el("p", { class: "muted small", text: h }));
   const m = modal({
     title,
-    body: el("div", {}, el("p", { text: message }), input),
+    body: wrap,
     actions: [
       { label: "Cancel", value: null, variant: "ghost" },
       { label: "OK", variant: "primary", onClick: () => input.value },

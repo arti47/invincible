@@ -3,10 +3,12 @@
 import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup } from "./core.js";
 import { modal, showToast, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as S from "../data-solo.js";
+import { NPC_PROFILES } from "../data-npcs.js";
 import { D } from "./rules.js";
 import * as R from "./rules.js";
 import * as Derived from "./derived.js";
 import * as Store from "./store.js";
+import { setLearnTab } from "./learn.js";
 import { STORAGE_PREFIX } from "./core.js";
 
 const KEY = `${STORAGE_PREFIX}solo`;
@@ -17,7 +19,16 @@ function load() {
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
-    eventChecks: 0, awaitingSocial: false };
+    eventChecks: 0, awaitingSocial: false, lastOracle: null };
+}
+
+/**
+ * The last oracle answer, kept on the tab instead of vanishing with its modal. Location rolls in
+ * particular describe the place you are standing in for the rest of the scene, so the answer has
+ * to stay legible after the dialog closes.
+ */
+function setOracle(state, kind, text, detail = "") {
+  state.lastOracle = { kind, text, detail, at: Date.now() };
 }
 
 /* ---------------------------------------------------------------- sequence of play (SOLO_SETUP.loop) */
@@ -49,6 +60,50 @@ function stepStrip(state) {
       class: `solo-step ${i === cur ? "current" : ""} ${i < cur ? "done" : ""}`,
       "aria-current": i === cur ? "step" : null,
     }, el("span", { class: "solo-step-n", "aria-hidden": "true", text: String(i + 1) }), el("span", { class: "solo-step-t", text }))));
+}
+
+/**
+ * One unmistakable "do this next" per loop step. The step strip shows the whole sequence, but a
+ * first-time player needs a single button and a reason, not six numbered lines to interpret.
+ * Every entry maps to the same step index as SOLO_SETUP.loop.
+ */
+const NEXT_STEP = [
+  { label: "Generate crisis alert",
+    why: "Nothing is happening yet. Roll an alert — the threat tables turn into the emergency your hero answers.",
+    run: (state, mount) => generateAlert(state, mount) },
+  { label: "Make an event check",
+    why: "The crisis level starts at 0. Event checks are the heartbeat: they decide whether the situation escalates, holds, or hands you an opportunity.",
+    run: (state, mount) => doEventCheck(state, mount) },
+  { label: "Engage a crisis",
+    why: "Pick one of the dangers below and start a crisis timer for it. A running timer is what makes the clock tick without a GM.",
+    run: (state, mount) => focusCard(state, mount, "solo-crises") },
+  { label: "Check your timers",
+    why: "Play the scene, then check every running timer as time passes. Ask the oracles whenever you would have asked a GM.",
+    run: (state, mount) => focusCard(state, mount, "solo-timers") },
+  { label: "Play a social scene",
+    why: "Something resolved. A social scene restores Resolve equal to your PRESENCE — take it before the next danger.",
+    run: (state, mount) => socialScene(state, mount) },
+];
+
+/** Scroll the relevant panel into view and flash it, for steps whose action lives further down. */
+function focusCard(state, mount, id) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  target.classList.add("flash");
+  setTimeout(() => target.classList.remove("flash"), 1400);
+}
+
+function nextStepCard(state, mount) {
+  const i = currentStep(state);
+  const step = NEXT_STEP[i];
+  return el("section", { class: "card next-step", id: "solo-next" },
+    el("p", { class: "next-step-eyebrow", text: `Step ${i + 1} of 6 — do this next` }),
+    el("h2", { text: step.label }),
+    el("p", { class: "next-step-why", text: step.why }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn primary big", onclick: () => step.run(state, mount) }, step.label),
+      el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")));
 }
 
 /** Guide, don't block: warn when acting out of order, then run the action anyway. */
@@ -95,7 +150,9 @@ export function renderSolo(mount) {
   const step = currentStep(state);
   const primary = (n) => (step === n ? "btn primary" : "btn");
 
-  mount.append(el("section", { class: "card" },
+  mount.append(nextStepCard(state, mount));
+
+  mount.append(el("section", { class: "card solo-header" },
     el("h2", { text: "Crisis Mode" }),
     el("p", { class: "muted small", text: "Solo play without a GM. Keep at least one timer running at all times." }),
     stepStrip(state),
@@ -140,7 +197,7 @@ export function renderSolo(mount) {
  */
 function allTimersCard(state, mount) {
   const running = state.timers.length + state.objectives.length + state.allies.length + (state.encounter ? 1 : 0);
-  const card = el("section", { class: "card" },
+  const card = el("section", { class: "card", id: "solo-timers" },
     el("h3", { text: `Timers (${running} running)` }),
     helpPanel([
       "Timers are the pressure in solo play — they are what a GM would otherwise supply. There are four types and they all advance when time passes in the fiction.",
@@ -164,27 +221,48 @@ function allTimersCard(state, mount) {
  * which previously sat in a reference block with no stated trigger.
  */
 function oraclesCard(state, mount) {
-  const card = el("section", { class: "card" },
+  const card = el("section", { class: "card", id: "solo-oracles" },
     el("h3", { text: "Ask the oracles" }),
     helpPanel([
       "Use these whenever you would otherwise have asked the GM something.",
       "Yes / no answers a closed question. Complex answer gives a directive and a subject to interpret when the question is open-ended.",
+      "Crisis event is the book's jolt: if you are ever unsure what happens next, raise the crisis level by 1 and roll one. Opportunity is its counterpart — a positive turn or a helpful asset. Keep opportunities rare.",
       "Describe a place is the location engines: roll one when you arrive somewhere and need to know what it is actually like — a district, a stretch of terrain, a facility interior, the volume of space you just dropped into. The Atmosphere engine is mixed into the others automatically to colour the result.",
-      "Crisis event is the book's jolt: if you are ever unsure what happens next, raise the crisis level by 1 and roll one.",
-    ]),
+    ]));
+
+  // The answer stays on the tab: a modal you have dismissed is no use half a scene later.
+  card.append(state.lastOracle
+    ? el("div", { class: "oracle-answer" },
+      el("span", { class: "oracle-kind", text: state.lastOracle.kind }),
+      el("p", { class: "lede", text: state.lastOracle.text }),
+      state.lastOracle.detail ? el("p", { class: "muted small", text: state.lastOracle.detail }) : null,
+      el("button", { class: "btn tiny ghost", onclick: () => { state.lastOracle = null; save(state); renderSolo(mount); } }, "Clear"))
+    : el("p", { class: "muted small", text: "No answer yet. Roll an oracle and the result stays here for the rest of the scene." }));
+
+  const group = (title, note, ...kids) => {
+    const g = el("div", { class: "oracle-group" }, el("h4", { class: "group-head", text: title }));
+    if (note) g.append(el("p", { class: "muted small", text: note }));
+    g.append(...kids.filter(Boolean));
+    return g;
+  };
+
+  card.append(group("Answer a question", "For anything you would have asked the GM outright.",
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
-      el("button", { class: "btn", onclick: () => askComplex(state, mount) }, "Complex answer"),
-      el("button", { class: "btn ghost", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event")));
+      el("button", { class: "btn", onclick: () => askComplex(state, mount) }, "Complex answer"))));
 
-  card.append(el("h4", { class: "group-head", text: "Describe a place" }));
-  card.append(el("p", { class: "muted small", text: "Roll the engine matching the scale you need." }));
+  card.append(group("Find out what happens", "When you do not know what the situation does next.",
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event"),
+      el("button", { class: "btn", onclick: () => rollOpportunityEvent(state, mount) }, "Opportunity")),
+    el("p", { class: "muted small", text: "A crisis event raises the crisis level by 1 and adds a new danger to Crises. An opportunity costs nothing and may count as a milestone for an objective check." })));
+
   const row = el("div", { class: "chiprow" });
   for (const key of Object.keys(S.LOCATION_ENGINES)) {
     row.append(el("button", { class: "chip", onclick: () => describePlace(state, mount, key) },
       S.LOCATION_ENGINES[key].name.replace(" Engine", "")));
   }
-  card.append(row);
+  card.append(group("Describe a place", "Roll the engine matching the scale you need.", row));
   return card;
 }
 
@@ -195,6 +273,9 @@ function describePlace(state, mount, key) {
   const atmosphere = key === "atmosphere" ? null : R.rollNamedTable(S.LOCATION_ENGINES.atmosphere);
   const text = atmosphere ? `${atmosphere.entry.text} ${res.entry.text}` : res.entry.text;
   logEvent(state, `${engine.name}: ${text}`);
+  setOracle(state, engine.name, text, atmosphere
+    ? `D66 ${res.value}, with Atmosphere ${atmosphere.value} rolled alongside so the place has a mood as well as a shape.`
+    : `D66 ${res.value}.`);
   save(state);
   modal({ title: engine.name,
     body: el("div", {},
@@ -219,7 +300,7 @@ function addCrisis(state, text, source) {
 }
 
 function crisesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: `Crises (${(state.crises || []).length})` }));
+  const card = el("section", { class: "card", id: "solo-crises" }, el("h3", { text: `Crises (${(state.crises || []).length})` }));
   card.append(helpPanel([
     "Every danger you could engage right now. The crisis alert seeds the first one; each event check that fires adds another.",
     "Step 3 of the loop is choosing one. Engage a crisis to turn it into a running crisis timer — the timer counts down to it happening.",
@@ -353,6 +434,8 @@ function joltCrisisEvent(state, mount) {
   const ev = rollCrisisEvent(state);
   addCrisis(state, ev.text, "event");
   logEvent(state, `Crisis event (${ev.focusRoll}/${ev.detailRoll}): ${ev.text}`);
+  setOracle(state, "Crisis event", ev.text,
+    `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}. Added to Crises.`);
   save(state);
   modal({ title: `Crisis event — ${ev.focus}`,
     body: el("div", {},
@@ -360,6 +443,26 @@ function joltCrisisEvent(state, mount) {
       el("p", { class: "muted small", text: `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}.` }),
       el("p", { class: "muted small", text: S.CRISIS_EVENT_ENGINE.note }),
       el("p", { class: "small", text: "Added to Crises — engage it there to start a timer." })),
+    actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/**
+ * The Opportunity Event Engine, on demand. The event check reaches it on 11-12, but the chapter
+ * also calls for one whenever a FATE response points at a positive turn — so it needs its own
+ * control rather than existing only as a rare side effect.
+ */
+function rollOpportunityEvent(state, mount) {
+  const opp = rollOpportunity();
+  logEvent(state, `Opportunity (${opp.value}): ${opp.text}`);
+  setOracle(state, "Opportunity", opp.text,
+    `D66 ${opp.value}. Keep these rare; one may count as a milestone that triggers an objective check.`);
+  save(state);
+  modal({ title: "Opportunity",
+    body: el("div", {},
+      el("p", { class: "lede big", text: opp.text }),
+      el("p", { class: "muted small", text: `D66 ${opp.value}. A positive twist or a helpful asset — the counterweight to a crisis event.` }),
+      el("p", { class: "small", text: "This may count as a milestone: if it moves an objective along, roll that objective's progress." })),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -391,6 +494,7 @@ function doEventCheck(state, mount) {
     rolls = `Opportunity D66 ${opp.value}. These should stay rare, and may count as a milestone for an objective check.`;
   }
   logEvent(state, `Event check ${value}: ${entry.text}${extra ? ` — ${extra}` : ""}`);
+  setOracle(state, `Event check ${value}`, extra || entry.text, rolls || entry.text);
   save(state);
   modal({ title: `Event check — ${value}`,
     body: el("div", {}, el("p", { text: entry.text }), extra ? el("p", { class: "lede", text: extra }) : null,
@@ -399,9 +503,6 @@ function doEventCheck(state, mount) {
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
-
-function oneEvent() { return complexPhrase(); }
-function twoEvents() { return `${complexPhrase()} / ${complexPhrase()}`; }
 
 function complexPhrase() {
   const dir = S.COMPLEX_ENGINE.directives[d66()];
@@ -423,6 +524,7 @@ async function askBinary(state, mount) {
   else { const a = d6(), b = d6(); value = odds === "yes" ? Math.max(a, b) : Math.min(a, b); }
   const entry = tableLookup(S.BINARY_ENGINE.entries, value);
   logEvent(state, `${question} → ${entry.text}`);
+  setOracle(state, "Yes / no", `${question} — ${entry.text}`, `D6 ${value}${odds === "even" ? "" : `, ${odds === "yes" ? "keeping the highest of 2D6" : "keeping the lowest of 2D6"}`}.`);
   save(state);
   modal({ title: entry.text,
     body: el("div", {}, el("p", { class: "muted", text: question }),
@@ -439,6 +541,7 @@ async function askComplex(state, mount) {
   const dir = S.COMPLEX_ENGINE.directives[dirRoll];
   const sub = S.COMPLEX_ENGINE.subjects[subRoll];
   logEvent(state, `${question} → ${dir} ${sub}`);
+  setOracle(state, "Complex answer", `${question} — ${dir} ${sub}`, `Directive ${dirRoll} · Subject ${subRoll}.`);
   save(state);
   modal({ title: "Complex Response Engine",
     body: el("div", {},
@@ -577,12 +680,28 @@ function objectivesCard(state, mount) {
           : el("button", { class: "btn tiny primary", onclick: () => objectiveCheck(state, o, mount) }, "Progress"),
         el("button", { class: "btn tiny ghost", onclick: () => { state.objectives = state.objectives.filter((x) => x.id !== o.id); save(state); renderSolo(mount); } }, "Drop"))));
   }
+  card.append(el("p", { class: "muted small", text: S.OBJECTIVE_TIMER.rules[0] }));
   card.append(el("button", { class: "btn", onclick: () => addObjective(state, mount) }, "Set an objective"));
   return card;
 }
 
+/**
+ * The rules give a principle for writing one (OBJECTIVE_TIMER.rules): name it, give it a starting
+ * status, and expect distant objectives to progress slowly and pay more karma. Those lines are
+ * surfaced in the dialog, because "what makes a good objective?" was otherwise unanswered.
+ */
 async function addObjective(state, mount) {
-  const name = await promptModal("What is the objective?", { title: "New objective" });
+  const name = await promptModal("What is your hero trying to achieve?", {
+    title: "New objective",
+    placeholder: "Find out who armed them",
+    hints: [
+      "Write one thing you are working towards across the whole crisis — not a single action. Anything you could resolve with one roll is a roll, not an objective.",
+      ...S.OBJECTIVE_TIMER.rules.slice(0, 1),
+      "It can also measure progress through a place when you are not using a map — 'reach the reactor core'.",
+      "Progress comes from milestones in the fiction: each time something meaningful happens for or against it, roll its progress dice.",
+    ],
+    suggest: { label: "Stuck? Ask the Complex Engine", fn: () => complexPhrase() },
+  });
   if (!name) return;
   const status = await chooseModal("How far away is it?", S.OBJECTIVE_TIMER.ladder.slice(0, 4).map((l) => ({
     label: l.name, hint: `${l.dice} progress dice · ${l.karma} karma`, value: l.key })));
@@ -654,18 +773,38 @@ function alliesCard(state, mount) {
         el("button", { class: "btn tiny", onclick: () => allyCheck(state, a, mount, true) }, "Fight"),
         el("button", { class: "btn tiny ghost", onclick: () => { state.allies = state.allies.filter((x) => x.id !== a.id); save(state); renderSolo(mount); } }, "Drop"))));
   }
+  card.append(el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
   card.append(el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
   return card;
 }
 
+/**
+ * Where an ally group comes from when you have no GM to introduce one: the Ch.6 minion profiles
+ * are already groups-as-one-entity, which is exactly what the ally timer tracks. Rolled from the
+ * book's own list rather than invented.
+ */
+function suggestAllyGroup() {
+  const groups = NPC_PROFILES.filter((n) => n.minion);
+  const pick = groups[Math.floor(Math.random() * groups.length)];
+  return pick.desc ? `${pick.name} — ${pick.desc}` : pick.name;
+}
+
 async function addAllies(state, mount) {
-  const name = await promptModal("Who are they?", { title: "Ally group" });
+  const name = await promptModal("Who is helping you?", {
+    title: "Ally group",
+    placeholder: "Police officers holding the cordon",
+    hints: [
+      "An ally group is one entity, not a list of NPCs — a squad, a crowd, a team, a family. Track a separate timer for each separate group.",
+      "The Ch.6 minion profiles are ready-made groups: police officers, soldiers, bystanders, martial artists, gangsters, ninjas. Roll one below if nobody has turned up yet.",
+      "You can also ask the oracles: use yes / no to test whether help arrives at all, then the Complex Engine for who they are.",
+    ],
+    suggest: { label: "Roll a group from Ch.6", fn: () => suggestAllyGroup() },
+  });
   if (!name) return;
-  const status = await chooseModal("Starting status", [
-    { label: "Unified", hint: "Unaware of the danger to come", value: "unified" },
-    { label: "Strained", hint: "Already in a tense situation", value: "strained" },
-    { label: "Diminished", hint: "Already taken casualties", value: "diminished" },
-  ]);
+  const status = await chooseModal("Starting status", S.ALLY_TIMER.start.map((t) => {
+    const [label, hint] = t.split(" — ");
+    return { label, hint, value: label.toLowerCase() };
+  }));
   if (!status) return;
   state.allies.push({ id: uid("ally"), name, status });
   save(state);
