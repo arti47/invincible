@@ -9,6 +9,7 @@ import * as Store from "./store.js";
 import * as Roller from "./roller.js";
 import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from "./power-automation.js";
 import { Settings } from "./settings.js";
+import { stageCard } from "./combat.js";
 
 /* ---------------------------------------------------------------- persistent header */
 
@@ -112,6 +113,7 @@ export function renderSheet(mount) {
   const s = Derived.summary(c);
 
   mount.append(
+    stageCard(),
     identityCard(c, s),
     vitalsCard(c, s),
     attributesCard(c, s),

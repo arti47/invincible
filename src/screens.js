@@ -7,7 +7,7 @@ import { D } from "./rules.js";
 import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import { Settings, TOGGLES, applyTheme } from "./settings.js";
-import { lifecycleButtons, openLifecycle } from "./combat.js";
+import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
 import * as Sync from "./sync.js";
@@ -19,6 +19,8 @@ export function renderHome(mount) {
   const c = Store.activeCharacter();
   const chars = Store.listCharacters();
   const team = Store.getTeam();
+
+  if (chars.length) mount.append(stageCard());
 
   // With an empty roster, learning the game comes before building a hero for it.
   if (!chars.length) {

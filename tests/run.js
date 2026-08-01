@@ -992,6 +992,50 @@ const run = async () => {
     sheetSeq.vitalOrder.indexOf("Take damage") < sheetSeq.vitalOrder.indexOf("Rest & recover"),
     sheetSeq.vitalOrder.join(" | "));
 
+  // One agreed answer to "what now": the session stage, and the control that carries it forward.
+  const stage = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    Store.clearCombat();
+    const seen = [];
+    const grab = () => { const s = Combat.sessionStage(); seen.push([s.key, s.label]); };
+    localStorage.removeItem("invincible:characters");
+    localStorage.removeItem("invincible:active");
+    grab();                                                    // no hero
+    const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0]));
+    Store.setActiveCharacter(c.id);
+    Store.updateCharacter((ch) => { ch.state.session.spendUnlocked = true; ch.state.session.stage = "idle"; }, { id: c.id });
+    grab();                                                    // between sessions
+    await Combat.applyBundle("start", { id: c.id });
+    grab();                                                    // session open
+    Combat.startActionScene();
+    grab();                                                    // in an action scene
+    Store.clearCombat();
+    await Combat.applyBundle("action", { id: c.id });
+    grab();                                                    // action over → social due
+    await Combat.applyBundle("social", { id: c.id });
+    grab();                                                    // between scenes
+    location.hash = "#/home";
+    await new Promise((r) => setTimeout(r, 250));
+    const onHome = !!document.querySelector("#screen #session-stage");
+    const homeFirst = document.querySelector("#screen .card")?.id === "session-stage";
+    location.hash = "#/sheet";
+    await new Promise((r) => setTimeout(r, 250));
+    const onSheet = !!document.querySelector("#screen #session-stage");
+    return { seen, onHome, homeFirst, onSheet };
+  });
+  ok("the session stage tracks the beat of play",
+    JSON.stringify(stage.seen.map((x) => x[0])) === JSON.stringify(["create", "start", "open", "inAction", "social", "next"]),
+    stage.seen.map((x) => x[0]).join(" → "));
+  ok("each stage names the one control that carries it forward",
+    stage.seen.every(([, label]) => typeof label === "string" && label.length > 0)
+      && stage.seen[2][1] === "Start action scene" && stage.seen[4][1] === "End social scene",
+    stage.seen.map((x) => x[1]).join(" | "));
+  ok("the stage card leads the Home screen", stage.onHome && stage.homeFirst);
+  ok("the sheet carries the same stage card", stage.onSheet);
+
   const seqData = await page.evaluate(async () => {
     const D = (await import("/data.js"));
     const Roller = await import("/src/roller.js");

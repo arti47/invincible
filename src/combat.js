@@ -95,6 +95,52 @@ function guessArmor(p) {
   return m ? Number(m[1]) : 0;
 }
 
+/* ---------------------------------------------------------------- where you are in the session */
+
+/**
+ * The one thing the whole app can agree on: which beat of §3.12 is live, and the single control
+ * that carries it forward. Every surface reads this rather than guessing from its own state, so
+ * "what do I do next" has the same answer on Home, the Sheet and the Action tab.
+ */
+export function sessionStage(c = Store.activeCharacter()) {
+  if (!c) return { key: "create", title: "Make a hero", why: "Nothing to play yet. Build a hero or take a published one.", label: "Create your hero", href: "#/create" };
+  const combat = getCombat();
+  if (combat?.active) {
+    const up = currentTurn(combat);
+    return { key: "inAction", title: `Action scene — round ${combat.round}`,
+      why: up ? `${up.name} acts now. Work down the initiative cards, then draw the next round.` : "Everyone has acted. Draw the next round or end the scene.",
+      label: "Go to the action scene", href: "#/combat" };
+  }
+  const st = c.state.session || {};
+  if (st.spendUnlocked || st.stage === "idle") {
+    return { key: "start", title: "Between sessions", why: "Karma can be spent now, in a safe location. Start the session when play begins.",
+      label: "Start session", run: () => openLifecycle("start") };
+  }
+  if (st.stage === "afterAction") {
+    return { key: "social", title: "The action scene is over", why: "Alternate scenes: a social scene now restores Resolve equal to your PRESENCE.",
+      label: "End social scene", run: () => openLifecycle("social") };
+  }
+  if (st.stage === "afterSocial") {
+    return { key: "next", title: "Between scenes", why: "Back to the story: start the next action scene, or close the session if the issue is done.",
+      label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; } };
+  }
+  return { key: "open", title: "Session open", why: "Open with a briefing, then alternate action and social scenes.",
+    label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; } };
+}
+
+/** The stage rendered as the same "do this next" card the Solo tab uses. */
+export function stageCard() {
+  const s = sessionStage();
+  const action = s.href
+    ? el("a", { class: "btn primary big", href: s.href }, s.label)
+    : el("button", { class: "btn primary big", onclick: () => s.run() }, s.label);
+  return el("section", { class: "card next-step", id: "session-stage" },
+    el("p", { class: "next-step-eyebrow", text: "Now" }),
+    el("h2", { text: s.title }),
+    el("p", { class: "next-step-why", text: s.why }),
+    el("div", { class: "row-actions" }, action));
+}
+
 /* ---------------------------------------------------------------- rendering */
 
 export function renderCombat(mount) {
@@ -389,6 +435,7 @@ export async function applyBundle(kind, { id } = {}) {
       ch.state.session.wreckedZones = [];
       ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
       ch.state.indomitableUsed = false;
+      ch.state.session.stage = "open";
       summaryLines.push("Session open; karma spending is locked until it ends.");
     } else if (kind === "action") {
       const heal = Derived.effectiveAttributes(ch).strength;
@@ -406,12 +453,14 @@ export async function applyBundle(kind, { id } = {}) {
         summaryLines.push(`${wrecked.length} wrecked zone(s) noted for bad karma.`);
       }
       ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
+      ch.state.session.stage = "afterAction";
       if (cleared.length) summaryLines.push(`Cleared: ${cleared.join(", ")}.`);
     } else if (kind === "social") {
       const before = ch.state.resolve;
       ch.state.resolve = Math.min(Derived.maxResolve(ch), ch.state.resolve + Derived.effectiveAttributes(ch).presence);
       summaryLines.push(`Resolve ${before} → ${ch.state.resolve} (+${ch.state.resolve - before}).`);
       ch.state.session.karmaAnswers.social = true;
+      ch.state.session.stage = "afterSocial";
       if (Settings.soloMode()) socialScenePlayed = true;
     } else if (kind === "adventure") {
       ch.state.session.spendUnlocked = true;
@@ -419,6 +468,7 @@ export async function applyBundle(kind, { id } = {}) {
       ch.state.session.badKarmaAnswers = {};
       ch.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
       ch.advancementLog.push({ at: Date.now(), kind: "adventure", label: "Adventure closed", cost: 0 });
+      ch.state.session.stage = "idle";
       summaryLines.push("Adventure logged and session flags cleared; karma spending unlocked.");
     }
   }, { id });
@@ -501,6 +551,7 @@ async function openSessionEnd(c) {
       if (ch.state.session.flawlessSessions >= 1) ch.state.session.flawState = "chooseNew";
     }
     ch.state.session.spendUnlocked = true;
+    ch.state.session.stage = "idle";
     ch.state.session.karmaAnswers = {};
     ch.state.session.badKarmaAnswers = {};
     ch.state.indomitableUsed = false;
