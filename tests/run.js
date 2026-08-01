@@ -938,6 +938,74 @@ const run = async () => {
     sheetSeq.vitalOrder.indexOf("Take damage") < sheetSeq.vitalOrder.indexOf("Rest & recover"),
     sheetSeq.vitalOrder.join(" | "));
 
+  const seqData = await page.evaluate(async () => {
+    const D = (await import("/data.js"));
+    const Roller = await import("/src/roller.js");
+    const ids = D.RULES_LIBRARY.map((r) => r.id);
+    const i = (id) => ids.indexOf(id);
+    return {
+      ids,
+      framedFirst: i("lifecycle") === 0,
+      deathAfterDamage: i("damage") < i("death") && i("death") < i("recovery"),
+      rollBeforeFight: i("resolution") < i("initiative") && i("initiative") < i("slugfest"),
+      // Block/dodge are declared before the attacker rolls, so the engine must expose them.
+      blockable: Roller.ATTACK_KINDS.slugfest.blockable === true && Roller.ATTACK_KINDS.grapple.blockable === true,
+      chargeDodgeOnly: Roller.ATTACK_KINDS.charge.blockable === false && Roller.ATTACK_KINDS.charge.dodgeable === true,
+      shootingDodge: Roller.ATTACK_KINDS.shooting.dodgeable === true,
+    };
+  });
+  ok("the rules library opens with how a session is framed", seqData.framedFirst, seqData.ids.slice(0, 3).join(" | "));
+  ok("damage → death → recovery read in that order", seqData.deathAfterDamage);
+  ok("rolling comes before initiative, which comes before attacks", seqData.rollBeforeFight);
+  ok("blockable and dodgeable attacks are typed for the pre-roll declaration",
+    seqData.blockable && seqData.chargeDodgeOnly && seqData.shootingDodge);
+
+  // The attack dialog must ask for the defence BEFORE it rolls the attack (§3.2).
+  const attackSeq = await page.evaluate(async () => {
+    location.hash = "#/sheet";
+    await new Promise((r) => setTimeout(r, 250));
+    const Store = await import("/src/store.js");
+    const logBefore = Store.rollLog().length;
+    const titles = [];
+    const step = async (pick) => {
+      await new Promise((r) => setTimeout(r, 80));
+      const d = document.querySelector(".modal");
+      if (!d) return false;
+      titles.push(d.getAttribute("aria-label"));
+      const btn = Array.from(d.querySelectorAll(".choice, .modal-actions button")).find((b) => pick(b.textContent.trim()));
+      btn?.click();
+      return true;
+    };
+    Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "Attack").click();
+    await step((t) => /Slugfest/.test(t));            // attack kind
+    const rolledAtKind = Store.rollLog().length;      // nothing may be rolled yet
+    await step((t) => /Huge creature|Normal target/.test(t));
+    await step((t) => /No defence|They block/.test(t));
+    await new Promise((r) => setTimeout(r, 150));
+    const d = document.querySelector(".modal");
+    const result = d ? d.getAttribute("aria-label") : "";
+    document.querySelector(".modal .modal-head .icon-btn")?.click();
+    return { titles, result, rolledAtKind, logBefore };
+  });
+  ok("the defence is declared before the attack is rolled",
+    attackSeq.titles.some((t) => /Block\?|Dodge\?/.test(t)) && attackSeq.rolledAtKind === attackSeq.logBefore,
+    attackSeq.titles.join(" | "));
+  ok("the attack dialog runs kind → target → defence → roll",
+    /attack/i.test(attackSeq.result) && attackSeq.titles.length === 3, `${attackSeq.titles.join(" | ")} → ${attackSeq.result}`);
+
+  const recoverySeq = await page.evaluate(async () => {
+    const Sheet = await import("/src/sheet.js");
+    const Store = await import("/src/store.js");
+    Sheet.openRecovery(Store.activeCharacter());
+    await new Promise((r) => setTimeout(r, 150));
+    const stages = Array.from(document.querySelectorAll(".modal .stage-label")).map((p) => p.textContent);
+    document.querySelector(".modal .modal-head .icon-btn")?.click();
+    return stages;
+  });
+  ok("recovery is grouped by time span, shortest first",
+    JSON.stringify(recoverySeq) === JSON.stringify(["An action round", "A few minutes", "A few hours"]),
+    recoverySeq.join(" | "));
+
   /* ---------------------------------------------------------------- wizard UI */
   section("Creation wizard UI");
   await page.evaluate(() => localStorage.clear());

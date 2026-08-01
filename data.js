@@ -1708,6 +1708,8 @@ export const LIFECYCLE = {
 /* ------------------------------------------------------------------ Rules library (searchable) */
 
 export const RULES_LIBRARY = [
+  { id: "lifecycle", title: "Scenes and sessions", tags: ["scene", "session", "briefing"], chapter: "Ch.6",
+    body: "Play runs in briefings, action scenes and social scenes, usually alternating. A session feels like one comic issue; adventures run first contact, twist and showdown." },
   { id: "resolution", title: "Attribute rolls", tags: ["dice", "roll", "success", "6"], chapter: "Ch.4",
     body: "Roll dice equal to the attribute that best matches the challenge. At least one 6 succeeds; every extra 6 buys a stunt. A pool never drops below one die. Failure must still leave a way forward — at a cost in time, risk or resources." },
   { id: "push", title: "Pushing a roll", tags: ["push", "stress", "re-roll"], chapter: "Ch.4",
@@ -1730,6 +1732,8 @@ export const RULES_LIBRARY = [
     body: "As part of a slugfest attack you may wreck your zone for bonus dice from the terrain table, extending the attack to range 1. A zone can only be wrecked once per scene, buildings are levelled, and wrecking costs bad karma." },
   { id: "damage", title: "Damage and being broken", tags: ["health", "broken", "armor"], chapter: "Ch.4",
     body: "Armor reduces each incoming hit and only one armor applies. At 0 Health you are broken and roll a critical injury (D6 plus the damage in excess of what broke you). Damage while broken causes another crit, adding the full damage." },
+  { id: "death", title: "Death", tags: ["death", "dying", "dead"], chapter: "Ch.4",
+    body: "A crit of 12 or more kills instantly. Crits 10 and 11 kill within a few hours or a few minutes unless someone stabilises you with advanced medical gear and a REASON roll — one attempt only. Heroes can and do die; the player takes a new hero." },
   { id: "crits", title: "Critical injuries", tags: ["crit", "injury", "stabilize", "rally"], chapter: "Ch.4",
     body: "Each crit carries a dice penalty and a healing time. Later crits add +1 per existing crit and any result at or below your worst is bumped a step worse; penalties to the same attributes never stack. Crits 10 and 11 kill without stabilisation — advanced medical gear and one REASON roll. At crit 9 or worse you cannot rally." },
   { id: "recovery", title: "Recovery", tags: ["heal", "rest", "resolve"], chapter: "Ch.4",
@@ -1740,22 +1744,18 @@ export const RULES_LIBRARY = [
     body: "Non-combat crises with a Challenge rating and a time limit. Each objective always needs a roll, even with a power, and every 6 removes 1 point from the rating. Reach zero in time or the stated failure happens." },
   { id: "powers", title: "Using powers", tags: ["power", "boost", "limit", "exploit"], chapter: "Ch.3",
     body: "Using a power as printed needs no roll. A roll is needed to push a power past its stated effect. Exploits let you take stress for extra effect. Boosts cost a power slot; limits are free but must be chosen when the power is first acquired, and either raise its level a step or grant a boost for that same power." },
-  { id: "karma", title: "Karma", tags: ["karma", "advancement", "xp"], chapter: "Ch.2",
-    body: "Answer ten questions at the end of each session for 1 karma each (2 for overcoming your flaw), then six bad-karma questions costing 1 each. Karma never drops below zero and is spent only between sessions in a safe location." },
-  { id: "reputation", title: "Reputation", tags: ["reputation", "fame", "recognised"], chapter: "Ch.2",
-    body: "On arriving somewhere new, roll dice equal to your Reputation — any 6 means people know you. It is not an attribute roll and cannot be pushed. Being recognised gives +2 dice to persuade or intimidate. Only the highest-Reputation hero rolls for a team." },
-  { id: "resources", title: "Resources and purchases", tags: ["money", "buy", "cost", "loan"], chapter: "Ch.4",
-    body: "Resources above an item's Cost buys it automatically; equal Cost needs a Resources roll (never pushable), then one PRESENCE barter attempt; below Cost you need a loan. Restricted items always need Streetwise." },
   { id: "minions", title: "Minions", tags: ["minion", "mooks", "group"], chapter: "Ch.4",
     body: "A minion group acts as one character: Health equals the number of minions, each point of damage removes one, and no crits are rolled. They share one Resolve, move together, and help each other's attacks up to +9 dice." },
   { id: "huge", title: "Huge creatures", tags: ["huge", "kaiju"], chapter: "Ch.4",
     body: "Huge creatures can hit elevated targets in slugfest, cannot be grappled, ignore Knockback, Stun, Slam, Suppressed and Deadly Hit, and are immune to action banter." },
   { id: "chases", title: "Chases", tags: ["chase", "pursuit", "vehicle"], chapter: "Ch.4",
     body: "No map — only the distance in zones. Each round begins with an opposed AGILITY roll modified by Maneuverability and a speed bonus; both sides may push, prey first. The winner changes the distance by one zone per excess 6. At zero the pursuer charges or rams unblockably; around five zones the chase is lost." },
-  { id: "lifecycle", title: "Scenes and sessions", tags: ["scene", "session", "briefing"], chapter: "Ch.6",
-    body: "Play runs in briefings, action scenes and social scenes, usually alternating. A session feels like one comic issue; adventures run first contact, twist and showdown." },
-  { id: "death", title: "Death", tags: ["death", "dying", "dead"], chapter: "Ch.4",
-    body: "A crit of 12 or more kills instantly. Crits 10 and 11 kill within a few hours or a few minutes unless someone stabilises you with advanced medical gear and a REASON roll — one attempt only. Heroes can and do die; the player takes a new hero." },
+  { id: "karma", title: "Karma", tags: ["karma", "advancement", "xp"], chapter: "Ch.2",
+    body: "Answer ten questions at the end of each session for 1 karma each (2 for overcoming your flaw), then six bad-karma questions costing 1 each. Karma never drops below zero and is spent only between sessions in a safe location." },
+  { id: "reputation", title: "Reputation", tags: ["reputation", "fame", "recognised"], chapter: "Ch.2",
+    body: "On arriving somewhere new, roll dice equal to your Reputation — any 6 means people know you. It is not an attribute roll and cannot be pushed. Being recognised gives +2 dice to persuade or intimidate. Only the highest-Reputation hero rolls for a team." },
+  { id: "resources", title: "Resources and purchases", tags: ["money", "buy", "cost", "loan"], chapter: "Ch.4",
+    body: "Resources above an item's Cost buys it automatically; equal Cost needs a Resources roll (never pushable), then one PRESENCE barter attempt; below Cost you need a loan. Restricted items always need Streetwise." },
 ];
 
 export const HOUSE_AIDS = [

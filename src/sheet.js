@@ -303,18 +303,46 @@ async function openAttackDialog(c) {
     weapon = weapons.find((w) => w.name === pick) || null;
   }
   const huge = await confirmModal("Is the target a huge creature?", { title: "Target", confirmLabel: "Huge creature", cancelLabel: "Normal target" });
+
+  // The defence is declared BEFORE the attacker rolls (§3.2) — so it is asked for here, not after.
+  const kindDef = Roller.ATTACK_KINDS[kind];
+  const defKind = kindDef.blockable ? "block" : kindDef.dodgeable ? "dodge" : null;
+  let defence = null;
+  if (defKind && !huge) {
+    const declared = await confirmModal(
+      defKind === "block"
+        ? "Declared before you roll: does the target spend a quick action to block? Each defender 6 cancels one of yours, and extra 6s become a counterattack."
+        : "Declared before you roll: does the target spend a quick action to dodge? Each defender 6 cancels one of yours, and extra 6s let them move a zone each.",
+      { title: defKind === "block" ? "Block?" : "Dodge?", confirmLabel: defKind === "block" ? "They block" : "They dodge", cancelLabel: "No defence" });
+    if (declared) {
+      const n = Number(await promptModal(defKind === "block" ? "Defender's FIGHTING score?" : "Defender's AGILITY score?",
+        { title: "Defender", value: "3" }));
+      if (n > 0) defence = { kind: defKind, dice: n };
+    }
+  }
+
   const manual = Settings.manualDice() ? await askManualFaces() : null;
   const r = Roller.makeAttack(c, kind, { weapon, huge, manualFaces: manual });
-  showAttackResult(c, r, { huge });
+  let resolved = null;
+  if (defence) {
+    const dr = Roller.rollRaw(defence.dice, defence.kind === "block" ? "Block (FIGHTING)" : "Dodge (AGILITY)", { pushable: false });
+    resolved = { ...defence, roll: dr, ...(defence.kind === "block" ? Roller.resolveBlock(r, dr) : Roller.resolveDodge(r, dr)) };
+  }
+  showAttackResult(c, r, { huge, defence: resolved });
 }
 
-export function showAttackResult(c, r, { huge = false } = {}) {
+export function showAttackResult(c, r, { huge = false, defence = null } = {}) {
   const stunts = r.meta.stunts || [];
-  const available = Math.max(0, r.sixes - 1);
+  const effective = defence ? defence.remainingSixes : r.sixes;
+  const available = Math.max(0, effective - 1);
   const body = el("div", {},
     el("div", { class: "dice-row" }, ...r.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))),
-    el("p", { class: `outcome ${r.sixes ? "good" : "bad"}`, text: r.sixes ? `Hit — ${r.meta.damage} damage (${r.meta.damageSource})` : "Miss" }),
-    r.sixes ? el("p", { class: "muted", text: `${available} stunt${available === 1 ? "" : "s"} available. Knockback, Bang Heads and Slam deal half your base STRENGTH (${Roller.stuntDamage(c)}), not Slugfest Damage.` }) : null,
+    defence ? el("div", {},
+      el("p", { class: "muted small", text: `${defence.kind === "block" ? "Block" : "Dodge"}: ${defence.roll.sixes} six${defence.roll.sixes === 1 ? "" : "es"} cancelling yours.` }),
+      el("div", { class: "dice-row" }, ...defence.roll.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) })))) : null,
+    el("p", { class: `outcome ${effective ? "good" : "bad"}`, text: effective ? `Hit — ${r.meta.damage} damage (${r.meta.damageSource})` : defence ? `Stopped — the ${defence.kind} cancelled it` : "Miss" }),
+    effective ? el("p", { class: "muted", text: `${available} stunt${available === 1 ? "" : "s"} available. Knockback, Bang Heads and Slam deal half your base STRENGTH (${Roller.stuntDamage(c)}), not Slugfest Damage.` }) : null,
+    defence?.note ? el("p", { class: "warn", text: defence.note }) : null,
     huge ? el("p", { class: "warn small", text: "Huge creature: Knockback, Stun, Slam, Suppressed and Deadly Hit are unavailable, and it cannot be grappled." }) : null,
     el("div", { class: "stunt-list" }, ...stunts.map((s) => el("details", {}, el("summary", { text: s.name }), el("p", { text: s.desc })))),
     el("p", { class: "cite" }, el("a", { href: "#/rules/stunts", class: "rules-link" }, "Rules: Stunts")));
@@ -326,9 +354,13 @@ export function showAttackResult(c, r, { huge = false } = {}) {
     if (!res.ok) { showToast(res.reason, { variant: "warn" }); return; }
     if (res.stress) spendStress(c, res.stress, "pushing the attack");
     close();
-    showAttackResult(Store.activeCharacter(), r, { huge });
+    // The push re-rolls the attack; the declared defence stands and is re-resolved against it.
+    const again = defence
+      ? { ...defence, ...(defence.kind === "block" ? Roller.resolveBlock(r, defence.roll) : Roller.resolveDodge(r, defence.roll)) }
+      : null;
+    showAttackResult(Store.activeCharacter(), r, { huge, defence: again });
   } });
-  announce(r.sixes ? `Hit for ${r.meta.damage}.` : "Miss.");
+  announce(effective ? `Hit for ${r.meta.damage}.` : "Miss.");
   return modal({ title: r.label, body, actions });
 }
 
@@ -558,23 +590,34 @@ export function openRecovery(c) {
     el("table", { class: "data-table" },
       el("tr", {}, el("th", { text: "Time" }), el("th", { text: "Health" }), el("th", { text: "Resolve" })),
       ...D.RECOVERY.map((r) => el("tr", {}, el("td", { text: r.span }), el("td", { text: r.health }), el("td", { text: r.resolve })))),
+    // Ordered by time span, exactly like the table above it: round → minutes → hours.
+    el("p", { class: "stage-label", text: "An action round" }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => {
+        const r = Roller.roll(c, "presence", "Recover Resolve");
+        Store.updateCharacter((ch) => { ch.state.resolve = Math.min(Derived.maxResolve(ch), ch.state.resolve + r.sixes); });
+        showToast(r.sixes ? `Full action: ${r.sixes} Resolve recovered.` : "No 6s — no Resolve recovered.");
+      } }, "Full action: PRESENCE roll, 1 Resolve per 6")),
+    el("p", { class: "stage-label", text: "A few minutes" }),
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => {
         Store.updateCharacter((ch) => { ch.state.health = Math.min(Derived.maxHealth(ch), ch.state.health + Derived.effectiveAttributes(ch).strength); ch.state.broken = ch.state.health <= 0; });
         showToast(`Health restored equal to your STRENGTH (${s.attributes.strength}).`);
-      } }, "A few minutes after the scene"),
-      el("button", { class: "btn", onclick: () => {
-        Store.updateCharacter((ch) => { ch.state.health = Derived.maxHealth(ch); ch.state.broken = false; });
-        showToast("All Health restored after a few hours' rest.");
-      } }, "A few hours' rest"),
+      } }, "After the action scene: Health = STRENGTH"),
       el("button", { class: "btn", onclick: () => {
         Store.updateCharacter((ch) => { ch.state.resolve = Math.min(Derived.maxResolve(ch), ch.state.resolve + Derived.effectiveAttributes(ch).presence); });
         showToast(`Social scene: Resolve restored equal to your PRESENCE (${s.attributes.presence}).`);
-      } }, "Brief social scene"),
+      } }, "Social scene: Resolve = PRESENCE")),
+    el("p", { class: "stage-label", text: "A few hours" }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => {
+        Store.updateCharacter((ch) => { ch.state.health = Derived.maxHealth(ch); ch.state.broken = false; });
+        showToast("All Health restored after a few hours' rest.");
+      } }, "Rest: all Health"),
       el("button", { class: "btn", onclick: () => {
         Store.updateCharacter((ch) => { ch.state.resolve = Derived.maxResolve(ch); });
         showToast("All Resolve restored after a long social scene.");
-      } }, "Long social scene")),
+      } }, "Social scene with a break: all Resolve")),
     el("p", { class: "muted small", text: "Recovering all your Health does not remove critical injuries — those heal on their own schedule." }),
     el("p", { class: "cite" }, el("a", { href: "#/rules/recovery", class: "rules-link" }, "Rules: Recovery")));
   return modal({ title: "Rest & recovery", body, actions: [{ label: "Close", variant: "ghost" }] });
