@@ -1139,6 +1139,46 @@ const run = async () => {
     JSON.stringify(recoverySeq) === JSON.stringify(["An action round", "A few minutes", "A few hours"]),
     recoverySeq.join(" | "));
 
+  /* ---------------------------------------------------------------- wipe mission data */
+  const wipe = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const Combat = await import("/src/combat.js");
+    localStorage.clear();
+    const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0]));
+    Store.setActiveCharacter(c.id);
+    Store.updateCharacter((ch) => { ch.state.karma = 7; ch.state.conditions.stunned = true; ch.state.session.stage = "open"; }, { id: c.id });
+    Store.saveTasks([{ id: "t", name: "Burning Building", rating: 6, remaining: 6 }]);
+    Store.pushRollLog({ label: "x", dice: [6], sixes: 1, ts: Date.now() });
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 4, alert: "x" }));
+    Combat.startActionScene();
+    const cleared = Store.wipeMissionData();
+    const after = Store.activeCharacter();
+    const post = {
+      combat: !!Store.getCombat(), tasks: Store.getTasks().length, log: Store.rollLog().length,
+      solo: !!localStorage.getItem("invincible:solo"),
+      heroes: Store.listCharacters().length, karma: after.state.karma,
+      conditions: Object.keys(after.state.conditions).length, stage: after.state.session.stage,
+    };
+    Store.undo();
+    const back = {
+      combat: !!Store.getCombat(), tasks: Store.getTasks().length, log: Store.rollLog().length,
+      solo: !!localStorage.getItem("invincible:solo"), karma: Store.activeCharacter().state.karma,
+    };
+    localStorage.clear();
+    return { cleared, post, back };
+  });
+  ok("wiping clears the scene, challenges, solo board and roll log",
+    wipe.post.combat === false && wipe.post.tasks === 0 && wipe.post.log === 0 && wipe.post.solo === false,
+    JSON.stringify(wipe.post));
+  ok("wiping keeps heroes, their karma and advancement",
+    wipe.post.heroes === 1 && wipe.post.karma === 7, JSON.stringify(wipe.post));
+  ok("wiping resets scene and session flags", wipe.post.conditions === 0 && wipe.post.stage === "idle");
+  ok("wiping is undoable in one step",
+    wipe.back.combat && wipe.back.tasks === 1 && wipe.back.log === 1 && wipe.back.solo && wipe.back.karma === 7,
+    JSON.stringify(wipe.back));
+
   /* ---------------------------------------------------------------- wizard UI */
   section("Creation wizard UI");
   await page.evaluate(() => localStorage.clear());

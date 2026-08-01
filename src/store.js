@@ -39,7 +39,9 @@ function emit(what) {
 let undoStack = null;
 
 export function snapshot(label) {
-  undoStack = { label, at: Date.now(), characters: read(K.characters, []), team: read(K.team, null), combat: read(K.combat, null) };
+  undoStack = { label, at: Date.now(), characters: read(K.characters, []), team: read(K.team, null),
+    combat: read(K.combat, null), tasks: read(K.tasks, []), rollLog: read(K.rollLog, []),
+    solo: localStorage.getItem(`${STORAGE_PREFIX}solo`) };
 }
 export function canUndo() { return !!undoStack; }
 export function undoLabel() { return undoStack?.label || null; }
@@ -48,6 +50,10 @@ export function undo() {
   write(K.characters, undoStack.characters);
   if (undoStack.team) write(K.team, undoStack.team); else localStorage.removeItem(K.team);
   if (undoStack.combat) write(K.combat, undoStack.combat); else localStorage.removeItem(K.combat);
+  write(K.tasks, undoStack.tasks || []);
+  write(K.rollLog, undoStack.rollLog || []);
+  if (undoStack.solo) localStorage.setItem(`${STORAGE_PREFIX}solo`, undoStack.solo);
+  else localStorage.removeItem(`${STORAGE_PREFIX}solo`);
   undoStack = null;
   emit("undo");
   return true;
@@ -204,6 +210,36 @@ export function clearRollLog() { write(K.rollLog, []); emit("rollLog"); }
 export function getCombat() { return read(K.combat, null); }
 export function saveCombat(combat) { write(K.combat, combat); emit("combat"); return combat; }
 export function clearCombat() { localStorage.removeItem(K.combat); emit("combat"); }
+
+/**
+ * Wipe everything the current mission produced — the action scene, challenges, the solo crisis
+ * board, the roll log — and reset each hero's session and scene flags. Heroes, the team and their
+ * karma survive: this clears the mission, not the campaign.
+ */
+export function wipeMissionData() {
+  const cleared = {
+    combat: !!read(K.combat, null),
+    tasks: read(K.tasks, []).length,
+    rollLog: read(K.rollLog, []).length,
+    solo: !!localStorage.getItem(`${STORAGE_PREFIX}solo`),
+    heroes: listCharacters().length,
+  };
+  snapshot("Wipe mission data");
+  localStorage.removeItem(K.combat);
+  localStorage.removeItem(K.tasks);
+  localStorage.removeItem(`${STORAGE_PREFIX}solo`);
+  write(K.rollLog, []);
+  const chars = listCharacters().map((c) => {
+    c.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
+    c.state.session = { ...c.state.session, karmaAnswers: {}, badKarmaAnswers: {}, wreckedZones: [], stage: "idle", spendUnlocked: true };
+    c.state.conditions = {};
+    c.updatedAt = Date.now();
+    return c;
+  });
+  write(K.characters, chars);
+  emit("wipe");
+  return cleared;
+}
 
 export function getTasks() { return read(K.tasks, []); }
 export function saveTasks(tasks) { write(K.tasks, tasks); emit("tasks"); return tasks; }

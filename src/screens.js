@@ -249,6 +249,11 @@ export function renderSettings(mount) {
     el("button", { class: "btn", onclick: () => importJson(mount) }, "Import JSON"),
     el("button", { class: "btn ghost", onclick: copyJson }, "Copy to clipboard")));
 
+  card.append(el("h3", { class: "section", text: "Mission data" }));
+  card.append(el("p", { class: "muted small", text: "Clears the running action scene, challenges, the solo crisis board and the roll log, and resets every hero's scene and session flags. Heroes, the team, karma and advancement are kept." }));
+  card.append(el("div", { class: "row-actions" },
+    el("button", { class: "btn danger", onclick: () => wipeMission(mount) }, "Wipe all mission data")));
+
   card.append(el("h3", { class: "section", text: "Multiplayer" }));
   card.append(Sync.renderSyncPanel());
 
@@ -261,6 +266,19 @@ export function renderSettings(mount) {
       el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
       el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));
   mount.append(card);
+}
+
+async function wipeMission(mount) {
+  const ok = await confirmModal(
+    "This clears the running action scene, every challenge, the solo crisis board and the roll log, and resets each hero's scene and session flags. Heroes, the team and karma are kept. It can be undone once.",
+    { title: "Wipe all mission data", confirmLabel: "Wipe it", variant: "danger" });
+  if (!ok) return;
+  const c = Store.wipeMissionData();
+  showToast(`Mission data wiped — ${c.rollLog} log entries, ${c.tasks} challenge(s), ${c.heroes} hero(es) reset.`, {
+    variant: "good", timeout: 8000,
+    action: { label: "Undo", onClick: () => { Store.undo(); showToast("Mission data restored."); renderSettings(mount); } },
+  });
+  renderSettings(mount);
 }
 
 function exportJson() {
