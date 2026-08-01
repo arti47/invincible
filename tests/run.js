@@ -609,6 +609,41 @@ const run = async () => {
   ok("location engines are reachable as oracles", soloUi.labels.includes("City") && soloUi.labels.includes("Facility"));
   ok("the jolt crisis-event control is with the oracles", soloUi.labels.includes("Crisis event"));
 
+  // Loop step 5 is "AFTER resolving …, play a social scene", and step 6 sends you home.
+  const soloTail = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const S = await import("/data-solo.js");
+    const base = { alert: "x", eventChecks: 1, timers: [], crises: [], awaitingSocial: false, objectives: [] };
+    const steps = {
+      unresolved: Solo.currentStep({ ...base, crises: [{ id: "c" }], resolved: 0 }),
+      midResolve: Solo.currentStep({ ...base, resolved: 0 }),
+      done: Solo.currentStep({ ...base, resolved: 1 }),
+      stillDanger: Solo.currentStep({ ...base, resolved: 1, crises: [{ id: "c" }] }),
+    };
+    localStorage.setItem("invincible:solo", JSON.stringify({ ...Solo.defaultState ? {} : {}, crisisLevel: 1, alert: "x",
+      crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
+      eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 1 }));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const head = Array.from(document.querySelectorAll(".solo-header .row-actions button")).map((b) => b.textContent.trim());
+    const nextLabel = document.querySelector("#solo-next .btn.primary")?.textContent.trim() || "";
+    const eyebrow = document.querySelector("#solo-next .next-step-eyebrow")?.textContent || "";
+    // restore: the checks below expect a fresh solo board on step 1
+    localStorage.removeItem("invincible:solo");
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    return { steps, head, nextLabel, eyebrow, loop: S.SOLO_SETUP.loop.length };
+  });
+  ok("resolving comes before the social scene in the header",
+    soloTail.head.indexOf("Resolve crisis") < soloTail.head.indexOf("Social scene") && soloTail.head.includes("Resolve crisis"),
+    soloTail.head.join(" | "));
+  ok("an unengaged crisis is still loop step 3", soloTail.steps.unresolved === 2 && soloTail.steps.midResolve === 2);
+  ok("loop step 6 fires only once something is resolved and nothing is left",
+    soloTail.steps.done === 5 && soloTail.steps.stillDanger === 2, JSON.stringify(soloTail.steps));
+  ok("step 6 offers going home to rest and bank karma",
+    /Head home/.test(soloTail.nextLabel) && /Step 6 of 6/.test(soloTail.eyebrow), `${soloTail.eyebrow} — ${soloTail.nextLabel}`);
+  ok("every loop step has a next-step action", soloTail.loop === 6);
+
   /* -------- the Solo tab has to tell a first-time player what to do, and both event engines
               have to be reachable by hand, laid out so neither collides with the next heading. */
   const soloGuide = await page.evaluate(() => {

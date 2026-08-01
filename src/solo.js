@@ -19,7 +19,7 @@ function load() {
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
-    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null };
+    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 };
 }
 
 /**
@@ -49,7 +49,11 @@ export function currentStep(state) {
   if (!state.alert) return 0;              // 1. generate a crisis alert
   if (state.awaitingSocial) return 4;      // 5. play a social scene
   if (!state.eventChecks) return 1;        // 2. crisis level 0, begin event checks
-  if (!state.timers.length) return 2;      // 3. choose a crisis, start timers
+  if (!state.timers.length) {
+    // 6. something has been resolved and nothing is left running or waiting: go home.
+    if (state.resolved > 0 && !(state.crises || []).length) return 5;
+    return 2;                              // 3. choose a crisis, start timers
+  }
   return 3;                                // 4. make checks, track timers
 }
 
@@ -83,7 +87,45 @@ const NEXT_STEP = [
   { label: "Play a social scene",
     why: "Something resolved. A social scene restores Resolve equal to your PRESENCE — take it before the next danger.",
     run: (state, mount) => socialScene(state, mount) },
+  { label: "Head home — rest and bank karma",
+    why: "No crisis is running and none is waiting. Rest to recover fully, claim the karma your reached objectives paid, then take a new alert when the next one breaks.",
+    run: (state, mount) => headHome(state, mount) },
 ];
+
+/**
+ * Loop step 6. Solo karma comes from objective timers rather than the session questions (§3.20),
+ * so going home is where it is actually claimed — and it needed a control of its own.
+ */
+async function headHome(state, mount) {
+  const c = Store.activeCharacter();
+  const reached = (state.objectives || []).filter((o) => o.status === "reached");
+  const owed = reached.reduce((n, o) => n + (o.karma || 0), 0);
+  const body = el("div", {},
+    el("p", { class: "lede", text: "A few hours' rest: all Health and all Resolve return." }),
+    reached.length
+      ? el("p", { text: `${reached.length} reached objective${reached.length === 1 ? "" : "s"} paying ${owed} karma.` })
+      : el("p", { class: "muted small", text: "No objectives reached this time — solo karma comes from objective timers, not the session questions." }),
+    el("p", { class: "muted small", text: "Karma is spent between sessions, in a safe location. Home counts." }));
+  const go = await modal({ title: "Head home", body,
+    actions: [{ label: "Not yet", value: false, variant: "ghost" }, { label: "Rest and recover", value: true, variant: "primary" }] }).promise;
+  if (!go) return;
+  if (c) {
+    Store.updateCharacter((ch) => {
+      ch.state.health = Derived.maxHealth(ch);
+      ch.state.resolve = Derived.maxResolve(ch);
+      ch.state.session.spendUnlocked = true;
+    }, { id: c.id });
+  }
+  state.objectives = (state.objectives || []).filter((o) => o.status !== "reached");
+  state.alert = "";
+  state.crises = [];
+  state.eventChecks = 0;
+  state.resolved = 0;
+  logEvent(state, "Headed home: rested, recovered and banked objective karma.");
+  save(state);
+  showToast("Rested. Karma spending is open — the next alert starts a new crisis.", { variant: "good", timeout: 6000 });
+  renderSolo(mount);
+}
 
 /** Scroll the relevant panel into view and flash it, for steps whose action lives further down. */
 function focusCard(state, mount, id) {
@@ -165,8 +207,10 @@ export function renderSolo(mount) {
     el("div", { class: "row-actions" },
       el("button", { class: primary(0), onclick: () => generateAlert(state, mount) }, state.alert ? "New crisis alert" : "Generate crisis alert"),
       el("button", { class: primary(1), onclick: () => doEventCheck(state, mount) }, "Event check"),
-      el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
+      // Loop step 5 is "AFTER resolving an event, threat or objective, play a social scene" —
+      // so resolving comes first in the row, as it does in the fiction.
       state.alert ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
+      el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
       undoSnapshot ? el("button", { class: "btn ghost", onclick: () => undoSolo(mount) }, `Undo ${undoSnapshot.label}`) : null),
     el("div", { class: "movement-modes" },
       el("span", { class: "crisis-label", text: "Moving" }),
@@ -393,6 +437,7 @@ async function resolveCrisis(state, mount) {
     actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Resolve", value: true, variant: "primary" }] }).promise;
   if (!ok) return;
   snapshot(state, "Resolve crisis");
+  state.resolved = (state.resolved || 0) + 1;
   state.alert = "";
   state.crises = [];
   state.timers = [];
