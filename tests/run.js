@@ -86,6 +86,33 @@ const run = async () => {
   }
   ok("no console errors during navigation", consoleErrors.length === 0, consoleErrors.slice(0, 3).join(" | "));
 
+  /* ---------------------------------------------------------------- PWA icons */
+  section("PWA icons");
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
+  const swSource = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
+  const pngIcons = manifest.icons.filter((i) => i.type === "image/png");
+  ok("manifest ships raster icons (SVG alone renders as a black tile on iOS/Android launchers)", pngIcons.length >= 2, `${pngIcons.length} PNG entries`);
+  ok("manifest declares a maskable icon", manifest.icons.some((i) => String(i.purpose || "").includes("maskable")));
+  const iconFiles = manifest.icons.map((i) => i.src.replace("./", ""));
+  const missing = iconFiles.filter((f) => !fs.existsSync(path.join(ROOT, f)));
+  ok("every manifest icon file exists", missing.length === 0, missing.join(", "));
+  ok("every icon is precached by the service worker", iconFiles.every((f) => swSource.includes(`./${f}`)), iconFiles.filter((f) => !swSource.includes(`./${f}`)).join(", "));
+  const touchIcon = await page.evaluate(() => document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute("href") || "");
+  ok("apple-touch-icon is a PNG", /\.png$/i.test(touchIcon), touchIcon);
+  const iconLoads = await page.evaluate(async (files) => {
+    const results = {};
+    for (const f of files) {
+      results[f] = await new Promise((res) => {
+        const img = new Image();
+        img.onload = () => res({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => res(null);
+        img.src = `/${f}`;
+      });
+    }
+    return results;
+  }, [...iconFiles, "icon-180.png"]);
+  ok("all icons decode with non-zero dimensions", Object.values(iconLoads).every((r) => r && r.w > 0 && r.h > 0), JSON.stringify(iconLoads));
+
   /* ---------------------------------------------------------------- data integrity */
   section("Data integrity");
   const data = await page.evaluate(async () => {

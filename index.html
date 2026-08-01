@@ -11,7 +11,9 @@
   <title>Invincible Player</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="./icon.svg">
+  <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
+  <!-- iOS ignores SVG here and falls back to a black tile, so the touch icon must be a PNG. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
