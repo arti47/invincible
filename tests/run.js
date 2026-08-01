@@ -719,6 +719,32 @@ const run = async () => {
     return { objHints: obj.hints.length, objSuggest: obj.suggest, allyHints: ally.hints.length,
       allySuggest: ally.suggest, generated, fromBook: NPCs.some((n) => generated.startsWith(n)) };
   });
+  // A location rolled from the Encounter panel has to land back in that panel, not only in the
+  // oracles card: it describes the place the encounter timer is running in.
+  const place = await page.evaluate(async () => {
+    const groupOf = (head) => Array.from(document.querySelectorAll("#solo-timers .timer-group"))
+      .find((g) => g.querySelector(".group-head")?.textContent === head);
+    // the City roll in the oracles block above already set a place — clearing it is step one
+    Array.from(groupOf("Encounter timer").querySelectorAll("button"))
+      .find((b) => b.textContent.trim() === "Somewhere else")?.click();
+    const before = !!groupOf("Encounter timer").querySelector(".oracle-answer.place");
+    Array.from(groupOf("Encounter timer").querySelectorAll("button")).find((b) => b.textContent.trim() === "Describe this place").click();
+    Array.from(document.querySelectorAll(".modal-actions button")).find((b) => b.textContent.trim() === "OK")?.click();
+    const after = groupOf("Encounter timer").querySelector(".oracle-answer.place");
+    const shown = after ? after.querySelector(".lede").textContent : "";
+    const stored = JSON.parse(localStorage.getItem("invincible:solo") || "{}").place;
+    // and it survives a re-render, rather than living only in the modal that produced it
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 120));
+    const persisted = !!groupOf("Encounter timer").querySelector(".oracle-answer.place");
+    return { before, shown, stored, persisted };
+  });
+  ok("the Encounter panel's place can be cleared and starts empty", place.before === false);
+  ok("a place rolled from the Encounter panel renders in that panel", place.shown.length > 0, place.shown);
+  ok("the place matches the stored roll", !!place.stored && place.stored.text === place.shown, JSON.stringify(place.stored));
+  ok("the place survives leaving and returning to the tab", place.persisted);
+
   ok("the objective dialog states the guiding principle", guidance.objHints >= 3, String(guidance.objHints));
   ok("the objective dialog offers a generator", /Complex Engine/.test(guidance.objSuggest), guidance.objSuggest);
   ok("the ally dialog explains what a group is", guidance.allyHints >= 3, String(guidance.allyHints));

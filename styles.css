@@ -452,3 +452,4 @@ select.select option { background: var(--panel); color: var(--ink); }
   background: var(--chipbg); }
 .oracle-answer .lede { margin: .2rem 0; }
 .oracle-kind { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.oracle-answer.place { border-left-width: 6px; border-left-color: var(--accent); }

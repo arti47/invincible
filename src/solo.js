@@ -19,7 +19,7 @@ function load() {
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
-    eventChecks: 0, awaitingSocial: false, lastOracle: null };
+    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null };
 }
 
 /**
@@ -273,6 +273,9 @@ function describePlace(state, mount, key) {
   const atmosphere = key === "atmosphere" ? null : R.rollNamedTable(S.LOCATION_ENGINES.atmosphere);
   const text = atmosphere ? `${atmosphere.entry.text} ${res.entry.text}` : res.entry.text;
   logEvent(state, `${engine.name}: ${text}`);
+  // A location roll is not a passing answer — it is where the scene is happening. It stays on the
+  // Encounter panel, next to the button that rolled it, until the hero moves somewhere else.
+  state.place = { engine: engine.name, text, at: Date.now() };
   setOracle(state, engine.name, text, atmosphere
     ? `D66 ${res.value}, with Atmosphere ${atmosphere.value} rolled alongside so the place has a mood as well as a shape.`
     : `D66 ${res.value}.`);
@@ -853,6 +856,14 @@ function encounterCard(state, mount) {
     helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.", "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.", "At 'Encountered' the highest die sets enemy behaviour and the number of 6s sets how big the threat is."]));
   const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
+
+  if (state.place) {
+    card.append(el("div", { class: "oracle-answer place" },
+      el("span", { class: "oracle-kind", text: `This place · ${state.place.engine}` }),
+      el("p", { class: "lede", text: state.place.text }),
+      el("button", { class: "btn tiny ghost", onclick: () => { state.place = null; save(state); renderSolo(mount); } }, "Somewhere else")));
+  }
+
   if (!state.encounter) {
     card.append(el("p", { class: "muted small", text: "Start an encounter timer when exploring an unknown location or evading enemies." }));
     card.append(el("div", { class: "row-actions" },
@@ -866,6 +877,7 @@ function encounterCard(state, mount) {
   card.append(el("p", { class: "stat-line", text: `${rung.name} · ${rung.dice} enemy dice · moving ${state.mode}` }));
   card.append(el("div", { class: "row-actions" },
     el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"),
+    el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
     el("button", { class: "btn ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Clear")));
   return card;
 }
