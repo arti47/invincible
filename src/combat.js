@@ -43,6 +43,26 @@ export function drawInitiative(combat) {
   return combat;
 }
 
+/**
+ * A combatant joining a round in progress draws one card; everyone else keeps theirs and keeps
+ * whether they have acted. A full redraw belongs to the start of a round, not to reinforcements.
+ */
+export function dealCard(combat, cb) {
+  const taken = new Set(combat.combatants.map((c) => c.card).filter(Boolean));
+  const free = Array.from({ length: 10 }, (_, i) => i + 1).filter((n) => !taken.has(n));
+  cb.card = free.length ? free[Math.floor(Math.random() * free.length)] : 1 + Math.floor(Math.random() * 10);
+  cb.acted = false;
+  cb.held = false;
+  cb.actions = { full: true, quick: true };
+  combat.combatants.sort((a, b) => (a.card || 99) - (b.card || 99));
+  return combat;
+}
+
+/** Whose turn it is: lowest card first, skipping anyone who has already acted (§3.17). */
+export function currentTurn(combat) {
+  return combat.combatants.find((c) => !c.acted && c.health > 0) || null;
+}
+
 export function combatantFromCharacter(c) {
   const s = Derived.summary(c);
   return {
@@ -94,13 +114,16 @@ export function renderCombat(mount) {
     return;
   }
 
+  const up = currentTurn(combat);
+  const roundDone = !up;
   mount.append(el("div", { class: "combat-head" },
     el("h2", { text: `Round ${combat.round}` }),
+    el("p", { class: "stage-label", text: roundDone ? "Everyone has acted — draw the next round" : `${up.name} acts now (card #${up.card || "—"})` }),
     // Round order: set the board, take actions (wrecking is one), then advance, then finish.
     el("div", { class: "row-actions" },
       el("button", { class: "btn ghost", onclick: () => openAddCombatant(mount) }, "Add combatant"),
       el("button", { class: "btn ghost", onclick: () => openWreck(combat, mount) }, "Wreck a zone"),
-      el("button", { class: "btn", onclick: () => { combat.round += 1; save(drawInitiative(combat)); renderCombat(mount); } }, "Next round"),
+      el("button", { class: roundDone ? "btn primary" : "btn", onclick: () => { combat.round += 1; save(drawInitiative(combat)); renderCombat(mount); } }, "Next round"),
       el("button", { class: "btn danger", onclick: async () => {
         if (await confirmModal("End the action scene and run the end-of-scene recovery?", { title: "End action scene", confirmLabel: "End scene" })) {
           Store.clearCombat(); openLifecycle("action"); renderCombat(mount);
@@ -108,7 +131,7 @@ export function renderCombat(mount) {
       } }, "End scene"))));
 
   const list = el("div", { class: "combatants" });
-  for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount));
+  for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount, cb === up));
   mount.append(list);
 
   if (combat.wreckedZones.length) {
@@ -117,12 +140,13 @@ export function renderCombat(mount) {
   renderTasks(mount);
 }
 
-function combatantCard(cb, combat, mount) {
+function combatantCard(cb, combat, mount, isUp = false) {
   const isMinion = cb.minionCount > 0;
-  return el("div", { class: `combatant ${cb.side} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""}` },
+  return el("div", { class: `combatant ${cb.side} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""} ${isUp ? "current" : ""}` },
     el("div", { class: "cbt-head" },
       el("span", { class: "cbt-card", text: cb.card ? `#${cb.card}` : "—" }),
       el("strong", { text: cb.name + (isMinion ? ` (${cb.health} minions)` : "") }),
+      isUp ? el("span", { class: "chip", text: "Acts now" }) : null,
       cb.huge ? el("span", { class: "chip warn", text: "Huge" }) : null),
     el("div", { class: "cbt-stats" },
       el("span", { text: isMinion ? `Minions ${cb.health}/${cb.maxHealth}` : `Health ${cb.health}/${cb.maxHealth}` }),
@@ -207,7 +231,10 @@ async function openAddCombatant(mount) {
     combat.combatants.push(combatantFromProfile(profile, { count }));
   }
   combat.active = true;
-  save(drawInitiative(combat));
+  const added = combat.combatants[combat.combatants.length - 1];
+  if (combat.round > 1 || combat.combatants.some((c) => c.acted)) dealCard(combat, added);
+  else drawInitiative(combat);
+  save(combat);
   renderCombat(mount);
 }
 

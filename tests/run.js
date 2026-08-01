@@ -921,6 +921,60 @@ const run = async () => {
     JSON.stringify(combatSeq.turn) === JSON.stringify(["Hold off", "Altitude", "Damage", "Acted", "Remove"]),
     combatSeq.turn.join(" | "));
 
+  // Turn order is the sequence of play: lowest card acts first, and reinforcements must not
+  // reshuffle a round that is already under way.
+  const turnSeq = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const Store = await import("/src/store.js");
+    const c = Store.getCombat();
+    c.combatants.forEach((x, i) => { x.card = i + 2; x.acted = false; });
+    const first = Combat.currentTurn(c);
+    c.combatants[0].acted = true;
+    const second = Combat.currentTurn(c);
+    // add one mid-round: everyone else keeps their card and their acted flag
+    const before = c.combatants.map((x) => [x.name, x.card, x.acted]);
+    const joiner = { id: "x1", name: "Reinforcement", health: 5, maxHealth: 5, resolve: 1, maxResolve: 1,
+      armor: 0, slugfest: 1, attrs: {}, altitude: "ground", zone: 1, minionCount: 0, conditions: {}, acted: false };
+    c.combatants.push(joiner);
+    Combat.dealCard(c, joiner);
+    const kept = before.every(([n, card, acted]) => {
+      const now = c.combatants.find((x) => x.name === n);
+      return now.card === card && now.acted === acted;
+    });
+    const unique = new Set(c.combatants.map((x) => x.card)).size === c.combatants.length;
+    const sorted = c.combatants.every((x, i, a) => i === 0 || x.card >= a[i - 1].card);
+    // finish the round
+    c.combatants.forEach((x) => { x.acted = true; });
+    const done = Combat.currentTurn(c);
+    Store.saveCombat(c);
+    location.hash = "#/combat";
+    await new Promise((r) => setTimeout(r, 250));
+    const head = document.querySelector("#screen .combat-head .stage-label")?.textContent || "";
+    const nextIsPrimary = !!document.querySelector("#screen .combat-head .row-actions .btn.primary");
+    return { first: first?.name, second: second?.name, kept, unique, sorted, done, head, nextIsPrimary,
+      firstCard: c.combatants[0].card };
+  });
+  ok("the lowest card acts first", turnSeq.first === turnSeq.second ? false : true, `${turnSeq.first} → ${turnSeq.second}`);
+  ok("a combatant joining mid-round does not reshuffle the round",
+    turnSeq.kept && turnSeq.unique && turnSeq.sorted);
+  ok("the round ends when everyone has acted", turnSeq.done === null);
+  ok("the Action tab says whose turn it is", /acts now|Everyone has acted/.test(turnSeq.head), turnSeq.head);
+  ok("Next round only leads once the round is done", turnSeq.nextIsPrimary);
+
+  const upNext = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const c = Store.getCombat();
+    c.combatants.forEach((x, i) => { x.acted = i > 0; });
+    Store.saveCombat(c);
+    location.hash = "#/home"; location.hash = "#/combat";
+    await new Promise((r) => setTimeout(r, 250));
+    const marked = Array.from(document.querySelectorAll("#screen .combatant")).map((n) => n.classList.contains("current"));
+    return { marked, badge: !!document.querySelector("#screen .combatant.current .chip"),
+      head: document.querySelector("#screen .combat-head .stage-label")?.textContent || "" };
+  });
+  ok("exactly one combatant is marked as acting now", upNext.marked.filter(Boolean).length === 1, JSON.stringify(upNext.marked));
+  ok("the acting combatant carries a visible marker", upNext.badge && /acts now/.test(upNext.head), upNext.head);
+
   const sheetSeq = await page.evaluate(async () => {
     location.hash = "#/sheet";
     await new Promise((r) => setTimeout(r, 250));

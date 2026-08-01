@@ -457,3 +457,4 @@ select.select option { background: var(--panel); color: var(--ink); }
 /* ---- lifecycle: the session in the order it is played ---- */
 .stage-label { margin: .8rem 0 .1rem; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .lifecycle > .stage-label:first-child { margin-top: .2rem; }
+.combatant.current { outline: 4px solid var(--accent); }
