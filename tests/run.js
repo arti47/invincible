@@ -1179,6 +1179,52 @@ const run = async () => {
     wipe.back.combat && wipe.back.tasks === 1 && wipe.back.log === 1 && wipe.back.solo && wipe.back.karma === 7,
     JSON.stringify(wipe.back));
 
+  /* ---------------------------------------------------------------- solo build allowance (Ch.9) */
+  const soloBuild = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const Derived = await import("/src/derived.js");
+    const W = await import("/src/wizard.js");
+    const mk = (solo) => {
+      const c = Derived.blankCharacter();
+      c.identity.rank = "global";
+      c.identity.solo = solo;
+      return c;
+    };
+    const plain = Derived.creationBudget(mk(false));
+    const solo = Derived.creationBudget(mk(true));
+    // an extra free talent costs no attribute point for a solo hero
+    const withTalents = mk(true);
+    withTalents.talents = [{ name: "Durable" }, { name: "Resilience" }, { name: "Second Wind" }];
+    const talentBudget = Derived.creationBudget(withTalents);
+    const plainTalents = mk(false);
+    plainTalents.talents = [{ name: "Durable" }, { name: "Resilience" }, { name: "Second Wind" }];
+    const plainTalentBudget = Derived.creationBudget(plainTalents);
+    // archetypes must still spend a solo budget exactly
+    const spent = D.ARCHETYPES.map((a) => {
+      const c = mk(true);
+      W.applyArchetypeTo(c, a, "global");
+      return Derived.creationBudget(c).remaining;
+    });
+    return {
+      plain: plain.available, solo: solo.available,
+      extraTalents: talentBudget.extraTalents, plainExtraTalents: plainTalentBudget.extraTalents,
+      archetypesExact: spent.every((r) => r === 0),
+      build: D.SOLO_BUILD,
+    };
+  });
+  ok("a solo hero starts with two extra attribute points",
+    soloBuild.solo === soloBuild.plain + 2, `${soloBuild.plain} → ${soloBuild.solo}`);
+  ok("a solo hero starts with one extra free talent",
+    soloBuild.extraTalents === soloBuild.plainExtraTalents - 1 && soloBuild.extraTalents === 0,
+    `${soloBuild.plainExtraTalents} → ${soloBuild.extraTalents}`);
+  ok("archetypes still spend a solo budget exactly", soloBuild.archetypesExact);
+  ok("the solo build allowance matches the chapter",
+    soloBuild.build.extraAttributePoints === 2 && soloBuild.build.extraFreeTalents === 1
+      && soloBuild.build.talentPicks.join() === "Durable,Resilience,Second Wind"
+      && soloBuild.build.favourPowers.join() === "DUPLICATION,HEALING,QUICKNESS"
+      && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
+    JSON.stringify(soloBuild.build));
+
   /* ---------------------------------------------------------------- wizard UI */
   section("Creation wizard UI");
   await page.evaluate(() => localStorage.clear());
@@ -1186,6 +1232,8 @@ const run = async () => {
   await page.waitForFunction(() => document.body.dataset.ready === "true");
   await page.waitForTimeout(200);
   ok("wizard renders its steps", (await page.locator(".wizard-step").count()) === 9);
+  ok("the rank step offers the Crisis Mode build allowance",
+    (await page.locator(".wizard-body .toggle-row input").count()) === 1);
   await page.locator(".card.selectable").nth(2).click();           // pick a rank
   await page.waitForTimeout(120);
   await page.locator(".wizard-step").nth(1).click();               // archetype step

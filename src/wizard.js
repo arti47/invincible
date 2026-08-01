@@ -8,6 +8,7 @@ import * as Derived from "./derived.js";
 import { blankCharacter, normalizeCharacter, creationBudget, validateCharacter, maxHealth, maxResolve, ATTR_KEYS } from "./derived.js";
 import * as Store from "./store.js";
 import { PREGENS } from "../data-pregens.js";
+import { Settings } from "./settings.js";
 
 const STEPS = [
   "Rank", "Archetype & Role", "Attributes", "Powers", "Power sources",
@@ -21,6 +22,7 @@ let host = null;
 export function startWizard(mount, { fromPregen = null } = {}) {
   host = mount;
   draft = fromPregen ? pregenToCharacter(fromPregen) : blankCharacter();
+  if (!fromPregen) draft.identity.solo = Settings.soloMode();   // Crisis Mode heroes build with the Ch.9 allowance
   step = fromPregen ? STEPS.length - 1 : 0;
   render();
 }
@@ -67,6 +69,19 @@ function renderStep(budget) {
 function stepRank() {
   const wrap = el("div", {});
   wrap.append(el("p", { class: "lede", text: "Your rank sets your attribute points, your maximum score, how many powers you start with and your Reputation. Decide it with the group — Global Guardian is the default." }));
+
+  // Crisis Mode build allowance (Ch.9): a solo hero starts with 2 extra attribute points and an
+  // extra free talent. It is a property of the hero, so it is chosen here, not read off a toggle.
+  wrap.append(el("label", { class: "card tight toggle-row" },
+    el("input", {
+      type: "checkbox", checked: !!draft.identity.solo,
+      onchange: (e) => { draft.identity.solo = e.target.checked; render(); },
+    }),
+    el("div", {},
+      el("strong", { text: "Building this hero for solo play (Crisis Mode)" }),
+      el("p", { class: "muted small", text: `+${D.SOLO_BUILD.extraAttributePoints} attribute points and +${D.SOLO_BUILD.extraFreeTalents} free talent. ${D.SOLO_BUILD.rankNote}` }),
+      el("p", { class: "muted small", text: `${D.SOLO_BUILD.powerNote} Favour ${D.SOLO_BUILD.favourPowers.join(", ")}; avoid ${D.SOLO_BUILD.avoidPowers.join(", ")}. Talents: ${D.SOLO_BUILD.talentPicks.join(", ")}.` }),
+      el("p", { class: "muted small", text: D.SOLO_BUILD.karmaNote }))));
   for (const rank of D.RANKS) {
     wrap.append(el("button", {
       class: `card selectable ${draft.identity.rank === rank.key ? "selected" : ""}`,
@@ -345,7 +360,11 @@ function stepTalents() {
   const wrap = el("div", {});
   const arche = R.findArchetype(draft.identity.archetype);
   const occ = R.findOccupation(draft.identity.occupation);
-  wrap.append(el("p", { class: "lede", text: "You get two free talents: one hero talent and one occupation talent. Extra talents cost 1 attribute point each. Drawbacks give 1 attribute point each, maximum two." }));
+  {
+    const free = D.CREATION_TRADES.freeTalents + (draft.identity.solo ? D.SOLO_BUILD.extraFreeTalents : 0);
+    wrap.append(el("p", { class: "lede", text: `You get ${free} free talents: one hero talent and one occupation talent${draft.identity.solo ? `, plus ${D.SOLO_BUILD.extraFreeTalents} for solo play` : ""}. Extra talents cost 1 attribute point each. Drawbacks give 1 attribute point each, maximum two.` }));
+    if (draft.identity.solo) wrap.append(el("p", { class: "muted small", text: `Solo recommendations: ${D.SOLO_BUILD.talentPicks.join(", ")}.` }));
+  }
 
   if (arche) {
     wrap.append(el("h4", { class: "section", text: `Hero talents — ${arche.name} (D6)` }));

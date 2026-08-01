@@ -213,25 +213,38 @@ export function canPush(character, { passive = false, defending = false, already
 
 /* ---------------------------------------------------------------- creation budget */
 
+/**
+ * Crisis Mode build allowance (Ch.9): a solo hero starts with two extra attribute points and one
+ * extra free talent. Read from the character's own `identity.solo` flag, set at creation, so a
+ * hero built for solo play keeps its allowance whether or not the toggle is on later.
+ */
+export function soloAllowance(character) {
+  return character?.identity?.solo
+    ? { attributePoints: D.SOLO_BUILD.extraAttributePoints, freeTalents: D.SOLO_BUILD.extraFreeTalents }
+    : { attributePoints: 0, freeTalents: 0 };
+}
+
 export function creationBudget(character) {
   const rank = R.findRank(character.identity?.rank);
+  const solo = soloAllowance(character);
   const attrs = character.attributes || blankAttributes();
   const spent = ATTR_KEYS.reduce((n, k) => n + (attrs[k] || 0), 0);
 
   const powerSlots = (character.powers || []).reduce((n, p) => n + 1 + (p.boosts?.length || 0) + (p.level || 0) - (p.limits?.length || 0), 0);
   const drawbacks = (character.drawbacks || []).length;
   const extraSources = Math.max(0, (character.identity?.powerSources || []).length - 1);
-  const extraTalents = Math.max(0, (character.talents || []).length - D.CREATION_TRADES.freeTalents);
+  const extraTalents = Math.max(0, (character.talents || []).length - D.CREATION_TRADES.freeTalents - solo.freeTalents);
 
   const powerDelta = powerSlots - rank.powers;                    // + = bought powers, - = sold powers
   const available = rank.points
+    + solo.attributePoints
     + drawbacks * D.CREATION_TRADES.attributePointPerDrawback
     - Math.max(0, powerDelta) * D.CREATION_TRADES.attributePointsPerExtraPower
     + Math.max(0, -powerDelta) * D.CREATION_TRADES.attributePointsPerSacrificedPower
     - extraSources * D.CREATION_TRADES.attributePointPerExtraPowerSource
     - extraTalents * D.CREATION_TRADES.attributePointPerExtraTalent;
 
-  return { rank, spent, available, remaining: available - spent, powerSlots, powerDelta, drawbacks, extraSources, extraTalents };
+  return { rank, spent, available, remaining: available - spent, powerSlots, powerDelta, drawbacks, extraSources, extraTalents, solo };
 }
 
 /** Full creation legality (audit A16, A17). */
@@ -304,7 +317,7 @@ export function blankCharacter(overrides = {}) {
     identity: {
       realName: "", heroName: "", rank: "global", role: "", archetype: "", occupation: "",
       powerSources: [], personality: [], drive: "", flaw: "", appearance: "",
-      keyRelationships: [], identitySecret: true, portraitUrl: "", pregen: false,
+      keyRelationships: [], identitySecret: true, portraitUrl: "", pregen: false, solo: false,
     },
     attributes: blankAttributes(),
     talents: [],

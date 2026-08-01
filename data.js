@@ -1667,6 +1667,21 @@ export const CONDITIONS = [
 
 /* ------------------------------------------------------------------ Scene & session lifecycle */
 
+/**
+ * Crisis Mode build allowance (Ch.9). Solo heroes get two extra attribute points and one extra
+ * free talent; the power and karma lines are guidance, not arithmetic.
+ */
+export const SOLO_BUILD = {
+  extraAttributePoints: 2,
+  extraFreeTalents: 1,
+  talentPicks: ["Durable", "Resilience", "Second Wind"],
+  favourPowers: ["DUPLICATION", "HEALING", "QUICKNESS"],
+  avoidPowers: ["ACTION PLAN", "PRECOGNITION"],
+  powerNote: "Favour powers that support utility and survivability; avoid those that mainly aid allies or rely on GM interpretation.",
+  rankNote: "Any rank works as long as you generate matching crisis alerts. Global Guardian is recommended.",
+  karmaNote: "Instead of session rewards, solo heroes earn karma by completing objectives on an objective timer. Objectives that start further away pay more karma.",
+};
+
 export const LIFECYCLE = {
   sceneTypes: [
     { key: "briefing", name: "Briefing", desc: "Short and to the point: where to go and what to do, with room for clarifying questions. Adventures usually open with one, and more can arrive mid-story." },
