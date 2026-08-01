@@ -589,14 +589,24 @@ const run = async () => {
   const soloUi = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
     const strip = Array.from(document.querySelectorAll(".solo-step")).map((s) => s.className);
-    const order = ["Generate crisis alert", "Event check", "Ask yes / no", "Complex answer", "Social scene"]
-      .map((l) => labels.indexOf(l));
-    return { labels, strip, order, current: strip.filter((c) => c.includes("current")).length };
+    // The header carries only the sequence-critical actions, in loop order; the oracles and the
+    // four timer types live in their own cards below it.
+    const order = ["Generate crisis alert", "Event check", "Social scene"].map((l) => labels.indexOf(l));
+    const heads = Array.from(document.querySelectorAll("#screen h3")).map((h) => h.textContent);
+    const groups = Array.from(document.querySelectorAll("#screen .timer-group .group-head")).map((h) => h.textContent);
+    return { labels, strip, order, groups, heads, current: strip.filter((c) => c.includes("current")).length };
   });
   ok("solo step strip renders six steps", soloUi.strip.length === 6, String(soloUi.strip.length));
   ok("exactly one step is marked current", soloUi.current === 1, String(soloUi.current));
   ok("solo actions are laid out in loop order", soloUi.order.every((n, i, a) => n >= 0 && (i === 0 || n > a[i - 1])), JSON.stringify(soloUi.order));
   ok("social scene control exists on the solo tab", soloUi.labels.includes("Social scene"));
+  ok("all four timer types sit in one Timers card",
+    JSON.stringify(soloUi.groups) === JSON.stringify(["Crisis timers", "Objectives", "Allies", "Encounter timer"]),
+    soloUi.groups.join(" | "));
+  ok("timers card counts what is running", soloUi.heads.some((h) => /^Timers \(\d+ running\)/.test(h)), soloUi.heads.join(" | "));
+  ok("oracles have their own card", soloUi.heads.includes("Ask the oracles"), soloUi.heads.join(" | "));
+  ok("location engines are reachable as oracles", soloUi.labels.includes("City") && soloUi.labels.includes("Facility"));
+  ok("the jolt crisis-event control is with the oracles", soloUi.labels.includes("Crisis event"));
 
   // Choosing a crisis: the alert seeds one, event checks add more, engaging turns it into a timer.
   const crisis = await page.evaluate(async () => {

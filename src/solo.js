@@ -104,13 +104,10 @@ export function renderSolo(mount) {
       el("button", { class: "icon-btn", "aria-label": "Lower crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel - 1, 0, 10); save(state); renderSolo(mount); } }, "−"),
       el("strong", { class: `crisis-value ${phase.key}`, "aria-live": "polite", text: `${state.crisisLevel} — ${phase.name}` }),
       el("button", { class: "icon-btn", "aria-label": "Raise crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10); save(state); renderSolo(mount); } }, "+")),
-    // Actions in loop order: alert → event check → oracles → social scene → resolve.
+    // Sequence-critical actions only, in loop order. The oracles have their own card.
     el("div", { class: "row-actions" },
       el("button", { class: primary(0), onclick: () => generateAlert(state, mount) }, state.alert ? "New crisis alert" : "Generate crisis alert"),
       el("button", { class: primary(1), onclick: () => doEventCheck(state, mount) }, "Event check"),
-      el("button", { class: "btn ghost", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event"),
-      el("button", { class: "btn ghost", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
-      el("button", { class: "btn ghost", onclick: () => askComplex(state, mount) }, "Complex answer"),
       el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
       state.alert ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       undoSnapshot ? el("button", { class: "btn ghost", onclick: () => undoSolo(mount) }, `Undo ${undoSnapshot.label}`) : null),
@@ -125,14 +122,87 @@ export function renderSolo(mount) {
     state.alert ? el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }) : null));
 
   mount.append(crisesCard(state, mount));
-  mount.append(timersCard(state, mount));
-  mount.append(objectivesCard(state, mount));
-  mount.append(alliesCard(state, mount));
-  mount.append(encounterCard(state, mount));
-  mount.append(enginesCard(state, mount));
+  mount.append(allTimersCard(state, mount));
+  mount.append(oraclesCard(state, mount));
+  mount.append(referenceCard(state, mount));
   mount.append(el("section", { class: "card" }, el("h3", { text: "Crisis log" }),
     helpPanel(["Everything that has happened this crisis, newest first — alerts, checks, timer results, oracle answers and karma.", "Use it to reconstruct the story afterwards, or to remind yourself what a timer was counting down to."]),
     el("ul", { class: "muted small" }, ...state.log.slice(0, 12).map((l) => el("li", { text: l.text })))));
+}
+
+
+/* ---------------------------------------------------------------- timers (all four types) */
+
+/**
+ * The rules describe four timer types, not four unrelated trackers: they are the clock that
+ * replaces the GM. Keeping them in one card makes "always keep at least one running" checkable
+ * at a glance, and shows the crisis timer and the encounter timer sharing a movement mode.
+ */
+function allTimersCard(state, mount) {
+  const running = state.timers.length + state.objectives.length + state.allies.length + (state.encounter ? 1 : 0);
+  const card = el("section", { class: "card" },
+    el("h3", { text: `Timers (${running} running)` }),
+    helpPanel([
+      "Timers are the pressure in solo play — they are what a GM would otherwise supply. There are four types and they all advance when time passes in the fiction.",
+      "Crisis counts down to something bad. Objective counts up to your goal and pays karma. Ally tracks how a helping group is holding up. Encounter tracks how close the opposition is.",
+      "Never let the board go empty: if nothing is running, nothing is pushing the story forward. Start a crisis timer first, then add whichever others fit the scene.",
+    ]),
+    running === 0
+      ? el("p", { class: "warn small", text: "Nothing is running. Engage a crisis, or start a timer below." })
+      : null);
+  card.append(timersCard(state, mount));
+  card.append(objectivesCard(state, mount));
+  card.append(alliesCard(state, mount));
+  card.append(encounterCard(state, mount));
+  return card;
+}
+
+/* ---------------------------------------------------------------- oracles */
+
+/**
+ * Everything that answers a question a GM would normally answer, including the location engines —
+ * which previously sat in a reference block with no stated trigger.
+ */
+function oraclesCard(state, mount) {
+  const card = el("section", { class: "card" },
+    el("h3", { text: "Ask the oracles" }),
+    helpPanel([
+      "Use these whenever you would otherwise have asked the GM something.",
+      "Yes / no answers a closed question. Complex answer gives a directive and a subject to interpret when the question is open-ended.",
+      "Describe a place is the location engines: roll one when you arrive somewhere and need to know what it is actually like — a district, a stretch of terrain, a facility interior, the volume of space you just dropped into. The Atmosphere engine is mixed into the others automatically to colour the result.",
+      "Crisis event is the book's jolt: if you are ever unsure what happens next, raise the crisis level by 1 and roll one.",
+    ]),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
+      el("button", { class: "btn", onclick: () => askComplex(state, mount) }, "Complex answer"),
+      el("button", { class: "btn ghost", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event")));
+
+  card.append(el("h4", { class: "group-head", text: "Describe a place" }));
+  card.append(el("p", { class: "muted small", text: "Roll the engine matching the scale you need." }));
+  const row = el("div", { class: "chiprow" });
+  for (const key of Object.keys(S.LOCATION_ENGINES)) {
+    row.append(el("button", { class: "chip", onclick: () => describePlace(state, mount, key) },
+      S.LOCATION_ENGINES[key].name.replace(" Engine", "")));
+  }
+  card.append(row);
+  return card;
+}
+
+/** Roll a location engine, blending in Atmosphere the way the chapter intends. */
+function describePlace(state, mount, key) {
+  const engine = S.LOCATION_ENGINES[key];
+  const res = R.rollNamedTable(engine);
+  const atmosphere = key === "atmosphere" ? null : R.rollNamedTable(S.LOCATION_ENGINES.atmosphere);
+  const text = atmosphere ? `${atmosphere.entry.text} ${res.entry.text}` : res.entry.text;
+  logEvent(state, `${engine.name}: ${text}`);
+  save(state);
+  modal({ title: engine.name,
+    body: el("div", {},
+      el("p", { class: "lede big", text }),
+      el("p", { class: "muted small", text: engine.note }),
+      atmosphere ? el("p", { class: "muted small", text: "The first half is the Atmosphere engine, rolled alongside so the place has a mood as well as a shape." }) : null),
+    actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
 }
 
 /* ---------------------------------------------------------------- loop step 3: choosing a crisis */
@@ -416,13 +486,23 @@ async function generateAlert(state, mount) {
   logEvent(state, `New crisis alert: ${text}`);
   save(state);
   renderSolo(mount);
-  showToast("Crisis alert generated. Make an event check, then engage a crisis.", { variant: "good", timeout: 6000 });
+  modal({ title: "Crisis alert",
+    body: el("div", {},
+      el("p", { class: "lede", text }),
+      el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }),
+      el("p", { class: "small", text: "Next: make an event check, then engage this crisis to start a timer." }),
+      el("h4", { class: "section", text: "Where is it?" }),
+      el("p", { class: "muted small", text: "Roll a location engine if you need the place itself described." }),
+      el("div", { class: "chiprow" }, ...Object.keys(S.LOCATION_ENGINES).map((k) =>
+        el("button", { class: "chip", onclick: () => describePlace(state, mount, k) },
+          S.LOCATION_ENGINES[k].name.replace(" Engine", ""))))),
+    actions: [{ label: "OK", variant: "primary" }] });
 }
 
 /* ---------------------------------------------------------------- crisis timers */
 
 function timersCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Crisis timers" }),
+  const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Crisis timers" }),
     helpPanel(["A crisis timer counts down to something bad happening. Check it whenever time passes in the fiction.", "Each 6 rolled moves it closer. When it reaches 'now' the event fires, the crisis level rises by 1, and the timer is removed.", "Keep at least one running at all times — that is what drives solo play forward without a GM."]),
     el("p", { class: "muted small", text: S.CRISIS_TIMER.sourceGap ? "Proximity labels follow the surrounding rules text; the supplied table was partly truncated." : "" }));
   for (const t of state.timers) {
@@ -485,7 +565,7 @@ function checkTimer(state, timer, mount) {
 /* ---------------------------------------------------------------- objectives */
 
 function objectivesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Objectives" }),
+  const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Objectives" }),
     helpPanel(["What your hero is trying to achieve. Objectives are how you earn karma in solo play, replacing the end-of-session questions.", "Roll Progress to advance along the ladder. 1s cancel 6s, and a net-negative result pushes the objective one step back.", "When it reaches the top of the ladder, claim the karma shown on the row."]));
   for (const o of state.objectives) {
     const rung = S.OBJECTIVE_TIMER.ladder.find((l) => l.key === o.status);
@@ -563,7 +643,7 @@ function completeObjective(state, obj, mount) {
 /* ---------------------------------------------------------------- allies */
 
 function alliesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Allies" }),
+  const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Allies" }),
     helpPanel(["A group helping you, tracked as one unit rather than as individual NPCs.", "Check them to see how they hold up: each 6 is a success (2 damage each in a fight), each 1 drops their status one step toward Alone.", "Allies aiding you directly give +2 dice to your own roll."]));
   for (const a of state.allies) {
     const rung = S.ALLY_TIMER.ladder.find((l) => l.key === a.status);
@@ -630,13 +710,15 @@ async function allyCheck(state, ally, mount, inFight) {
 /* ---------------------------------------------------------------- encounters */
 
 function encounterCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Encounter timer" }),
+  const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Encounter timer" }),
     helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.", "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.", "At 'Encountered' the highest die sets enemy behaviour and the number of 6s sets how big the threat is."]));
   const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
   if (!state.encounter) {
     card.append(el("p", { class: "muted small", text: "Start an encounter timer when exploring an unknown location or evading enemies." }));
-    card.append(el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"));
+    card.append(el("div", { class: "row-actions" },
+      el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
+      el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
     card.append(sequence);
     return card;
   }
@@ -701,22 +783,9 @@ function encounterCheck(state, mount) {
 
 /* ---------------------------------------------------------------- engines reference */
 
-function enginesCard(state, mount) {
-  const card = el("section", { class: "card" }, el("h3", { text: "Location engines" }),
+function referenceCard(state, mount) {
+  const card = el("section", { class: "card" }, el("h3", { text: "Reference" }),
     helpPanel(["Oracles for describing where you are when there is no GM to tell you.", "Roll the engine matching the scale you need; the Atmosphere engine is mixed in automatically to colour the result.", "Bonus-6 effects, solo combat reminders and power guidance live here too."]));
-  const row = el("div", { class: "chiprow" });
-  for (const [key, engine] of Object.entries(S.LOCATION_ENGINES)) {
-    row.append(el("button", { class: "chip", onclick: () => {
-      const res = R.rollNamedTable(engine);
-      const atmosphere = key === "atmosphere" ? null : R.rollNamedTable(S.LOCATION_ENGINES.atmosphere);
-      const text = atmosphere ? `${atmosphere.entry.text} ${res.entry.text}` : res.entry.text;
-      logEvent(state, `${engine.name}: ${text}`);
-      save(state);
-      modal({ title: engine.name, body: el("div", {}, el("p", { class: "lede big", text }), el("p", { class: "muted small", text: engine.note })), actions: [{ label: "OK", variant: "primary" }] });
-      renderSolo(mount);
-    } }, engine.name.replace(" Engine", "")));
-  }
-  card.append(row);
   card.append(el("details", {}, el("summary", { text: "Bonus 6 effects (choose one per roll)" }),
     ...S.BONUS_SIX_EFFECTS.map((b) => el("p", { class: "small" }, el("strong", { text: `${b.name}: ` }), b.effect))));
   card.append(el("details", {}, el("summary", { text: "Solo combat and recovery reminders" }),
