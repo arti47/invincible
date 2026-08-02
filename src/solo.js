@@ -179,6 +179,9 @@ export function phaseFor(level) {
   return S.CRISIS_LEVEL.phases.find((p) => level >= p.range[0] && level <= p.range[1]) || S.CRISIS_LEVEL.phases[0];
 }
 
+const diceRow = (faces) => el("div", { class: "dice-row" },
+  ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) })));
+
 function logEvent(state, text) {
   state.log.unshift({ at: Date.now(), text });
   state.log = state.log.slice(0, 60);
@@ -232,6 +235,146 @@ async function rallyOnMemory(state, mount) {
   renderSolo(mount);
 }
 
+/* --------------------------------------------- "what just happened?" — the one control that
+   removes the guesswork. Each timer type has a DIFFERENT trigger in Ch.9, and knowing which to
+   roll is the hardest part of solo play. So the app asks what the hero did and fires the right
+   checks, in the right order, with the right modifiers. */
+
+const MOVES = [
+  { key: "zone", label: "I moved to a new place",
+    when: "Walking into the next zone, room, street or corridor.",
+    fires: "Encounter check · crisis timers",
+    steps: ["encounter", "timers"] },
+  { key: "search", label: "I searched, waited or worked on something",
+    when: "Lingering anywhere for a few minutes or more — searching, picking a lock, treating the wounded.",
+    fires: "Encounter check · crisis timers at +1 die (it took time)",
+    steps: ["encounter", "timers+"] },
+  { key: "milestone", label: "Something moved my objective",
+    when: "You learned something, reached somewhere, or lost ground. For or against — both count.",
+    fires: "Objective check · event check",
+    steps: ["objective", "event"] },
+  { key: "allies", label: "My allies faced danger",
+    when: "The group fought, held a line, evacuated people, or tried something risky.",
+    fires: "Ally check",
+    steps: ["ally"] },
+  { key: "fight", label: "A fight or a long scene ended",
+    when: "Combat is over, or a chase, or anything that ate real time.",
+    fires: "Crisis timers at +1 die · event check",
+    steps: ["timers+", "event"] },
+  { key: "scene", label: "Time jumped, or the scene changed",
+    when: "You travelled, waited hours, or tied off a chunk of the mission.",
+    fires: "Crisis timers · event check",
+    steps: ["timers", "event"] },
+];
+
+async function whatHappened(state, mount) {
+  const pick = await chooseModal("What did your hero just do?", MOVES.map((m) => ({
+    label: m.label, hint: `${m.when}  →  ${m.fires}`, value: m.key })));
+  if (!pick) return;
+  const move = MOVES.find((m) => m.key === pick);
+  const report = el("div", {});
+  let acted = false;
+
+  for (const step of move.steps) {
+    if (step === "encounter") {
+      if (!state.encounter) continue;                       // no exploration scene running
+      const r = rollEncounter(state);
+      acted = true;
+      report.append(el("h4", { class: "section", text: "Encounter check" }), diceRow(r.faces),
+        el("p", { text: `${r.dice} enemy dice → enemy presence ${r.presence.name}.` }));
+      if (r.evidence) report.append(el("p", { class: "muted small", text: r.evidence.text }));
+      if (r.behaviour) {
+        report.append(el("p", { class: "warn" }, el("strong", { text: `Encounter! ${r.behaviour.name}. ` }), r.behaviour.effect),
+          el("p", { class: "small", text: `${r.threat.name} — ${r.threat.examples}` }),
+          el("p", { class: "small", text: "The Encounter timer panel now shows the next step." }));
+      }
+    } else if (step === "timers" || step === "timers+") {
+      if (!state.timers.length) {
+        report.append(el("h4", { class: "section", text: "Crisis timers" }),
+          el("p", { class: "warn small", text: "None running. Start one — the chapter says always keep at least one going." }));
+        continue;
+      }
+      acted = true;
+      state.lastTimerLines = [];
+      const pace = step === "timers+" ? 1 : 0;
+      for (const t of [...state.timers]) rollTimer(state, t, pace);
+      report.append(el("h4", { class: "section", text: `Crisis timers${pace ? " (+1 die — that took time)" : ""}` }),
+        ...state.lastTimerLines.map((l) => el("p", { text: l })));
+    } else if (step === "objective") {
+      if (!state.objectives.length) {
+        report.append(el("h4", { class: "section", text: "Objectives" }),
+          el("p", { class: "muted small", text: "None set. Objectives are where solo karma comes from — set one." }));
+        continue;
+      }
+      const live = state.objectives.filter((o) => o.status !== "reached");
+      if (!live.length) { report.append(el("p", { class: "good small", text: "Your objective is already reached — claim its karma." })); continue; }
+      const which = live.length === 1 ? live[0].id
+        : await chooseModal("Which objective moved?", live.map((o) => ({ label: o.name, hint: S.OBJECTIVE_TIMER.ladder.find((l) => l.key === o.status).name, value: o.id })));
+      const obj = live.find((o) => o.id === which);
+      if (!obj) continue;
+      const r = rollObjective(state, obj);
+      acted = true;
+      report.append(el("h4", { class: "section", text: `Objective — ${obj.name}` }), diceRow(r.faces),
+        r.penalty ? el("p", { class: "warn small", text: `${r.phase.name}: ${r.penalty} progress dice.` }) : null,
+        el("p", { text: r.message }));
+    } else if (step === "ally") {
+      const live = state.allies.filter((a) => a.status !== "alone");
+      if (!live.length) {
+        report.append(el("h4", { class: "section", text: "Allies" }),
+          el("p", { class: "muted small", text: state.allies.length ? "You are Alone — there is nobody left to roll for." : "No ally group tracked." }));
+        continue;
+      }
+      const which = live.length === 1 ? live[0].id
+        : await chooseModal("Which group?", live.map((a) => ({ label: a.name, hint: S.ALLY_TIMER.ladder.find((l) => l.key === a.status).name, value: a.id })));
+      const ally = live.find((a) => a.id === which);
+      if (!ally) continue;
+      const bonus = await chooseModal("Does this suit them?", [
+        { label: "No bonus", value: 0 },
+        { label: "Suited to their role (+2)", value: 2 },
+        { label: "Situation strongly favours them (+3)", value: 3 },
+      ]);
+      if (bonus === null) continue;
+      const fight = await chooseModal("Were they fighting?", [
+        { label: "Not a fight", hint: "Successes are simply progress", value: false },
+        { label: "In a fight", hint: "Each 6 becomes 2 damage to enemies", value: true },
+      ]);
+      const r = rollAlly(state, ally, Number(bonus), fight === true);
+      acted = true;
+      report.append(el("h4", { class: "section", text: `Allies — ${ally.name}` }), diceRow(r.faces), el("p", { text: r.text }));
+    } else if (step === "event") {
+      const r = rollEventCheck(state);
+      acted = true;
+      report.append(el("h4", { class: "section", text: `Event check — ${r.value}` }), el("p", { text: r.entry.text }),
+        r.extra ? el("p", { class: "lede", text: r.extra }) : null,
+        r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null);
+    }
+  }
+
+  save(state);
+  modal({ title: move.label,
+    body: el("div", {}, report,
+      el("p", { class: "muted small", text: acted ? `Rolled: ${move.fires}.` : "Nothing was running that this affects." })),
+    actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** The card that fronts it — the second thing on the tab, under "do this next". */
+function whatHappenedCard(state, mount) {
+  return el("section", { class: "card", id: "solo-move" },
+    el("h3", { text: "What did your hero just do?" }),
+    el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it")),
+    el("details", { class: "help" }, el("summary", { text: "Which timer fires when?" }),
+      el("div", { class: "tablewrap" },
+        el("table", { class: "data-table" },
+          el("tr", {}, el("th", { text: "Timer" }), el("th", { text: "Check it when" })),
+          el("tr", {}, el("td", { text: "Crisis" }), el("td", { text: "Time passes: between scenes, on a delay, changing location, or lingering. +1 die for anything lengthy, -1 for anything fast." })),
+          el("tr", {}, el("td", { text: "Objective" }), el("td", { text: "A milestone happens — something meaningful for or against the goal. Never on a clock." })),
+          el("tr", {}, el("td", { text: "Ally" }), el("td", { text: "The group faces a threat or tries something dangerous. Off-screen, at least once every few hours of game time." })),
+          el("tr", {}, el("td", { text: "Encounter" }), el("td", { text: "Only while exploring somewhere a fight could break out — once per zone you move through or linger in. Ordinary travel needs no timer at all." }))))));
+}
+
 /* ---------------------------------------------------------------- render */
 
 export function renderSolo(mount) {
@@ -245,6 +388,7 @@ export function renderSolo(mount) {
   mount.append(nextStepCard(state, mount));
   const recovery = recoveryCard(state, mount);
   if (recovery) mount.append(recovery);
+  if (state.alert) mount.append(whatHappenedCard(state, mount));
 
   mount.append(el("section", { class: "card solo-header" },
     el("h2", { text: "Crisis Mode" }),
@@ -585,8 +729,7 @@ function rollOpportunityEvent(state, mount) {
 
 /* ---------------------------------------------------------------- FATE tools */
 
-function doEventCheck(state, mount) {
-  offSequence(state, 1, "an event check");
+function rollEventCheck(state) {
   state.eventChecks = (state.eventChecks || 0) + 1;
   const value = roll2d6();
   const entry = tableLookup(S.EVENT_CHECK.entries, value);
@@ -611,11 +754,17 @@ function doEventCheck(state, mount) {
   }
   logEvent(state, `Event check ${value}: ${entry.text}${extra ? ` — ${extra}` : ""}`);
   setOracle(state, `Event check ${value}`, extra || entry.text, rolls || entry.text);
+  return { value, entry, extra, rolls };
+}
+
+function doEventCheck(state, mount) {
+  offSequence(state, 1, "an event check");
+  const r = rollEventCheck(state);
   save(state);
-  modal({ title: `Event check — ${value}`,
-    body: el("div", {}, el("p", { text: entry.text }), extra ? el("p", { class: "lede", text: extra }) : null,
-      rolls ? el("p", { class: "muted small", text: rolls }) : null,
-      value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
+  modal({ title: `Event check — ${r.value}`,
+    body: el("div", {}, el("p", { text: r.entry.text }), r.extra ? el("p", { class: "lede", text: r.extra }) : null,
+      r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null,
+      r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -731,6 +880,7 @@ async function generateAlert(state, mount) {
 function timersCard(state, mount) {
   const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Crisis timers" }),
     helpPanel(["A crisis timer counts down to something bad happening. Check it whenever time passes in the fiction.", "Each 6 rolled moves it closer. When it reaches 'now' the event fires, the crisis level rises by 1, and the timer is removed.", "Keep at least one running at all times — that is what drives solo play forward without a GM."]),
+    el("p", { class: "trigger", text: "Check when: time passes — between scenes, on a delay, changing location, or lingering somewhere." }),
     el("p", { class: "muted small", text: S.CRISIS_TIMER.sourceGap ? "Proximity labels follow the surrounding rules text; the supplied table was partly truncated." : "" }));
   for (const t of state.timers) {
     const rung = S.CRISIS_TIMER.ladder.find((l) => l.key === t.proximity) || S.CRISIS_TIMER.ladder[0];
@@ -858,7 +1008,8 @@ async function checkTimer(state, timer, mount) {
 
 function objectivesCard(state, mount) {
   const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Objectives" }),
-    helpPanel(["What your hero is trying to achieve. Objectives are how you earn karma in solo play, replacing the end-of-session questions.", "Roll Progress to advance along the ladder. 1s cancel 6s, and a net-negative result pushes the objective one step back.", "When it reaches the top of the ladder, claim the karma shown on the row."]));
+    helpPanel(["What your hero is trying to achieve. Objectives are how you earn karma in solo play, replacing the end-of-session questions.", "Roll Progress to advance along the ladder. 1s cancel 6s, and a net-negative result pushes the objective one step back.", "When it reaches the top of the ladder, claim the karma shown on the row."]),
+    el("p", { class: "trigger", text: "Check when: a milestone happens — something meaningful for or against the goal. Never on a clock." }));
   for (const o of state.objectives) {
     const rung = S.OBJECTIVE_TIMER.ladder.find((l) => l.key === o.status);
     card.append(el("div", { class: "timer" },
@@ -903,7 +1054,8 @@ async function addObjective(state, mount) {
 }
 
 /** Audit A24: 1s cancel 6s; a net-negative result pushes the objective one step back. */
-function objectiveCheck(state, obj, mount) {
+/** The objective roll on its own, so a composed move can run it without opening a dialog. */
+function rollObjective(state, obj) {
   const ladder = S.OBJECTIVE_TIMER.ladder;
   const idx = ladder.findIndex((l) => l.key === obj.status);
   const rung = ladder[idx];
@@ -927,12 +1079,17 @@ function objectiveCheck(state, obj, mount) {
     message = "No progress — consider why this milestone didn't help, or what minor complication appeared.";
   }
   logEvent(state, `Objective "${obj.name}": ${sixes} successes, ${ones} banes. ${message}`);
+  return { faces, sixes, ones, net, message, penalty, phase, dice };
+}
+
+function objectiveCheck(state, obj, mount) {
+  const r = rollObjective(state, obj);
   save(state);
   modal({ title: obj.name,
     body: el("div", {},
-      el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
-      penalty ? el("p", { class: "warn small", text: `${phase.name}: ${penalty} progress dice.` }) : null,
-      el("p", { text: message })),
+      diceRow(r.faces),
+      r.penalty ? el("p", { class: "warn small", text: `${r.phase.name}: ${r.penalty} progress dice.` }) : null,
+      el("p", { text: r.message })),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -951,7 +1108,8 @@ function completeObjective(state, obj, mount) {
 
 function alliesCard(state, mount) {
   const card = el("div", { class: "timer-group" }, el("h4", { class: "group-head", text: "Allies" }),
-    helpPanel(["A group helping you, tracked as one unit rather than as individual NPCs.", "Check them to see how they hold up: each 6 is a success (2 damage each in a fight), each 1 drops their status one step toward Alone.", "Allies aiding you directly give +2 dice to your own roll."]));
+    helpPanel(["A group helping you, tracked as one unit rather than as individual NPCs.", "Check them to see how they hold up: each 6 is a success (2 damage each in a fight), each 1 drops their status one step toward Alone.", "Allies aiding you directly give +2 dice to your own roll."]),
+    el("p", { class: "trigger", text: "Check when: the group faces a threat or tries something dangerous. Off-screen, once every few hours of game time." }));
   for (const a of state.allies) {
     const rung = S.ALLY_TIMER.ladder.find((l) => l.key === a.status);
     card.append(el("div", { class: "timer" },
@@ -961,7 +1119,7 @@ function alliesCard(state, mount) {
         el("button", { class: "btn tiny", onclick: () => allyCheck(state, a, mount, true) }, "Fight"),
         el("button", { class: "btn tiny ghost", onclick: () => { state.allies = state.allies.filter((x) => x.id !== a.id); save(state); renderSolo(mount); } }, "Drop"))));
   }
-  card.append(el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
+  if (!state.allies.length) card.append(el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
   card.append(el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
   return card;
 }
@@ -1000,17 +1158,10 @@ async function addAllies(state, mount) {
 }
 
 /** Audit A25: each 6 is 2 damage in a fight; each 1 drops the status one step. */
-async function allyCheck(state, ally, mount, inFight) {
+function rollAlly(state, ally, bonus, inFight) {
   const ladder = S.ALLY_TIMER.ladder;
   const idx = ladder.findIndex((l) => l.key === ally.status);
   const rung = ladder[idx];
-  const bonus = await chooseModal("Does this suit their role?", [
-    { label: "No bonus", value: 0 },
-    { label: "Suited to their role (+2)", value: 2 },
-    { label: "Situation strongly favours them (+3)", value: 3 },
-  ]);
-  if (bonus === null) return;
-  if (rung.dice === 0) { showToast("You are alone — there is nobody left to roll for.", { variant: "warn" }); return; }
   const dice = Math.max(1, rung.dice + Number(bonus));
   const faces = Array.from({ length: dice }, () => d6());
   const sixes = faces.filter((f) => f === 6).length;
@@ -1023,12 +1174,25 @@ async function allyCheck(state, ally, mount, inFight) {
     ones ? `${ones} setback(s): now ${ladder[next].name}.` : "",
   ].filter(Boolean).join(" ");
   logEvent(state, `Ally check (${ally.name}): ${text}`);
+  return { faces, sixes, ones, damage, text, dice, status: ladder[next].name };
+}
+
+async function allyCheck(state, ally, mount, inFight) {
+  const rung = S.ALLY_TIMER.ladder.find((l) => l.key === ally.status);
+  if (rung.dice === 0) { showToast("You are alone — there is nobody left to roll for.", { variant: "warn" }); return; }
+  const bonus = await chooseModal("Does this suit their role?", [
+    { label: "No bonus", value: 0 },
+    { label: "Suited to their role (+2)", value: 2 },
+    { label: "Situation strongly favours them (+3)", value: 3 },
+  ]);
+  if (bonus === null) return;
+  const r = rollAlly(state, ally, Number(bonus), inFight);
   save(state);
   modal({ title: ally.name,
     body: el("div", {},
-      el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
-      el("p", { text }),
-      ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null),
+      diceRow(r.faces),
+      el("p", { text: r.text }),
+      r.ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -1081,7 +1245,8 @@ function encounterCard(state, mount) {
     helpPanel(["Use this when exploring an unknown location or evading enemies — it tracks how close the opposition is getting.",
       "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.",
       "The panel walks the chapter's encounter sequence: check, reveal, spot, avoid or escape, fight, reset, advance time.",
-      "Searching a zone takes minutes — it rolls INTUITION and prompts a crisis timer check."]));
+      "Searching a zone takes minutes — it rolls INTUITION and prompts a crisis timer check."]),
+    el("p", { class: "trigger", text: "Start one only for a tense patrol, search or escape where a fight could break out. Ordinary travel needs no encounter timer. Check it once per zone you move through or linger in." }));
   const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t, i) => el("li", {
       class: state.encounter ? (i === sequenceIndex(state) ? "current-step" : "") : "", text: t }))));
@@ -1094,7 +1259,10 @@ function encounterCard(state, mount) {
     : null);
 
   if (!state.encounter) {
-    card.append(el("p", { class: "muted small", text: "Start an encounter timer when exploring an unknown location or evading enemies." }));
+    card.append(el("p", { class: "muted small", text: "No encounter timer running — nothing is stalking you. Start one when your hero enters somewhere dangerous on foot." }));
+    card.append(el("details", { class: "help" }, el("summary", { text: "When does a fight actually start?" }),
+      el("p", { class: "small", text: "Three ways, and only three. (1) An encounter timer reaches Encountered and you neither avoid nor escape it — the panel walks you to Draw initiative. (2) You choose to attack something the fiction has already put in front of you — draw initiative from the Action tab. (3) A crisis timer fires into a fight, because that is what you said it would trigger." }),
+      el("p", { class: "small", text: "You never roll to see whether combat happens. Combat happens because the encounter sequence delivered an enemy, or because you decided to swing first." })));
     card.append(el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
       el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
@@ -1193,7 +1361,8 @@ async function startEncounter(state, mount) {
 }
 
 /** Steps 2-4, and 5-6 when the presence reaches 'encountered'. */
-function encounterCheck(state, mount) {
+/** The encounter roll alone: shifts the presence and, on 'encountered', reads behaviour + threat. */
+function rollEncounter(state) {
   const enc = state.encounter;
   const ladder = S.ENCOUNTER_TIMER.ladder;
   const idx = encIndex(enc.presence);
@@ -1207,40 +1376,39 @@ function encounterCheck(state, mount) {
   enc.presence = ladder[next].key;
   enc.lastCheck = { faces, sixes, ones, highest };
 
-  const body = el("div", {},
-    el("div", { class: "dice-row" }, ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) }))),
-    el("p", { text: `Enemy presence: ${ladder[next].name}.` }));
-
-  if (sixes) {
-    const ev = S.ENCOUNTER_TIMER.evidence.find((e) => e.sixes === Math.min(3, sixes));
-    body.append(el("p", { class: "muted", text: ev.text }));
-  }
-
+  let behaviour = null, threat = null;
   if (ladder[next].key === "encountered") {
-    const behaviour = S.ENEMY_BEHAVIOUR.find((b) => b.highest === highest) || S.ENEMY_BEHAVIOUR.find((b) => b.highest === 0);
-    const threat = S.ENEMY_THREAT.find((t) => t.sixes === Math.min(3, sixes)) || S.ENEMY_THREAT[0];
+    behaviour = S.ENEMY_BEHAVIOUR.find((b) => b.highest === highest) || S.ENEMY_BEHAVIOUR.find((b) => b.highest === 0);
+    threat = S.ENEMY_THREAT.find((t) => t.sixes === Math.min(3, sixes)) || S.ENEMY_THREAT[0];
     enc.behaviour = behaviour;
     enc.threat = threat;
     enc.surprised = behaviour.highest === 0;
-    enc.phase = "revealed";
+    enc.phase = /False alarm/.test(behaviour.name) ? "reset" : "revealed";
     enc.detail = { kind: `${behaviour.name} · ${threat.name}`, text: behaviour.effect, note: threat.examples };
-    body.append(
-      el("h4", { class: "section", text: "Encounter!" }),
-      el("p", {}, el("strong", { text: `${behaviour.name}: ` }), behaviour.effect),
-      el("p", {}, el("strong", { text: `${threat.name}: ` }), threat.examples),
-      el("p", { class: "small", text: /False alarm/.test(behaviour.name)
-        ? "A false alarm — no hostile enemy. Reset the timer and move on."
-        : "Next: make the spotting check, then decide how the encounter opens." }));
-    if (/False alarm/.test(behaviour.name)) enc.phase = "reset";
   } else {
     enc.phase = "moving";
-    const opt = powerOptionAvailable(state);
-    if (opt) {
-      body.append(el("p", { class: "warn small", text: `${opt.power} lets you Outmaneuver${opt.canPrepare ? " or Prepare" : ""} instead of rolling the next check.` }));
-    }
   }
-
   logEvent(state, `Encounter check: ${sixes} sixes → ${ladder[next].name}`);
+  return { faces, sixes, ones, highest, dice, presence: ladder[next], behaviour, threat, evidence:
+    sixes ? S.ENCOUNTER_TIMER.evidence.find((e) => e.sixes === Math.min(3, sixes)) : null };
+}
+
+function encounterCheck(state, mount) {
+  const r = rollEncounter(state);
+  const body = el("div", {}, diceRow(r.faces), el("p", { text: `Enemy presence: ${r.presence.name}.` }));
+  if (r.evidence) body.append(el("p", { class: "muted", text: r.evidence.text }));
+  if (r.behaviour) {
+    body.append(
+      el("h4", { class: "section", text: "Encounter!" }),
+      el("p", {}, el("strong", { text: `${r.behaviour.name}: ` }), r.behaviour.effect),
+      el("p", {}, el("strong", { text: `${r.threat.name}: ` }), r.threat.examples),
+      el("p", { class: "small", text: /False alarm/.test(r.behaviour.name)
+        ? "A false alarm — no hostile enemy. Reset the timer and move on."
+        : "Next: make the spotting check, then decide how the encounter opens." }));
+  } else {
+    const opt = powerOptionAvailable(state);
+    if (opt) body.append(el("p", { class: "warn small", text: `${opt.power} lets you Outmaneuver${opt.canPrepare ? " or Prepare" : ""} instead of rolling the next check.` }));
+  }
   save(state);
   modal({ title: "Encounter check", body, actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);

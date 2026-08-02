@@ -1225,6 +1225,81 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- "what just happened" drives the timers */
+  const moves = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    const hero = Derived.blankCharacter();
+    hero.id = "move_hero"; hero.identity.heroName = "Mover";
+    Store.saveCharacter(hero); Store.setActiveCharacter("move_hero");
+
+    const board = (extra = {}) => ({ crisisLevel: 0, alert: "A fire downtown", crises: [], timers: [],
+      allies: [], objectives: [], encounter: null, mode: "alert", log: [], eventChecks: 1,
+      awaitingSocial: false, lastOracle: null, place: null, resolved: 0, ...extra });
+
+    const show = async (st) => {
+      localStorage.setItem("invincible:solo", JSON.stringify(st));
+      location.hash = "#/home"; location.hash = "#/solo";
+      await new Promise((r) => setTimeout(r, 220));
+    };
+
+    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
+    const card = document.querySelector("#solo-move");
+    const cardLabels = card ? Array.from(card.querySelectorAll("button")).map((b) => b.textContent.trim()) : [];
+    const triggerCount = document.querySelectorAll("#solo-timers .trigger").length;
+    const triggers = Array.from(document.querySelectorAll("#solo-timers .trigger")).map((p) => p.textContent);
+
+    // the encounter panel explains when a fight starts, and that ordinary travel needs no timer
+    const encText = document.querySelector("#solo-encounter")?.textContent || "";
+
+    // driving a move must roll the timers it says it rolls
+    Array.from(card.querySelectorAll("button")).find((b) => /Something happened/.test(b.textContent)).click();
+    await new Promise((r) => setTimeout(r, 150));
+    const choices = Array.from(document.querySelectorAll(".modal .choice")).map((c) => c.textContent);
+    const before = JSON.parse(localStorage.getItem("invincible:solo")).timers[0].proximity;
+    Array.from(document.querySelectorAll(".modal .choice")).find((c) => /A fight or a long scene ended/.test(c.textContent)).click();
+    await new Promise((r) => setTimeout(r, 250));
+    const reportHeads = Array.from(document.querySelectorAll(".modal h4")).map((h) => h.textContent);
+    document.querySelector(".modal .modal-actions button")?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const after = JSON.parse(localStorage.getItem("invincible:solo"));
+
+    // with no encounter timer running, a move that would roll one simply skips it
+    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
+    const card2 = document.querySelector("#solo-move");
+    Array.from(card2.querySelectorAll("button")).find((b) => /Something happened/.test(b.textContent)).click();
+    await new Promise((r) => setTimeout(r, 150));
+    Array.from(document.querySelectorAll(".modal .choice")).find((c) => /I moved to a new place/.test(c.textContent)).click();
+    await new Promise((r) => setTimeout(r, 250));
+    const skipHeads = Array.from(document.querySelectorAll(".modal h4")).map((h) => h.textContent);
+    document.querySelector(".modal .modal-actions button")?.click();
+    localStorage.removeItem("invincible:solo");
+
+    return { cardLabels, triggerCount, triggers, encText, choices, before, reportHeads,
+      afterProx: after.timers[0]?.proximity, eventChecks: after.eventChecks, skipHeads };
+  });
+  ok("the Solo tab fronts one control that rolls the right checks for you",
+    moves.cardLabels.some((l) => /Something happened/.test(l)), moves.cardLabels.join(" | "));
+  ok("every timer group states its own trigger", moves.triggerCount === 4, String(moves.triggerCount));
+  ok("the triggers name the right conditions",
+    /time passes/i.test(moves.triggers[0]) && /faces a threat/i.test(moves.triggers[1])
+      && /milestone/i.test(moves.triggers[2]) && /per zone/i.test(moves.triggers[3]),
+    moves.triggers.join(" || "));
+  ok("the encounter panel says ordinary travel needs no timer", /Ordinary travel needs no encounter timer/.test(moves.encText));
+  ok("the encounter panel explains how a fight starts", /When does a fight actually start\?/.test(moves.encText));
+  ok("the move list covers the six things a solo hero does", moves.choices.length === 6, String(moves.choices.length));
+  ok("a finished fight rolls the crisis timers at +1 and then an event check",
+    /\+1 die/.test(moves.reportHeads.join(" ")) && moves.reportHeads.some((h) => /Event check/.test(h))
+      && moves.eventChecks === 2,
+    moves.reportHeads.join(" | "));
+  ok("a move skips the checks that have nothing running",
+    !moves.skipHeads.some((h) => /Encounter check/.test(h)) && moves.skipHeads.some((h) => /Crisis timers/.test(h)),
+    moves.skipHeads.join(" | "));
+
   /* ------------------------------------------------- solo rules audit (Ch.9) */
   const soloRules = await page.evaluate(async () => {
     const Solo = await import("/src/solo.js");

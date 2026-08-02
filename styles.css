@@ -459,3 +459,5 @@ select.select option { background: var(--panel); color: var(--ink); }
 .lifecycle > .stage-label:first-child { margin-top: .2rem; }
 .combatant.current { outline: 4px solid var(--accent); }
 .current-step { font-weight: 700; color: var(--ink); }
+.trigger { margin: 0 0 .4rem; font-size: .82rem; color: var(--ink); border-left: 4px solid var(--accent-2);
+  padding: .2rem 0 .2rem .5rem; background: color-mix(in srgb, var(--accent-2) 8%, transparent); }
