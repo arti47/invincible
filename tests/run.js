@@ -1254,6 +1254,55 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- a crisis reads as facts, not a run-on line */
+  const crisisFmt = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    const parts = { kind: "Supervillain activity", headline: "A dangerous substance is discharged.",
+      where: "Research district", complication: "Media presence: reporters are already on scene." };
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 0, alert: "flat text", alertParts: parts,
+      crises: [{ id: "c1", source: "alert", text: "flat text", parts },
+        { id: "c2", source: "event", text: "old save with no parts" }],
+      timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
+      eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 }));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const rows = Array.from(document.querySelectorAll("#solo-crises .timer.crisis"));
+    const first = rows[0];
+    const read = (sel) => first.querySelector(sel)?.textContent.trim() || "";
+    // a generated alert must produce the same four fields
+    const gen = Solo.alertParts ? null : null;
+    const legacy = rows[1]?.textContent || "";
+    localStorage.removeItem("invincible:solo");
+    return {
+      rows: rows.length,
+      kind: read(".crisis-kind"), head: read(".crisis-head"), where: read(".crisis-where"),
+      comp: read(".crisis-comp"), source: read(".crisis-source"),
+      headIsOneFact: !/Complication|\(/.test(read(".crisis-head")),
+      legacyRendersFlat: /old save with no parts/.test(legacy),
+      alertBoxSplit: !!document.querySelector(".alert-box .crisis-head"),
+    };
+  });
+  ok("a crisis renders as separate facts", crisisFmt.kind && crisisFmt.head && crisisFmt.where && crisisFmt.comp,
+    JSON.stringify(crisisFmt));
+  ok("the headline is the event alone, with no complication or location glued on", crisisFmt.headIsOneFact, crisisFmt.head);
+  ok("the complication is labelled", /Complication/i.test(crisisFmt.comp), crisisFmt.comp);
+  ok("the source is an eyebrow, not part of the text", /From the alert/i.test(crisisFmt.source));
+  ok("a save from before the split still renders", crisisFmt.legacyRendersFlat);
+
+  const genParts = await page.evaluate(async () => {
+    // the generator itself must emit the four fields for every alert source
+    const src = await (await fetch("/src/solo.js")).text();
+    const i = src.indexOf("async function generateAlert(");
+    const body = src.slice(i, src.indexOf("\n}\n", i));
+    const kinds = (body.match(/parts = \{/g) || []).length;
+    return { kinds, headline: (body.match(/headline:/g) || []).length, comp: (body.match(/complication:/g) || []).length };
+  });
+  ok("every alert source emits structured parts",
+    genParts.kinds === 4 && genParts.headline === 4 && genParts.comp === 4, JSON.stringify(genParts));
+
   /* ------------------------------------------------- "what just happened" drives the timers */
   const moves = await page.evaluate(async () => {
     const Solo = await import("/src/solo.js");

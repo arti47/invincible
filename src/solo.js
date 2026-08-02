@@ -20,7 +20,7 @@ function load() {
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
-    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 };
+    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, alertParts: null };
 }
 
 /**
@@ -415,7 +415,7 @@ export function renderSolo(mount) {
         onclick: () => { state.mode = m.key; save(state); renderSolo(mount); },
       }, m.name)))),
     el("p", { class: "muted small", text: "Movement mode shifts both the crisis timer and the encounter timer." }),
-    state.alert ? el("p", { class: "alert-box", text: state.alert }) : null,
+    state.alert ? el("div", { class: "alert-box" }, crisisBody({ text: state.alert, parts: state.alertParts })) : null,
     state.alert ? el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }) : null));
 
   mount.append(crisesCard(state, mount));
@@ -537,10 +537,27 @@ function describePlace(state, mount, key) {
  * adds more. Loop step 3 is "choose a crisis and start a crisis timer" — engaging one turns it
  * into a running timer, which is what the rest of the loop tracks.
  */
-function addCrisis(state, text, source) {
+/**
+ * A crisis is four separate facts, not one run-on sentence: what kind of thing it is, what is
+ * actually happening, where, and what makes it worse. They are stored apart so the card can lay
+ * them out; `text` stays as the flat one-liner for the log and for timer names.
+ */
+function addCrisis(state, text, source, parts = null) {
   state.crises = state.crises || [];
-  state.crises.push({ id: uid("crisis"), text, source, at: Date.now() });
+  state.crises.push({ id: uid("crisis"), text, source, parts, at: Date.now() });
   return state.crises[state.crises.length - 1];
+}
+
+/** Lay a crisis out: kind above, the event itself as the lede, then where and the complication. */
+function crisisBody(c) {
+  const p = c.parts;
+  if (!p) return el("p", { class: "small", text: c.text });
+  return el("div", { class: "crisis-body" },
+    p.kind ? el("span", { class: "crisis-kind", text: p.kind }) : null,
+    el("p", { class: "crisis-head", text: p.headline }),
+    p.where ? el("p", { class: "crisis-where", text: p.where }) : null,
+    p.complication ? el("p", { class: "crisis-comp" },
+      el("strong", { text: "Complication " }), p.complication) : null);
 }
 
 function crisesCard(state, mount) {
@@ -557,9 +574,10 @@ function crisesCard(state, mount) {
     return card;
   }
   for (const c of state.crises) {
-    card.append(el("div", { class: "timer" },
-      el("div", {}, el("strong", { text: c.source === "alert" ? "From the alert" : "From an event check" }),
-        el("p", { class: "small", text: c.text })),
+    card.append(el("div", { class: "timer crisis" },
+      el("div", { class: "crisis-main" },
+        el("span", { class: "crisis-source", text: c.source === "alert" ? "From the alert" : "From an event check" }),
+        crisisBody(c)),
       el("div", { class: "chosen-actions" },
         el("button", { class: currentStep(state) === 2 ? "btn tiny primary" : "btn tiny", onclick: () => engageCrisis(state, c, mount) }, "Engage"),
         el("button", { class: "btn tiny ghost", onclick: () => {
@@ -692,7 +710,7 @@ export function rollOpportunity() {
 function joltCrisisEvent(state, mount) {
   state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
   const ev = rollCrisisEvent(state);
-  addCrisis(state, ev.text, "event");
+  addCrisis(state, ev.text, "event", { kind: ev.focus, headline: ev.detail });
   logEvent(state, `Crisis event (${ev.focusRoll}/${ev.detailRoll}): ${ev.text}`);
   setOracle(state, "Crisis event", ev.text,
     `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}. Added to Crises.`);
@@ -738,13 +756,14 @@ function rollEventCheck(state) {
   if (value === 2) {
     state.crisisLevel = clamp(state.crisisLevel + 2, 0, 10);
     const a = rollCrisisEvent(state), b = rollCrisisEvent(state);
-    addCrisis(state, a.text, "event"); addCrisis(state, b.text, "event");
+    addCrisis(state, a.text, "event", { kind: a.focus, headline: a.detail });
+    addCrisis(state, b.text, "event", { kind: b.focus, headline: b.detail });
     extra = `${a.text} / ${b.text}`;
     rolls = `Focus ${a.focusRoll}/${b.focusRoll} · detail ${a.detailRoll}/${b.detailRoll}`;
   } else if (value <= 4) {
     state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10);
     const one = rollCrisisEvent(state);
-    addCrisis(state, one.text, "event");
+    addCrisis(state, one.text, "event", { kind: one.focus, headline: one.detail });
     extra = one.text;
     rolls = `Focus D66 ${one.focusRoll} · detail 2D6 + crisis level = ${one.detailRoll} (${one.band.label})`;
   } else if (value >= 11) {
@@ -767,6 +786,12 @@ function doEventCheck(state, mount) {
       r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
+}
+
+/** The flat one-liner: for the log, for timer names, and for old saves without parts. */
+function flattenCrisis(p) {
+  return [p.kind ? `${p.kind}:` : null, p.headline, p.where ? `(${p.where})` : null,
+    p.complication ? `Complication: ${p.complication}` : null].filter(Boolean).join(" ");
 }
 
 function complexPhrase() {
@@ -832,39 +857,41 @@ async function generateAlert(state, mount) {
   const sources = S.SOLO_SETUP.alertsByRank[rankKey] || S.SOLO_SETUP.alertsByRank.global;
   const pick = await chooseModal("Where does the alert come from?", sources.map((s) => ({ label: s, value: s })));
   if (!pick) return;
-  let text = "";
+  let parts;
   if (/criminal/i.test(pick)) {
     const crime = R.rollNamedTable(D.GM_TABLES.crime);
     const comp = R.rollNamedTable(D.GM_TABLES.crimeComplications);
-    text = `${crime.entry.text}. Complication: ${comp.entry.text}`;
+    parts = { kind: "Criminal activity", headline: crime.entry.text, complication: comp.entry.text };
   } else if (/city/i.test(pick)) {
     const cat = R.rollNamedTable(D.GM_TABLES.catalyst);
     const inc = R.rollNamedTable(D.GM_TABLES.incidents);
     const loc = R.rollNamedTable(D.GM_TABLES.cityLocations);
     const comp = R.rollNamedTable(D.GM_TABLES.incidentComplications);
-    text = `${cat.entry.text}: ${inc.entry.text} (${loc.entry.text}). Complication: ${comp.entry.text}`;
+    parts = { kind: cat.entry.text, headline: inc.entry.text, where: loc.entry.text, complication: comp.entry.text };
   } else if (/global/i.test(pick)) {
     const cat = R.rollNamedTable(D.GM_TABLES.globalCategory);
     const key = "global" + cat.entry.text.replace(/[^a-z]/gi, "");
     const table = D.GM_TABLES[key] || D.GM_TABLES.globalCriminal;
     const danger = R.rollNamedTable(table);
     const comp = R.rollNamedTable(D.GM_TABLES.globalComplications);
-    text = `${cat.entry.text} danger: ${danger.entry.text} Complication: ${comp.entry.text}`;
+    parts = { kind: `${cat.entry.text} danger`, headline: danger.entry.text, complication: comp.entry.text };
   } else {
-    text = `Cosmic peril: ${complexPhrase()} — ${R.rollNamedTable(D.GM_TABLES.globalComplications).entry.text}`;
+    parts = { kind: "Cosmic peril", headline: complexPhrase(), complication: R.rollNamedTable(D.GM_TABLES.globalComplications).entry.text };
   }
+  const text = flattenCrisis(parts);
   state.alert = text;
+  state.alertParts = parts;
   state.crisisLevel = 0;
   state.eventChecks = 0;
   state.awaitingSocial = false;
   state.crises = [];
-  addCrisis(state, text, "alert");
+  addCrisis(state, text, "alert", parts);
   logEvent(state, `New crisis alert: ${text}`);
   save(state);
   renderSolo(mount);
   modal({ title: "Crisis alert",
     body: el("div", {},
-      el("p", { class: "lede", text }),
+      crisisBody({ parts }),
       el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }),
       el("p", { class: "small", text: "Next: make an event check, then engage this crisis to start a timer." }),
       el("h4", { class: "section", text: "Where is it?" }),
