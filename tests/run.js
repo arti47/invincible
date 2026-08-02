@@ -822,7 +822,36 @@ const run = async () => {
       badTalents: hero.talents.filter((t) => !R.findTalent(t.name)).map((t) => t.name),
     };
   });
-  ok("two tutorials with chapters and steps", learn.tutorials === 2 && learn.chapters >= 10 && learn.steps >= 40,
+  const walkthrough = await page.evaluate(async () => {
+    const T = await import("/data-tutorial.js");
+    const L = await import("/src/learn.js");
+    const w = T.TUTORIAL_INDEX.find((t) => t.key === "walkthrough");
+    const steps = w.chapters.flatMap((c) => c.steps);
+    const rolls = steps.filter((s) => s.roll);
+    L.setLearnTab("walkthrough");
+    const host = document.createElement("div");
+    document.body.append(host);
+    L.renderLearn(host);
+    const rendered = host.querySelectorAll(".tut-roll .die").length;
+    const firstChapter = host.querySelector(".card h3")?.textContent || "";
+    const text = host.textContent;
+    host.remove();
+    L.setLearnTab("basics");
+    return { chapters: w.chapters.length, steps: steps.length, rolls: rolls.length,
+      faces: rolls.flatMap((s) => s.roll.faces), rendered,
+      captions: rolls.every((s) => typeof s.roll.caption === "string" && s.roll.caption.length > 0),
+      triggersFirst: /Never choose which timer to roll/.test(text),
+      combat: /three ways/i.test(text) };
+  });
+  ok("the worked session runs eight chapters", walkthrough.chapters === 8, String(walkthrough.chapters));
+  ok("it shows real recorded dice", walkthrough.rolls >= 15 && walkthrough.rendered === walkthrough.faces.length,
+    `${walkthrough.rolls} rolls, ${walkthrough.rendered}/${walkthrough.faces.length} dice rendered`);
+  ok("every recorded die is a legal D6 face", walkthrough.faces.every((f) => f >= 1 && f <= 6));
+  ok("every recorded roll is captioned", walkthrough.captions);
+  ok("it opens with the timer triggers and explains when combat starts",
+    walkthrough.triggersFirst && walkthrough.combat);
+
+  ok("three tutorials with chapters and steps", learn.tutorials === 3 && learn.chapters >= 18 && learn.steps >= 90,
     `${learn.tutorials}/${learn.chapters}/${learn.steps}`);
   ok("the example hero is a legal build", learn.errors.length === 0 && learn.remaining === 0,
     `${learn.errors.join("; ")} remaining ${learn.remaining}`);

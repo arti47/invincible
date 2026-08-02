@@ -52,7 +52,13 @@ export function renderLearn(mount) {
   const tut = TUTORIAL_INDEX.find((t) => t.key === activeTab);
   tut.chapters.forEach((ch, i) => mount.append(chapterCard(ch, i === 0, hero, mount)));
 
-  if (activeTab === "solo") {
+  if (activeTab === "walkthrough") {
+    mount.append(el("section", { class: "card" },
+      el("h3", { text: "Now play one" }),
+      el("p", { class: "small", text: "The Solo tab's top card always names the step you are on, and \"What did your hero just do?\" rolls the right checks for you." }),
+      el("div", { class: "row-actions" },
+        el("a", { class: "btn primary", href: "#/solo", onclick: () => enableSolo(false) }, "Open the Solo tab"))));
+  } else if (activeTab === "solo") {
     mount.append(el("section", { class: "card" },
       el("h3", { text: "Ready to play" }),
       el("p", { class: "small", text: "Turn Crisis Mode on and the Solo tab appears in the bottom bar." }),
@@ -97,6 +103,9 @@ function chapterCard(ch, open, hero, mount) {
     const li = el("li", {}, el("p", { text: step.text }));
     if (step.example) li.append(el("p", { class: "tut-example" }, el("strong", { text: "Example: " }), step.example));
     if (step.app) li.append(el("p", { class: "tut-app" }, el("strong", { text: "In the app: " }), step.app));
+    // A recorded roll from the worked session: the dice exactly as they fell.
+    if (step.roll) li.append(el("div", { class: "tut-roll" }, dice(step.roll.faces),
+      el("p", { class: "small", text: step.roll.caption })));
     if (step.demo) {
       const out = el("div", { class: "tut-demo-out", "aria-live": "polite" });
       li.append(el("button", { class: "btn tiny primary", onclick: () => runDemo(step.demo, out, hero) }, "Try it"), out);

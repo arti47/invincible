@@ -461,3 +461,6 @@ select.select option { background: var(--panel); color: var(--ink); }
 .current-step { font-weight: 700; color: var(--ink); }
 .trigger { margin: 0 0 .4rem; font-size: .82rem; color: var(--ink); border-left: 4px solid var(--accent-2);
   padding: .2rem 0 .2rem .5rem; background: color-mix(in srgb, var(--accent-2) 8%, transparent); }
+.tut-roll { margin: .45rem 0; padding: .45rem .55rem; border: 2px solid var(--line); background: var(--chipbg); }
+.tut-roll .dice-row { margin-bottom: .3rem; }
+.tut-roll p { margin: 0; }
