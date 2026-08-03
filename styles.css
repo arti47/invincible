@@ -520,3 +520,15 @@ select.select option { background: var(--panel); color: var(--ink); }
 .step-more { font: inherit; font-size: .78rem; background: none; border: 0; padding: 0;
   color: var(--accent-2); text-decoration: underline dotted; cursor: pointer; min-height: 32px; }
 .step-list .current-step { font-weight: 700; color: var(--ink); }
+
+/* ---- solo: the crisis log is editable ---- */
+.log-list { list-style: none; margin: .5rem 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+/* Actions sit under the text, not beside it: three buttons in a right-hand column squeeze the
+   entry into a two-word ribbon on a phone. */
+.log-entry { display: flex; flex-direction: column; gap: .35rem;
+  border: 2px solid var(--line); border-radius: 8px; padding: .45rem .55rem; background: var(--paper-2); }
+.log-entry .chosen-actions { display: flex; flex-direction: row; gap: .35rem; flex-wrap: wrap; }
+.log-main { min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+.log-time { font-size: .68rem; letter-spacing: .1em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-text { margin: 0; font-size: .88rem; }
+.log-note { margin: .15rem 0 0; font-size: .85rem; padding-left: .5rem; border-left: 3px solid var(--accent); }

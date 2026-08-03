@@ -1254,6 +1254,99 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- the crisis log is an editable record */
+  const logUi = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    const board = (log) => JSON.stringify({ crisisLevel: 0, alert: "x", alertParts: null, crises: [],
+      timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log,
+      eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, showAllLog: false });
+    const show = async (log) => {
+      localStorage.setItem("invincible:solo", board(log));
+      location.hash = "#/home"; location.hash = "#/solo";
+      await new Promise((r) => setTimeout(r, 220));
+    };
+    const read = () => JSON.parse(localStorage.getItem("invincible:solo")).log;
+    const rowBtn = (n, label) => Array.from(document.querySelectorAll("#solo-log .log-entry")[n].querySelectorAll("button"))
+      .find((b) => b.textContent.trim() === label);
+    const cardBtn = (label) => Array.from(document.querySelectorAll("#solo-log .row-actions button"))
+      .find((b) => b.textContent.trim() === label);
+    const type = async (value) => {
+      await new Promise((r) => setTimeout(r, 100));
+      const box = document.querySelector(".modal textarea, .modal input");
+      box.value = value;
+      Array.from(document.querySelectorAll(".modal-actions button")).find((b) => /OK/.test(b.textContent)).click();
+      await new Promise((r) => setTimeout(r, 150));
+    };
+
+    // an old save with no ids must still be editable
+    await show([{ at: 1000, text: "Legacy entry" }, { at: 900, text: "Older entry" }]);
+    const controls = Array.from(document.querySelectorAll("#solo-log .log-entry")[0].querySelectorAll("button")).map((b) => b.textContent.trim());
+    const heading = document.querySelector("#solo-log h3")?.textContent || "";
+
+    rowBtn(0, "Edit").click();
+    await type("Reworded entry");
+    const edited = read()[0].text;
+
+    rowBtn(0, "Note").click();
+    await type("The cleaner was already inside.");
+    const noted = read()[0].note;
+    const noteShown = !!document.querySelector("#solo-log .log-note");
+    const noteLabel = rowBtn(0, "Edit note") ? "Edit note" : "";
+
+    rowBtn(1, "Remove").click();
+    await new Promise((r) => setTimeout(r, 200));
+    const afterRemove = read().length;
+    // the toast offers an undo
+    const undo = Array.from(document.querySelectorAll(".toast-action")).find((b) => /Undo/.test(b.textContent));
+    undo?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const afterUndo = read().length;
+
+    cardBtn("Add an entry").click();
+    await type("I decided to go in through the roof.");
+    const added = read()[0];
+
+    cardBtn("Clear the log").click();
+    await new Promise((r) => setTimeout(r, 150));
+    Array.from(document.querySelectorAll(".modal-actions button")).find((b) => /Clear it/.test(b.textContent)).click();
+    await new Promise((r) => setTimeout(r, 200));
+    const cleared = read().length;
+    const emptyState = document.querySelector("#solo-log")?.textContent || "";
+    const undo2 = Array.from(document.querySelectorAll(".toast-action")).find((b) => /Undo/.test(b.textContent));
+    undo2?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const restored = read().length;
+
+    // long logs collapse to the latest 12 with a way to see the rest
+    await show(Array.from({ length: 20 }, (_, i) => ({ id: `l${i}`, at: 2000 - i, text: `Entry ${i}`, note: "" })));
+    const visible = document.querySelectorAll("#solo-log .log-entry").length;
+    const expand = cardBtn("Show all 20");
+    expand?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const expanded = document.querySelectorAll("#solo-log .log-entry").length;
+
+    localStorage.removeItem("invincible:solo");
+    return { controls, heading, edited, noted, noteShown, noteLabel, afterRemove, afterUndo,
+      added, cleared, emptyState, restored, visible, expanded };
+  });
+  ok("every log entry offers note, edit and remove",
+    JSON.stringify(logUi.controls) === JSON.stringify(["Note", "Edit", "Remove"]), logUi.controls.join(" | "));
+  ok("the log heading counts the entries", /Crisis log \(\d+\)/.test(logUi.heading), logUi.heading);
+  ok("an entry can be reworded", logUi.edited === "Reworded entry", logUi.edited);
+  ok("a note can be added to a roll and is shown",
+    logUi.noted === "The cleaner was already inside." && logUi.noteShown && logUi.noteLabel === "Edit note",
+    `${logUi.noted} / shown ${logUi.noteShown}`);
+  ok("removing one entry is undoable", logUi.afterRemove === 1 && logUi.afterUndo === 2,
+    `${logUi.afterRemove} → ${logUi.afterUndo}`);
+  ok("an entry can be written by hand", /through the roof/.test(logUi.added.text) && !!logUi.added.id);
+  ok("the whole log can be cleared, and the clear is undoable",
+    logUi.cleared === 0 && /Nothing logged yet/.test(logUi.emptyState) && logUi.restored > 0,
+    `${logUi.cleared} → ${logUi.restored}`);
+  ok("a long log collapses to the latest 12 and expands on request",
+    logUi.visible === 12 && logUi.expanded === 20, `${logUi.visible} → ${logUi.expanded}`);
+
   /* ------------------------------------------------- the encounter panel carries its own controls */
   const encPanel = await page.evaluate(async () => {
     const Store = await import("/src/store.js");

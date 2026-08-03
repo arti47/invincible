@@ -20,7 +20,8 @@ function load() {
 function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
-    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, alertParts: null };
+    eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, alertParts: null,
+    showAllLog: false };
 }
 
 /**
@@ -183,10 +184,15 @@ const diceRow = (faces) => el("div", { class: "dice-row" },
   ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) })));
 
 function logEvent(state, text) {
-  state.log.unshift({ at: Date.now(), text });
+  state.log.unshift({ id: uid("log"), at: Date.now(), text, note: "" });
   state.log = state.log.slice(0, 60);
   announce(text);
 }
+
+const logTime = (at) => {
+  try { return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+  catch { return ""; }
+};
 
 /**
  * Ch.9 recovery. A solo hero broken by damage or stress still acts, at -1 die, and one broken by
@@ -422,9 +428,113 @@ export function renderSolo(mount) {
   mount.append(allTimersCard(state, mount));
   mount.append(oraclesCard(state, mount));
   mount.append(referenceCard(state, mount));
-  mount.append(el("section", { class: "card" }, el("h3", { text: "Crisis log" }),
-    helpPanel(["Everything that has happened this crisis, newest first — alerts, checks, timer results, oracle answers and karma.", "Use it to reconstruct the story afterwards, or to remind yourself what a timer was counting down to."]),
-    el("ul", { class: "muted small" }, ...state.log.slice(0, 12).map((l) => el("li", { text: l.text })))));
+  mount.append(logCard(state, mount));
+}
+
+/**
+ * The crisis log is the session's record, so it has to be editable: a rolled result rarely says
+ * what it MEANT in the fiction. Every entry can be rewritten, annotated or removed, and the whole
+ * log cleared — with a one-step undo on the destructive paths.
+ */
+function logCard(state, mount) {
+  const shown = state.showAllLog ? state.log : state.log.slice(0, 12);
+  const card = el("section", { class: "card", id: "solo-log" },
+    el("h3", { text: `Crisis log (${state.log.length})` }),
+    helpPanel([
+      "Everything that has happened this crisis, newest first — alerts, checks, timer results, oracle answers and karma.",
+      "Add a note to any entry to record what the roll actually meant in the fiction. Edit an entry to reword it, or remove one you rolled by mistake.",
+      "Use it to reconstruct the story afterwards, or to remind yourself what a timer was counting down to.",
+    ]));
+
+  if (!state.log.length) {
+    card.append(el("p", { class: "muted small", text: "Nothing logged yet. Every roll you make on this tab lands here." }));
+    return card;
+  }
+
+  const list = el("ul", { class: "log-list" });
+  for (const entry of shown) {
+    const id = entry.id || String(entry.at);
+    list.append(el("li", { class: "log-entry" },
+      el("div", { class: "log-main" },
+        el("span", { class: "log-time", text: logTime(entry.at) }),
+        el("p", { class: "log-text", text: entry.text }),
+        entry.note ? el("p", { class: "log-note", text: entry.note }) : null),
+      el("div", { class: "chosen-actions" },
+        el("button", { class: "btn tiny", onclick: () => noteEntry(state, id, mount) }, entry.note ? "Edit note" : "Note"),
+        el("button", { class: "btn tiny ghost", onclick: () => editEntry(state, id, mount) }, "Edit"),
+        el("button", { class: "btn tiny ghost", onclick: () => removeEntry(state, id, mount) }, "Remove"))));
+  }
+  card.append(list);
+
+  const row = el("div", { class: "row-actions" });
+  if (state.log.length > 12) {
+    row.append(el("button", { class: "btn ghost", onclick: () => { state.showAllLog = !state.showAllLog; save(state); renderSolo(mount); } },
+      state.showAllLog ? "Show the latest 12" : `Show all ${state.log.length}`));
+  }
+  row.append(el("button", { class: "btn", onclick: () => addLogNote(state, mount) }, "Add an entry"));
+  row.append(el("button", { class: "btn danger", onclick: () => clearLog(state, mount) }, "Clear the log"));
+  card.append(row);
+  return card;
+}
+
+const findEntry = (state, id) => state.log.find((l) => (l.id || String(l.at)) === id);
+
+async function editEntry(state, id, mount) {
+  const entry = findEntry(state, id);
+  if (!entry) return;
+  const text = await promptModal("What happened?", { title: "Edit entry", value: entry.text, multiline: true,
+    hints: ["Reword a rolled result into what it actually meant, or fix a typo. The dice are already spent — this is the record, not the roll."] });
+  if (text === null) return;
+  if (!text.trim()) { showToast("An entry needs some text. Use Remove to delete it.", { variant: "warn" }); return; }
+  entry.text = text.trim();
+  save(state);
+  renderSolo(mount);
+}
+
+async function noteEntry(state, id, mount) {
+  const entry = findEntry(state, id);
+  if (!entry) return;
+  const note = await promptModal("Your note", { title: "Note on this roll", value: entry.note || "", multiline: true,
+    hints: ["What did this result mean in the fiction? Who was it? What did you decide?",
+      "Leave it blank to remove the note."] });
+  if (note === null) return;
+  entry.note = note.trim();
+  save(state);
+  renderSolo(mount);
+}
+
+async function removeEntry(state, id, mount) {
+  const entry = findEntry(state, id);
+  if (!entry) return;
+  snapshot(state, "Remove log entry");
+  state.log = state.log.filter((l) => (l.id || String(l.at)) !== id);
+  save(state);
+  showToast("Entry removed.", { action: { label: "Undo", onClick: () => undoSolo(mount) } });
+  renderSolo(mount);
+}
+
+async function addLogNote(state, mount) {
+  const text = await promptModal("What happened?", { title: "Add an entry", multiline: true,
+    hints: ["For anything the app did not roll — a decision you made, a scene you played out, something you want to remember."] });
+  if (!text || !text.trim()) return;
+  logEvent(state, text.trim());
+  save(state);
+  renderSolo(mount);
+}
+
+async function clearLog(state, mount) {
+  const ok = await modal({ title: "Clear the log",
+    body: el("div", {},
+      el("p", { text: `This deletes all ${count(state.log.length, "entry", "entries")}, including your notes.` }),
+      el("p", { class: "muted small", text: "Timers, crises, objectives and your hero are untouched. You can undo it once." })),
+    actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Clear it", value: true, variant: "danger" }] }).promise;
+  if (!ok) return;
+  snapshot(state, "Clear the log");
+  state.log = [];
+  state.showAllLog = false;
+  save(state);
+  showToast("Crisis log cleared.", { action: { label: "Undo", onClick: () => undoSolo(mount) } });
+  renderSolo(mount);
 }
 
 
