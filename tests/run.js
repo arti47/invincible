@@ -432,6 +432,49 @@ const run = async () => {
   });
   ok("every archetype at every rank spends its budget exactly", archetypeBudget.length === 0, archetypeBudget.join(", "));
 
+  /* ---------------------------------------------------------------- turn order */
+  section("Turn order (§3.17)");
+  const turn = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const mk = (name, card, attrs) => ({ id: name, name, card, acted: false, health: 5, maxHealth: 5,
+      resolve: 3, maxResolve: 3, armor: 0, slugfest: 2, attrs, minionCount: 0, huge: false,
+      conditions: {}, altitude: "ground", zone: 1, actions: { full: true, quick: true } });
+    const a = mk("A", 2, { fighting: 5, agility: 4 });
+    const b = mk("B", 5, { fighting: 4, agility: 4 });
+    const combat = { active: true, round: 1, combatants: [a, b], wreckedZones: [], log: [] };
+
+    const before = Combat.currentTurn(combat).name;
+    const next = Combat.spendAttackTurn(combat, a, "slugfest");
+    const after = Combat.currentTurn(combat).name;
+
+    // A charge costs the quick action too.
+    const c = mk("C", 1, { strength: 5 });
+    Combat.spendAttackTurn({ combatants: [c] }, c, "charge");
+
+    // Defending is a quick action out of turn: it must not end the defender's turn.
+    const d = mk("D", 3, { fighting: 4 });
+    Combat.spendDefence(d);
+
+    // Once everyone has acted there is no current turn — that is the cue to draw the next round.
+    Combat.spendAttackTurn(combat, b, "shooting");
+    return {
+      before, after, returned: next && next.name,
+      attackerActed: a.acted, attackerFull: a.actions.full, attackerQuick: a.actions.quick,
+      chargeQuick: c.actions.quick, chargeFull: c.actions.full,
+      defenderActed: d.acted, defenderQuick: d.actions.quick, defenderFull: d.actions.full,
+      roundDone: Combat.currentTurn(combat),
+    };
+  });
+  ok("the lowest card acts first", turn.before === "A", turn.before);
+  ok("attacking marks the attacker as acted", turn.attackerActed === true);
+  ok("attacking spends the full action", turn.attackerFull === false);
+  ok("a slugfest leaves the quick action", turn.attackerQuick === true);
+  ok("a charge spends the quick action too", turn.chargeFull === false && turn.chargeQuick === false);
+  ok("the turn moves to the next card after an attack", turn.after === "B", turn.after);
+  ok("the attack reports who is up next", turn.returned === "B", String(turn.returned));
+  ok("defending costs a quick action but not the turn", turn.defenderActed === false && turn.defenderQuick === false && turn.defenderFull === true);
+  ok("no current turn once everyone has acted", turn.roundDone === null);
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {

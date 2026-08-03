@@ -58,6 +58,26 @@ export function dealCard(combat, cb) {
   return combat;
 }
 
+/**
+ * Spend what an attack costs and end the attacker's turn (§3.17). Every attack kind is a full
+ * action; a charge is full + quick. With the full action gone the turn is over, so `acted` is set
+ * and `currentTurn` moves on to the next card.
+ */
+export function spendAttackTurn(combat, attacker, kind) {
+  attacker.actions = attacker.actions || { full: true, quick: true };
+  attacker.actions.full = false;
+  if (kind === "charge") attacker.actions.quick = false;
+  attacker.acted = true;
+  return currentTurn(combat);
+}
+
+/** Blocking and dodging are quick actions taken out of turn — they cost the action, not the turn. */
+export function spendDefence(target) {
+  target.actions = target.actions || { full: true, quick: true };
+  target.actions.quick = false;
+  return target;
+}
+
 /** Whose turn it is: lowest card first, skipping anyone who has already acted (§3.17). */
 export function currentTurn(combat) {
   return combat.combatants.find((c) => !c.acted && c.health > 0) || null;
@@ -179,7 +199,7 @@ async function openAttack(attacker, combat, mount) {
     const declared = dice > 0 && await confirmModal(
       `Declared before the roll: does ${target.name} spend a quick action to ${defKind}? They would roll ${dice} ${defAttr.toUpperCase()} dice, and each 6 cancels one of the attacker's.`,
       { title: defKind === "block" ? "Block?" : "Dodge?", confirmLabel: `They ${defKind}`, cancelLabel: "No defence" });
-    if (declared) defence = { kind: defKind, dice };
+    if (declared) { defence = { kind: defKind, dice }; spendDefence(target); }
   }
 
   const heroChar = attacker.refId ? Store.getCharacter(attacker.refId) : null;
@@ -188,13 +208,17 @@ async function openAttack(attacker, combat, mount) {
     ? Roller.makeAttack(heroChar, kind, { weapon, huge: target.huge, targetName: target.name })
     : npcAttack(attacker, kind, target);
 
+  // The action is spent as soon as the dice hit the table, hit or miss.
+  const upNext = spendAttackTurn(combat, attacker, kind);
+  save(combat);
+
   let resolved = null;
   if (defence) {
     const dr = Roller.rollRaw(defence.dice, `${target.name} ${defence.kind}s`, { pushable: false });
     resolved = { ...defence, roll: dr,
       ...(defence.kind === "block" ? Roller.resolveBlock(roll, dr) : Roller.resolveDodge(roll, dr)) };
   }
-  showAttack(attacker, target, kind, roll, resolved, combat, mount);
+  showAttack(attacker, target, kind, roll, resolved, combat, mount, upNext);
 }
 
 /** Weapons the hero could be swinging; skipped entirely when they have none. */
@@ -216,7 +240,7 @@ function npcAttack(attacker, kind, target) {
   return r;
 }
 
-function showAttack(attacker, target, kind, roll, defence, combat, mount) {
+function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext = null) {
   const effective = defence ? defence.remainingSixes : roll.sixes;
   const stunts = Roller.stuntsFor(kind, { huge: target.huge });
   const available = Math.max(0, effective - 1);
@@ -260,6 +284,9 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount) {
       }
     }
     body.append(el("p", { class: "cite" }, el("a", { href: "#/rules/stunts", class: "rules-link" }, "Rules: Stunts")));
+    body.append(el("p", { class: "stage-label",
+      text: upNext ? `Turn spent — ${upNext.name} acts next (card #${upNext.card || "—"}).`
+        : "Turn spent — everyone has acted. Draw the next round." }));
   };
 
   const damageFor = () => {
@@ -276,7 +303,10 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount) {
       return true;
     } });
   }
-  modal({ title: `${attacker.name} → ${target.name}`, body, actions }).promise.then(() => renderCombat(mount));
+  modal({ title: `${attacker.name} → ${target.name}`, body, actions }).promise.then(() => {
+    announce(upNext ? `${upNext.name} acts next.` : "Everyone has acted.");
+    renderCombat(mount);
+  });
 }
 
 /** Damage lands on the board: minions drop one per point, heroes route through the crit engine. */
