@@ -85,9 +85,9 @@ const NEXT_STEP = [
   { label: "Engage a crisis",
     why: "Pick one of the dangers below and start a crisis timer for it. A running timer is what makes the clock tick without a GM.",
     run: (state, mount) => focusCard(state, mount, "solo-crises") },
-  { label: "Check your timers",
-    why: "Play the scene, then check every running timer as time passes. Ask the oracles whenever you would have asked a GM.",
-    run: (state, mount) => focusCard(state, mount, "solo-timers") },
+  { label: "Say what your hero just did",
+    why: "The timers are set — now play. Decide what your hero does in the fiction, then tell the app: it works out which checks that action triggers and rolls them in order. You never have to pick a timer yourself.",
+    run: (state, mount) => whatHappened(state, mount) },
   { label: "Play a social scene",
     why: "Something resolved. A social scene restores Resolve equal to your PRESENCE — take it before the next danger.",
     run: (state, mount) => socialScene(state, mount) },
@@ -1239,6 +1239,19 @@ async function addObjective(state, mount) {
   logEvent(state, `Objective set: ${name} (${rung.name})`);
   save(state);
   renderSolo(mount);
+  // Setting an objective is where players most often stall: nothing rolls, so it feels like a
+  // dead end. Say plainly what the next move is.
+  modal({ title: "Objective set",
+    body: el("div", {},
+      el("p", { class: "lede", text: `${name} — ${rung.name}, paying ${rung.karma} karma when you reach it.` }),
+      el("p", { text: "Nothing to roll yet. An objective only advances on a milestone — something that genuinely moved the goal, for or against. It is never on a clock." }),
+      el("h4", { class: "section", text: "So what now?" }),
+      el("p", { text: "Decide what your hero actually does next, then use \u201cSay what your hero just did\u201d. The app fires whatever that action triggers: an encounter check if you are exploring, crisis timers as time passes, an objective check when you hit a milestone." }),
+      el("p", { class: "muted small", text: "You only need an encounter timer if that action means moving through or searching somewhere a fight could break out. The Encounter panel has a \u201cDo I need one right now?\u201d check if you are unsure." })),
+    actions: [
+      { label: "Got it", value: null, variant: "ghost" },
+      { label: "Say what my hero just did", variant: "primary", onClick: () => { setTimeout(() => whatHappened(load(), mount), 0); } },
+    ] });
 }
 
 /** Audit A24: 1s cancel 6s; a net-negative result pushes the objective one step back. */
@@ -1478,6 +1491,32 @@ function movementPicker(state, mount) {
   return wrap;
 }
 
+
+/**
+ * The commonest place to get stuck: timers are running, and it is unclear whether an encounter
+ * timer belongs in this scene. Ch.9 scopes it to exploring or evading — somewhere a fight could
+ * plausibly start and it is uncertain whether you are found. A fixed, known scene never needs one.
+ */
+async function encounterNeeded(state, mount) {
+  const moving = await modal({ title: "Do I need an encounter timer?",
+    body: el("div", {},
+      el("p", { class: "lede", text: "One question decides it." }),
+      el("p", { text: "Is your hero moving through or searching somewhere the opposition could find them — a patrol, a sweep of an unknown building, sneaking past a cordon, an escape?" }),
+      el("p", { class: "muted small", text: "If instead you are at a fixed scene you already understand — holding up a collapsing floor, talking someone down, fighting something already in front of you — there is nothing to discover, so no encounter timer. Crisis timers and the objective still run." })),
+    actions: [
+      { label: "No — fixed, known scene", value: false, variant: "ghost" },
+      { label: "Yes — exploring or evading", value: true, variant: "primary" },
+    ] }).promise;
+  if (moving === null) return;
+  if (!moving) {
+    showToast("No encounter timer, then. Act toward your objective and use \u201cSay what your hero just did\u201d — it will skip the encounter check.",
+      { timeout: 8000 });
+    return;
+  }
+  showToast("Start one below, then check it once per zone you move through or linger in.", { variant: "good", timeout: 6000 });
+  await startEncounter(state, mount);
+}
+
 function encounterCard(state, mount) {
   const card = el("div", { class: "timer-group", id: "solo-encounter" },
     el("h4", { class: "group-head", text: "Encounter timer" }),
@@ -1485,7 +1524,8 @@ function encounterCard(state, mount) {
       "Your movement mode shifts the odds: rushing is faster but noisier, moving cautiously is slower but safer.",
       "The panel walks the chapter's encounter sequence: check, reveal, spot, avoid or escape, fight, reset, advance time.",
       "Searching a zone takes minutes — it rolls INTUITION and prompts a crisis timer check."]),
-    el("p", { class: "trigger", text: "Start one only for a tense patrol, search or escape where a fight could break out. Ordinary travel needs no encounter timer. Check it once per zone you move through or linger in." }));
+    el("p", { class: "trigger", text: "Start one only for a tense patrol, search or escape where a fight could break out. Ordinary travel needs no encounter timer. Check it once per zone you move through or linger in." }),
+    el("button", { class: "btn tiny ghost", onclick: () => encounterNeeded(state, mount) }, "Do I need one right now?"));
   const sequence = state.encounter ? null : el("details", {},
     el("summary", { text: "Encounter procedure, in order" }),
     el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));

@@ -531,6 +531,57 @@ const run = async () => {
     domGate.length >= 2 && domGate.every((c) => c.current !== c.disabled), JSON.stringify(domGate));
   ok("a blocked Attack explains itself", domGate.every((c) => c.hasTitle));
 
+  // Getting unstuck: step 4 must hand the player an action, not a scroll, and the encounter
+  // question must be answerable where it is asked.
+  const unstuck = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const withTimers = { alert: "x", eventChecks: 1, timers: [{ id: "t" }], objectives: [{ id: "o" }],
+      allies: [], crises: [], awaitingSocial: false, resolved: 0 };
+    document.querySelectorAll(".modal-backdrop").forEach((n) => n.remove());
+    return { step: Solo.currentStep(withTimers) };
+  });
+  ok("timers running puts the player on loop step 4", unstuck.step === 3, String(unstuck.step));
+
+  await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 1, alert: "Chemical fire at the docks", crises: [],
+      timers: [{ id: "t1", name: "the tank ruptures", proximity: "distant" }],
+      objectives: [{ id: "o1", name: "clear the bay", status: "farOff", karma: 4 }],
+      allies: [], encounter: null, mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, resolved: 0,
+    }));
+    location.hash = "#/solo";
+  });
+  await page.waitForTimeout(300);
+  const soloStuck = await page.evaluate(() => {
+    const card = document.querySelector("#solo-next");
+    const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    return {
+      heading: card?.querySelector("h2")?.textContent || "",
+      why: card?.querySelector(".next-step-why")?.textContent || "",
+      hasNeedCheck: labels.includes("Do I need one right now?"),
+    };
+  });
+  ok("step 4 offers the narrate-then-roll control", /what your hero just did/i.test(soloStuck.heading), soloStuck.heading);
+  ok("step 4 explains you never pick a timer yourself", /which checks that action triggers/i.test(soloStuck.why), soloStuck.why.slice(0, 60));
+  ok("the encounter panel answers whether a timer is needed", soloStuck.hasNeedCheck);
+
+  const needed = await page.evaluate(async () => {
+    Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "Do I need one right now?").click();
+    await new Promise((r) => setTimeout(r, 150));
+    const dlg = document.querySelector(".modal");
+    const out = { title: dlg?.getAttribute("aria-label") || "", body: dlg?.textContent || "",
+      actions: Array.from(dlg?.querySelectorAll(".modal-actions .btn") || []).map((b) => b.textContent.trim()) };
+    document.querySelectorAll(".modal-backdrop").forEach((n) => n.remove());
+    return out;
+  });
+  ok("the encounter decision is a single question", /Do I need an encounter timer/.test(needed.title), needed.title);
+  ok("it distinguishes exploring from a fixed scene",
+    needed.actions.some((a) => /exploring or evading/i.test(a)) && needed.actions.some((a) => /fixed, known scene/i.test(a)),
+    needed.actions.join(" | "));
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {
