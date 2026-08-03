@@ -475,6 +475,62 @@ const run = async () => {
   ok("defending costs a quick action but not the turn", turn.defenderActed === false && turn.defenderQuick === false && turn.defenderFull === true);
   ok("no current turn once everyone has acted", turn.roundDone === null);
 
+  const attackGate = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const mk = (id, card) => ({ id, name: id, card, acted: false, health: 5, maxHealth: 5, resolve: 3,
+      maxResolve: 3, armor: 0, slugfest: 2, attrs: { fighting: 4, agility: 4 }, minionCount: 0,
+      huge: false, conditions: {}, altitude: "ground", zone: 1, actions: { full: true, quick: true } });
+    const a = mk("A", 2), b = mk("B", 5), dead = mk("D", 9);
+    dead.health = 0;
+    const combat = { active: true, round: 1, combatants: [a, b, dead], wreckedZones: [], log: [] };
+    const out = {
+      current: Combat.attackBlockedReason(combat, a),
+      outOfTurn: Combat.attackBlockedReason(combat, b),
+      broken: Combat.attackBlockedReason(combat, dead),
+    };
+    Combat.spendAttackTurn(combat, a, "slugfest");
+    out.afterActing = Combat.attackBlockedReason(combat, a);
+    out.nowCurrent = Combat.attackBlockedReason(combat, b);
+    Combat.spendAttackTurn(combat, b, "slugfest");
+    out.roundDone = Combat.attackBlockedReason(combat, a);
+    return out;
+  });
+  ok("the current combatant may attack", attackGate.current === null, String(attackGate.current));
+  ok("a combatant out of turn may not attack", /turn/.test(attackGate.outOfTurn || ""), String(attackGate.outOfTurn));
+  ok("a broken combatant may not attack", /Broken/.test(attackGate.broken || ""), String(attackGate.broken));
+  ok("a combatant who has acted may not attack again", /already acted/.test(attackGate.afterActing || ""), String(attackGate.afterActing));
+  ok("the next combatant becomes attackable in turn", attackGate.nowCurrent === null, String(attackGate.nowCurrent));
+  ok("nobody may attack once the round is done", !!attackGate.roundDone, String(attackGate.roundDone));
+
+  // The greying must be real: a blocked control carries the disabled attribute, not just opacity.
+  await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Combat = await import("/src/combat.js");
+    localStorage.clear();
+    const c = Store.createCharacter({});
+    Store.setActiveCharacter(c.id);
+    Combat.startActionScene();
+    const combat = Store.getCombat();
+    const extra = { ...combat.combatants[0], id: "npc2", name: "Thug", card: 9, refId: null, acted: false };
+    combat.combatants.push(extra);
+    combat.combatants.sort((x, y) => (x.card || 99) - (y.card || 99));
+    Store.saveCombat(combat);
+    location.hash = "#/combat";
+  });
+  await page.waitForTimeout(300);
+  const domGate = await page.evaluate(() => {
+    const cards = Array.from(document.querySelectorAll(".combatant"));
+    const attackOf = (card) => Array.from(card.querySelectorAll("button")).find((b) => b.textContent.trim() === "Attack");
+    return cards.map((card) => ({
+      current: card.classList.contains("current"),
+      disabled: !!attackOf(card)?.disabled,
+      hasTitle: !!attackOf(card)?.getAttribute("title"),
+    }));
+  });
+  ok("only the current combatant's Attack is enabled",
+    domGate.length >= 2 && domGate.every((c) => c.current !== c.disabled), JSON.stringify(domGate));
+  ok("a blocked Attack explains itself", domGate.every((c) => c.hasTitle));
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {
@@ -1345,13 +1401,14 @@ const run = async () => {
     location.hash = "#/combat";
     await new Promise((r) => setTimeout(r, 250));
     const cards = Array.from(document.querySelectorAll("#screen .combatant"));
-    const withAttack = cards.filter((n) => Array.from(n.querySelectorAll("button")).some((b) => b.textContent.trim() === "Attack")).length;
+    const attackBtn = (n) => Array.from(n.querySelectorAll("button")).find((b) => b.textContent.trim() === "Attack");
+    const withAttack = cards.filter((n) => { const b = attackBtn(n); return b && !b.disabled; }).length;
     const living = Store.getCombat().combatants.filter((x) => x.health > 0).length;
     const down = Store.getCombat().combatants.filter((x) => x.health <= 0).length;
 
     // driving one: kind → target → defence → roll, then Apply damage
-    const first = cards.find((n) => Array.from(n.querySelectorAll("button")).some((b) => b.textContent.trim() === "Attack"));
-    Array.from(first.querySelectorAll("button")).find((b) => b.textContent.trim() === "Attack").click();
+    const first = cards.find((n) => { const b = attackBtn(n); return b && !b.disabled; });
+    attackBtn(first).click();
     await new Promise((r) => setTimeout(r, 150));
     const kindTitle = document.querySelector(".modal")?.getAttribute("aria-label") || "";
     const kinds = Array.from(document.querySelectorAll(".modal .choice")).map((x) => x.textContent);
@@ -1362,9 +1419,11 @@ const run = async () => {
       heroBefore, heroNow: sheet.health, broken: sheet.broken, crits: sheet.crits.length,
       withAttack, living, down, total: cards.length, kindTitle, kinds };
   });
-  ok("every living combatant can attack from the board, and a broken one cannot",
-    fight.withAttack === fight.living && fight.living >= 2 && fight.down >= 1,
-    `${fight.withAttack} attack / ${fight.living} living / ${fight.down} down`);
+  // Turn order gates this now: exactly the combatant whose card is up may attack, never the
+  // whole living board, and never a broken one.
+  ok("only the combatant whose turn it is can attack, and a broken one never can",
+    fight.withAttack === 1 && fight.living >= 2 && fight.down >= 1,
+    `${fight.withAttack} enabled / ${fight.living} living / ${fight.down} down`);
   ok("the attack asks for a kind first", /attacks — how\?/.test(fight.kindTitle) && fight.kinds.length === 4,
     `${fight.kindTitle} — ${fight.kinds.length}`);
   ok("damage to a minion group drops one per point",

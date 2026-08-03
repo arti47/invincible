@@ -311,7 +311,8 @@ textarea.input { min-height: 90px; }
 .combatants { display: flex; flex-direction: column; gap: .5rem; margin: .6rem 0; }
 .combatant { border: 3px solid var(--line); border-radius: 8px; padding: .55rem; background: var(--panel); box-shadow: var(--shadow); }
 .combatant.adversary { background: color-mix(in srgb, var(--danger) 10%, var(--panel)); }
-.combatant.acted { opacity: .6; }
+/* Spent, not dead: its Damage / Un-act / Remove controls are still live. */
+.combatant.acted { opacity: .78; }
 .combatant.down { border-color: var(--danger); }
 .cbt-head { display: flex; align-items: center; gap: .5rem; }
 .cbt-card { font-family: Impact, sans-serif; font-size: 1.2rem; min-width: 2.2rem; }

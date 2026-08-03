@@ -383,13 +383,29 @@ export function renderCombat(mount) {
   renderTasks(mount);
 }
 
+/**
+ * Why this combatant cannot attack right now, or null if they can. Turn order is the rule
+ * (§3.17: work down the initiative cards); acting out of order is done by holding off, which
+ * swaps cards, not by tapping another card's Attack button.
+ */
+export function attackBlockedReason(combat, cb) {
+  if (cb.health <= 0) return "Broken — cannot move, roll attributes or use powers.";
+  if (cb.acted) return `${cb.name} has already acted this round.`;
+  const up = currentTurn(combat);
+  if (up && up.id !== cb.id) return `It is ${up.name}'s turn (card #${up.card || "—"}). Use Hold off to change the order.`;
+  if (!up) return "Everyone has acted — draw the next round.";
+  return null;
+}
+
 function combatantCard(cb, combat, mount, isUp = false) {
   const isMinion = cb.minionCount > 0;
+  const blocked = attackBlockedReason(combat, cb);
   return el("div", { class: `combatant ${cb.side} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""} ${isUp ? "current" : ""}` },
     el("div", { class: "cbt-head" },
       el("span", { class: "cbt-card", text: cb.card ? `#${cb.card}` : "—" }),
       el("strong", { text: cb.name + (isMinion ? ` (${cb.health} minions)` : "") }),
       isUp ? el("span", { class: "chip", text: "Acts now" }) : null,
+      cb.acted ? el("span", { class: "chip muted", text: "Acted" }) : null,
       cb.huge ? el("span", { class: "chip warn", text: "Huge" }) : null),
     el("div", { class: "cbt-stats" },
       el("span", { text: isMinion ? `Minions ${cb.health}/${cb.maxHealth}` : `Health ${cb.health}/${cb.maxHealth}` }),
@@ -399,9 +415,17 @@ function combatantCard(cb, combat, mount, isUp = false) {
       el("span", { text: cb.altitude })),
     // A turn in order: pass your place, move, resolve what hits you, then mark the turn spent.
     el("div", { class: "cbt-actions" },
-      cb.health > 0 ? el("button", { class: "btn tiny primary", onclick: () => openAttack(cb, combat, mount) }, "Attack") : null,
-      el("button", { class: "btn tiny ghost", onclick: () => holdOff(cb, combat, mount) }, "Hold off"),
+      el("button", {
+        class: "btn tiny primary", disabled: !!blocked, title: blocked || `${cb.name} attacks`,
+        onclick: () => openAttack(cb, combat, mount),
+      }, "Attack"),
+      el("button", {
+        class: "btn tiny ghost", disabled: cb.acted || cb.health <= 0,
+        title: cb.acted ? "Only before you act." : "Swap initiative cards with someone later in the order.",
+        onclick: () => holdOff(cb, combat, mount),
+      }, "Hold off"),
       el("button", { class: "btn tiny ghost", onclick: () => cycleAltitude(cb, combat, mount) }, "Altitude"),
+      // Damage arrives out of turn, so this one stays live whatever the initiative says.
       el("button", { class: "btn tiny ghost", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
       el("button", { class: "btn tiny", onclick: () => { cb.acted = !cb.acted; save(combat); renderCombat(mount); } }, cb.acted ? "Un-act" : "Acted"),
       el("button", { class: "btn tiny ghost", onclick: () => { combat.combatants = combat.combatants.filter((x) => x.id !== cb.id); save(combat); renderCombat(mount); } }, "Remove")));
