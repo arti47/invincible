@@ -511,3 +511,12 @@ select.select option { background: var(--panel); color: var(--ink); }
 .row-actions.steps { gap: .45rem; }
 .row-actions.steps .btn { flex: 1 1 8.5rem; }
 .row-actions.steps .btn.primary { flex-basis: 100%; }
+
+/* ---- solo: where you are in the encounter procedure ---- */
+.step-marker { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin: .7rem 0 .1rem; }
+.step-n { font: 700 .7rem/1.6 inherit; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--chipbg); border: 2px solid var(--line); border-radius: 999px; padding: 0 .5rem; }
+.step-name { font-size: .88rem; font-weight: 600; }
+.step-more { font: inherit; font-size: .78rem; background: none; border: 0; padding: 0;
+  color: var(--accent-2); text-decoration: underline dotted; cursor: pointer; min-height: 32px; }
+.step-list .current-step { font-weight: 700; color: var(--ink); }

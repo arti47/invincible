@@ -1300,6 +1300,11 @@ async function allyCheck(state, ally, mount, inFight) {
  *   advance  11   check active crisis timers, then 12: round again
  */
 const ENCOUNTER_PHASES = ["moving", "revealed", "standoff", "fight", "reset", "advance"];
+
+/** A two-or-three word name per printed step, so the marker is a position rather than a paragraph. */
+const STEP_NAMES = ["choose your mode", "encounter check", "shift the presence", "still moving",
+  "who spots whom", "what you are facing", "reveal, hide or slip past", "escape or stand",
+  "draw initiative", "reset the timer", "time passes", "on to the next zone"];
 const SPOT_POWERS = ["DETECTION", "ENHANCED SENSES", "TELEPATHY"];
 
 function encMode(state) { return S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0]; }
@@ -1331,6 +1336,17 @@ export function powerOptionAvailable(state) {
  * How you are moving, offered where you actually choose it. It shifts the encounter check, both
  * INTUITION rolls and the crisis timers at once, so each option spells out its own trade.
  */
+/** The full printed procedure, with the step you are on marked. */
+function showSequence(state) {
+  const i = sequenceIndex(state);
+  modal({ title: "Encounter procedure",
+    body: el("div", {},
+      el("p", { class: "muted small", text: "The chapter's twelve steps. The panel only ever offers the controls the current step allows." }),
+      el("ol", { class: "small step-list" }, ...S.ENCOUNTER_SEQUENCE.map((t, n) =>
+        el("li", { class: n === i ? "current-step" : "", text: t })))),
+    actions: [{ label: "OK", variant: "primary" }] });
+}
+
 function movementPicker(state, mount) {
   const wrap = el("div", { class: "mode-picker" },
     el("span", { class: "mode-label", text: "How are you moving?" }));
@@ -1359,9 +1375,9 @@ function encounterCard(state, mount) {
       "The panel walks the chapter's encounter sequence: check, reveal, spot, avoid or escape, fight, reset, advance time.",
       "Searching a zone takes minutes — it rolls INTUITION and prompts a crisis timer check."]),
     el("p", { class: "trigger", text: "Start one only for a tense patrol, search or escape where a fight could break out. Ordinary travel needs no encounter timer. Check it once per zone you move through or linger in." }));
-  const sequence = el("details", {}, el("summary", { text: "Encounter procedure, in order" }),
-    el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t, i) => el("li", {
-      class: state.encounter ? (i === sequenceIndex(state) ? "current-step" : "") : "", text: t }))));
+  const sequence = state.encounter ? null : el("details", {},
+    el("summary", { text: "Encounter procedure, in order" }),
+    el("ol", { class: "small" }, ...S.ENCOUNTER_SEQUENCE.map((t) => el("li", { text: t }))));
 
   const placeBlock = () => (state.place
     ? el("div", { class: "oracle-answer place" },
@@ -1380,7 +1396,7 @@ function encounterCard(state, mount) {
       el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
     const p0 = placeBlock();
     if (p0) card.append(p0);
-    card.append(sequence);
+    if (sequence) card.append(sequence);
     return card;
   }
 
@@ -1402,7 +1418,13 @@ function encounterCard(state, mount) {
       : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer.` }));
   }
   card.append(movementPicker(state, mount));
-  card.append(el("p", { class: "stage-label", text: `Step ${sequenceIndex(state) + 1} of 12 — ${S.ENCOUNTER_SEQUENCE[sequenceIndex(state)]}` }));
+  {
+    const i = sequenceIndex(state);
+    card.append(el("p", { class: "step-marker" },
+      el("span", { class: "step-n", text: `Step ${i + 1}/12` }),
+      el("span", { class: "step-name", text: STEP_NAMES[i] }),
+      el("button", { class: "step-more", onclick: () => showSequence(state) }, "see all 12")));
+  }
 
   const row = el("div", { class: "row-actions steps" });
 
@@ -1454,7 +1476,6 @@ function encounterCard(state, mount) {
       el("p", { class: "lede", text: enc.detail.text }),
       enc.detail.note ? el("p", { class: "muted small", text: enc.detail.note }) : null));
   }
-  card.append(sequence);
   return card;
 }
 

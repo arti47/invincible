@@ -1618,7 +1618,7 @@ const run = async () => {
       const panel = document.querySelector("#solo-encounter");
       return {
         labels: Array.from(panel.querySelectorAll(".row-actions button, .row-actions a")).map((b) => b.textContent.trim()),
-        step: panel.querySelector(".stage-label")?.textContent || "",
+        step: panel.querySelector(".step-marker")?.textContent || "",
         stats: panel.querySelector(".timer-status")?.textContent || "",
       };
     };
@@ -1639,7 +1639,7 @@ const run = async () => {
   ok("every encounter phase maps onto a printed step",
     JSON.stringify(encounter.steps) === JSON.stringify({ moving: 1, afterCheck: 3, revealed: 4, unspotted: 6, spotted: 7, fight: 8, reset: 9, advance: 10 }),
     JSON.stringify(encounter.steps));
-  ok("the panel names the step it is standing on", /^Step \d+ of 12 — /.test(encounter.moving.step), encounter.moving.step);
+  ok("the panel names the step it is standing on", /^Step \d+\/12/.test(encounter.moving.step), encounter.moving.step);
   ok("moving offers the check and a search",
     encounter.moving.labels.includes("Move / linger — check") && encounter.moving.labels.includes("Search this zone"),
     encounter.moving.labels.join(" | "));
