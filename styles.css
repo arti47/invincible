@@ -498,3 +498,16 @@ select.select option { background: var(--panel); color: var(--ink); }
 .timer.t-gone { opacity: .7; }
 /* the tone class must never repaint the row's text - .good/.warn are global colour utilities */
 .timer[class*="t-"] { color: var(--ink); }
+
+/* ---- solo: choosing how you move, where it matters ---- */
+.mode-picker { margin: .5rem 0 .2rem; }
+.mode-label { display: block; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .25rem; }
+.mode-picker .chip { flex-direction: column; align-items: flex-start; gap: 0; padding: .3rem .55rem; line-height: 1.25; }
+.mode-name { font-weight: 700; font-size: .85rem; }
+.mode-effect { font-size: .7rem; color: var(--muted); }
+.chip.selected .mode-effect { color: inherit; opacity: .8; }
+.row-actions.minor { margin-top: .35rem; }
+/* The encounter step's own controls share the row evenly instead of leaving orphans. */
+.row-actions.steps { gap: .45rem; }
+.row-actions.steps .btn { flex: 1 1 8.5rem; }
+.row-actions.steps .btn.primary { flex-basis: 100%; }

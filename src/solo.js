@@ -1327,6 +1327,30 @@ export function powerOptionAvailable(state) {
   return { power, canOutmaneuver, canPrepare };
 }
 
+/**
+ * How you are moving, offered where you actually choose it. It shifts the encounter check, both
+ * INTUITION rolls and the crisis timers at once, so each option spells out its own trade.
+ */
+function movementPicker(state, mount) {
+  const wrap = el("div", { class: "mode-picker" },
+    el("span", { class: "mode-label", text: "How are you moving?" }));
+  const row = el("div", { class: "chiprow" });
+  for (const m of S.MOVEMENT_MODES) {
+    const bits = [
+      m.encounter ? `${m.encounter > 0 ? "+" : ""}${m.encounter} enemy die` : null,
+      m.ownIntuition ? `${m.ownIntuition > 0 ? "+" : ""}${m.ownIntuition} your INTUITION` : null,
+      m.crisis ? `${m.crisis > 0 ? "+" : ""}${m.crisis} crisis die` : null,
+    ].filter(Boolean);
+    row.append(el("button", {
+      class: `chip selectable ${state.mode === m.key ? "selected" : ""}`, title: m.desc,
+      onclick: () => { state.mode = m.key; logEvent(state, `Moving ${m.name.replace(" (default)", "").toLowerCase()}.`); save(state); renderSolo(mount); },
+    }, el("span", { class: "mode-name", text: m.name.replace(" (default)", "") }),
+      el("span", { class: "mode-effect", text: bits.length ? bits.join(" · ") : "no modifiers" })));
+  }
+  wrap.append(row);
+  return wrap;
+}
+
 function encounterCard(state, mount) {
   const card = el("div", { class: "timer-group", id: "solo-encounter" },
     el("h4", { class: "group-head", text: "Encounter timer" }),
@@ -1375,11 +1399,12 @@ function encounterCard(state, mount) {
       el("span", { class: "timer-status", text: `${rung.name}${rung.dice ? ` · roll ${count(dice, "die", "dice")}` : ""}` })));
     card.append(el("p", { class: "timer-meaning", text: left === 0
       ? "Something is here. Work through the steps below."
-      : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer, and moving ${mode.name.replace(" (default)", "").toLowerCase()} means ${mode.encounter === 0 ? "no change to the dice" : `${mode.encounter > 0 ? "+" : ""}${mode.encounter} enemy die`}.` }));
+      : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer.` }));
   }
+  card.append(movementPicker(state, mount));
   card.append(el("p", { class: "stage-label", text: `Step ${sequenceIndex(state) + 1} of 12 — ${S.ENCOUNTER_SEQUENCE[sequenceIndex(state)]}` }));
 
-  const row = el("div", { class: "row-actions" });
+  const row = el("div", { class: "row-actions steps" });
 
   if (phase === "moving") {
     row.append(el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"));
@@ -1415,9 +1440,10 @@ function encounterCard(state, mount) {
     row.append(el("button", { class: "btn primary", onclick: () => advanceTime(state, mount) }, "Advance time — check crisis timers"));
   }
 
-  row.append(el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"));
-  row.append(el("button", { class: "btn ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Clear"));
   card.append(row);
+  card.append(el("div", { class: "row-actions minor" },
+    el("button", { class: "btn tiny ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
+    el("button", { class: "btn tiny ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Stop the encounter timer")));
 
   const p = placeBlock();
   if (p) card.append(p);

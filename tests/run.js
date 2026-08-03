@@ -1254,6 +1254,62 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- the encounter panel carries its own controls */
+  const encPanel = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    const h = Derived.blankCharacter();
+    h.id = "enc_scout"; h.identity.heroName = "Scout";
+    h.powers = [{ name: "ENHANCED SENSES", level: 0, boosts: [], limits: [] }];
+    Store.saveCharacter(h); Store.setActiveCharacter("enc_scout");
+    const board = (mode) => JSON.stringify({ crisisLevel: 3, alert: "x", alertParts: null, crises: [],
+      timers: [], allies: [], objectives: [],
+      encounter: { presence: "closing", phase: "moving", lastCheck: { faces: [6, 2, 3], sixes: 1, ones: 0, highest: 6 } },
+      mode, log: [], eventChecks: 2, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 });
+    const show = async (mode) => {
+      localStorage.setItem("invincible:solo", board(mode));
+      location.hash = "#/home"; location.hash = "#/solo";
+      await new Promise((r) => setTimeout(r, 220));
+      const panel = document.querySelector("#solo-encounter");
+      return {
+        modes: Array.from(panel.querySelectorAll(".mode-picker .chip")).map((c) => c.querySelector(".mode-name")?.textContent),
+        effects: Array.from(panel.querySelectorAll(".mode-picker .mode-effect")).map((c) => c.textContent),
+        selected: panel.querySelector(".mode-picker .chip.selected .mode-name")?.textContent || "",
+        status: panel.querySelector(".timer-status")?.textContent || "",
+        rows: panel.querySelectorAll(".row-actions").length,
+        minor: Array.from(panel.querySelectorAll(".row-actions.minor button")).map((b) => b.textContent.trim()),
+      };
+    };
+    const alert = await show("alert");
+    const cautious = await show("cautious");
+    const rushed = await show("rushed");
+    // clicking a mode chip must actually change the stored mode
+    const chip = Array.from(document.querySelectorAll("#solo-encounter .mode-picker .chip"))
+      .find((c) => /Rushed/.test(c.textContent));
+    chip.click();
+    await new Promise((r) => setTimeout(r, 220));
+    const stored = JSON.parse(localStorage.getItem("invincible:solo")).mode;
+    const afterClick = document.querySelector("#solo-encounter .mode-picker .chip.selected .mode-name")?.textContent || "";
+    localStorage.removeItem("invincible:solo");
+    return { alert, cautious, rushed, stored, afterClick };
+  });
+  ok("the encounter panel lets you choose how you are moving",
+    JSON.stringify(encPanel.alert.modes) === JSON.stringify(["Alert", "Cautious", "Rushed"]), JSON.stringify(encPanel.alert.modes));
+  ok("each mode spells out what it costs and buys",
+    /no modifiers/.test(encPanel.alert.effects[0]) && /enemy die/.test(encPanel.alert.effects[1]) && /crisis die/.test(encPanel.alert.effects[1]),
+    encPanel.alert.effects.join(" | "));
+  ok("the selected mode is marked", encPanel.cautious.selected === "Cautious" && encPanel.rushed.selected === "Rushed");
+  ok("changing the mode changes the dice the panel says to roll",
+    /roll 5 dice/.test(encPanel.alert.status) && /roll 4 dice/.test(encPanel.cautious.status) && /roll 6 dice/.test(encPanel.rushed.status),
+    `${encPanel.alert.status} || ${encPanel.cautious.status} || ${encPanel.rushed.status}`);
+  ok("picking a mode from the encounter panel sticks", encPanel.stored === "rushed" && encPanel.afterClick === "Rushed");
+  ok("panel utilities sit apart from the step's own controls",
+    encPanel.alert.rows >= 2 && encPanel.alert.minor.includes("Stop the encounter timer"),
+    encPanel.alert.minor.join(" | "));
+
   /* ------------------------------------------------- every timer reads the same way */
   const timerFmt = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
