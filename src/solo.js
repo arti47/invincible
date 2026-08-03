@@ -867,7 +867,7 @@ function rollOpportunityEvent(state, mount) {
 
 /* ---------------------------------------------------------------- FATE tools */
 
-function rollEventCheck(state) {
+export function rollEventCheck(state) {
   state.eventChecks = (state.eventChecks || 0) + 1;
   const value = roll2d6();
   const entry = tableLookup(S.EVENT_CHECK.entries, value);
@@ -1148,7 +1148,7 @@ async function checkAllTimers(state, mount) {
 }
 
 /** One timer's threat roll. Returns the faces so a single check can also render its dice. */
-function rollTimer(state, timer, pace = 0) {
+export function rollTimer(state, timer, pace = 0) {
   const ladder = S.CRISIS_TIMER.ladder;
   const idx = ladder.findIndex((l) => l.key === timer.proximity);
   const rung = ladder[idx];
@@ -1263,7 +1263,7 @@ async function addObjective(state, mount) {
 
 /** Audit A24: 1s cancel 6s; a net-negative result pushes the objective one step back. */
 /** The objective roll on its own, so a composed move can run it without opening a dialog. */
-function rollObjective(state, obj) {
+export function rollObjective(state, obj) {
   const ladder = S.OBJECTIVE_TIMER.ladder;
   const idx = ladder.findIndex((l) => l.key === obj.status);
   const rung = ladder[idx];
@@ -1377,7 +1377,7 @@ async function addAllies(state, mount) {
 }
 
 /** Audit A25: each 6 is 2 damage in a fight; each 1 drops the status one step. */
-function rollAlly(state, ally, bonus, inFight) {
+export function rollAlly(state, ally, bonus, inFight) {
   const ladder = S.ALLY_TIMER.ladder;
   const idx = ladder.findIndex((l) => l.key === ally.status);
   const rung = ladder[idx];
@@ -1667,7 +1667,7 @@ async function startEncounter(state, mount) {
 
 /** Steps 2-4, and 5-6 when the presence reaches 'encountered'. */
 /** The encounter roll alone: shifts the presence and, on 'encountered', reads behaviour + threat. */
-function rollEncounter(state) {
+export function rollEncounter(state) {
   const enc = state.encounter;
   const ladder = S.ENCOUNTER_TIMER.ladder;
   const idx = encIndex(enc.presence);

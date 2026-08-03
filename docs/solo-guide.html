@@ -1,0 +1,275 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Invincible — Solo Play Guide</title><style>
+@page { size: A4; margin: 18mm 16mm; }
+* { box-sizing: border-box; }
+body { font: 10.5pt/1.5 Georgia, "Times New Roman", serif; color: #000; background: #fff; margin: 0; }
+h1 { font: 700 26pt/1.15 Georgia, serif; margin: 0 0 4pt; letter-spacing: -.4pt; }
+h2 { font: 700 16pt/1.2 Georgia, serif; margin: 22pt 0 6pt; padding-bottom: 3pt;
+     border-bottom: 1.5pt solid #000; page-break-after: avoid; }
+h3 { font: 700 11.5pt/1.25 Georgia, serif; margin: 14pt 0 4pt; page-break-after: avoid; }
+h4 { font: 700 10pt/1.25 Georgia, serif; margin: 10pt 0 3pt; page-break-after: avoid; }
+p { margin: 0 0 7pt; }
+ul, ol { margin: 0 0 8pt; padding-left: 16pt; }
+li { margin-bottom: 3pt; }
+table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9pt;
+        page-break-inside: avoid; }
+th, td { border: .75pt solid #000; padding: 3.5pt 5pt; text-align: left; vertical-align: top; }
+th { background: #e8e8e8; font-weight: 700; }
+tbody tr:nth-child(even) td { background: #f5f5f5; }
+.box { border: 1pt solid #000; padding: 7pt 9pt; margin: 9pt 0; page-break-inside: avoid;
+       background: #f7f7f7; }
+.box-h { font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .6pt;
+         margin-bottom: 4pt; }
+.play { border-left: 3pt solid #000; padding: 6pt 0 6pt 10pt; margin: 10pt 0;
+        page-break-inside: avoid; }
+.play-h { font-weight: 700; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .8pt;
+          margin-bottom: 4pt; }
+.play p:last-child { margin-bottom: 0; }
+.ruleref { font-size: 8.5pt; font-style: italic; margin: -4pt 0 8pt; }
+.dice { display: inline-block; white-space: nowrap; vertical-align: middle; }
+.die { display: inline-block; width: 13pt; height: 13pt; line-height: 12pt; text-align: center;
+       border: .75pt solid #000; margin-right: 2pt; font: 8pt/12pt Georgia, serif; }
+.die.six { background: #000; color: #fff; font-weight: 700; }
+.die.one { background: #cfcfcf; }
+.cover { text-align: center; padding-top: 55mm; page-break-after: always; }
+.cover .sub { font-size: 13pt; margin-top: 8pt; }
+.cover .meta { font-size: 9pt; margin-top: 30mm; }
+.toc { page-break-after: always; }
+.toc ol { padding-left: 18pt; }
+.toc li { margin-bottom: 4pt; }
+.lead { font-size: 11.5pt; }
+.newpage { page-break-before: always; }
+.nb { font-weight: 700; }
+code { font: 9.5pt "Courier New", monospace; }
+</style></head>
+<body>
+<div class="cover">
+  <h1>Solo Play</h1>
+  <div class="sub">A step-by-step guide to Crisis Mode<br>in the Invincible Player app</div>
+  <div class="meta">
+    Every die in the worked session was rolled by the app's own solo engines.<br>
+    The random seed was chosen so the session exercises each mechanic; no individual result was edited.<br>
+    Rules content paraphrased from the core rulebook; a personal play aid.<br>
+    Generated 2026-08-03.
+  </div>
+</div>
+<div class="toc">
+  <h2 style="margin-top:0">Contents</h2>
+  <ol><li>How to use this guide</li><li>The loop</li><li>Steps 1 and 2 — the alert, then the heartbeat</li><li>Step 3 — choosing a crisis and starting timers</li><li>The crisis timer</li><li>The objective timer</li><li>The encounter timer</li><li>The ally timer</li><li>The oracles</li><li>Combat</li><li>Step 5 — the social scene</li><li>Step 6 — ending the crisis</li><li>Common mistakes</li><li>Appendix A — Crisis Event Engine</li><li>Appendix B — Complex Response Engine</li><li>Transitions at a glance</li><li>Appendix C — One-page play aid</li><li>Appendix D — Glossary</li></ol>
+  <p class="lead" style="margin-top:14pt">If you read nothing else, read <span class="nb">§2 The loop</span> and <span class="nb">§13 Transitions at a glance</span>. Between them they contain the whole procedure.</p>
+</div>
+<h2>1 · How to use this guide</h2>
+<p>Crisis Mode is the rulebook's solo mode: it replaces the Game Master with dice oracles and a set of timers. This guide walks the whole procedure in the order you actually play it, and shows the app's controls at each point. Every worked example follows one hero through one complete crisis, from the first alert to going home.</p>
+<p><span class="nb">The dice in this guide are real.</span> Each roll was made by the app's own solo engines while this document was generated, using the same code the app runs during play. Nothing was chosen to look tidy — where a roll went badly, the example carries on with the bad result.</p>
+<div class="box"><div class="box-h">Before you start</div><ul><li>Turn on <span class="nb">Settings → Solo play (Crisis Mode)</span>. A <span class="nb">Solo</span> tab appears in the bottom bar.</li><li>Build a hero on the <span class="nb">Home</span> tab if you have not already. Tick the solo box on the wizard's rank step so the allowance below is applied.</li><li>Keep the <span class="nb">Action</span> tab handy — that is where fights are run when one starts.</li></ul></div>
+<h3>The solo build allowance</h3>
+<p>A solo hero carries the whole story, so the chapter grants a little more:</p>
+<ul><li>Create your hero normally, then add 2 extra attribute points.</li><li>Start with one additional free talent. Durable, Resilience and Second Wind suit solo play.</li><li>Favour powers that support utility and survivability (DUPLICATION, HEALING, QUICKNESS) over powers that mainly aid allies or need GM interpretation (ACTION PLAN, PRECOGNITION).</li><li>Any rank works as long as you generate matching crisis alerts. Global Guardian is recommended.</li><li>Instead of end-of-session karma, solo heroes earn karma by completing objectives on the objective timer.</li></ul>
+<div class="ruleref">The app applies the extra points and the extra free talent automatically once the solo box is ticked on the rank step.</div>
+
+
+<h2>2 · The loop</h2>
+<p>Solo play is a six-step loop. The Solo tab prints it as a numbered strip and highlights the step you are on; the card at the top of the tab always names the single next action.</p>
+<table><thead><tr><th>Step</th><th>What it is</th><th>The app control</th></tr></thead><tbody><tr><td>1</td><td>Generate a crisis alert from the random threat tables or the Complex Response Engine.</td><td><span class="nb">Generate crisis alert</span></td></tr><tr><td>2</td><td>Start the crisis level at 0 and begin making event checks.</td><td><span class="nb">Event check</span></td></tr><tr><td>3</td><td>Choose a crisis and start a crisis timer, plus any ally, objective or encounter timers.</td><td><span class="nb">Engage</span>, on the Crises card</td></tr><tr><td>4</td><td>Make checks, track timers and the crisis level, and engage threats or opportunities.</td><td><span class="nb">Say what your hero just did</span></td></tr><tr><td>5</td><td>After resolving an event, threat or objective, play a social scene — especially to recover Resolve.</td><td><span class="nb">Social scene</span></td></tr><tr><td>6</td><td>Return to any remaining crisis dangers, or head home to rest, recover and earn karma.</td><td><span class="nb">Head home</span></td></tr></tbody></table>
+<div class="box"><div class="box-h">The one rule that keeps the loop moving</div><p>Always have at least one timer running. A timer is what makes the situation change while you are busy — it is the pressure a GM would otherwise apply. If every timer is stopped, nothing is pushing back and play stalls.</p></div>
+<h3>Crisis level</h3>
+<p>A single 0–10 counter for how bad things have got. It rises when event checks fire and when a crisis timer runs out. It feeds back into the dice: a higher level makes crisis events harsher and objectives harder.</p>
+<table><thead><tr><th>Level</th><th>Phase</th><th>Effect on objective checks</th></tr></thead><tbody><tr><td>0–3</td><td>Low danger</td><td>No penalty</td></tr><tr><td>4–7</td><td>Medium danger</td><td>−1 progress die</td></tr><tr><td>8–10</td><td>High danger</td><td>−2 progress dice</td></tr></tbody></table>
+
+
+<h2>3 · Steps 1 and 2 — the alert, then the heartbeat</h2>
+<h3>Step 1 · Generate a crisis alert</h3>
+<p>A crisis alert works like a briefing: a priority message from an agency, a breaking news story, or something your hero witnesses on patrol.</p>
+<p>Press <span class="nb">Generate crisis alert</span>. The app rolls the threat tables that suit your rank and lays the result out as four separate facts — kind, what is happening, where, and a complication. It also seeds the first entry on the <span class="nb">Crises</span> card and resets the crisis level to 0.</p>
+<div class="box"><div class="box-h">If you want the place described</div><p>The alert dialog offers the five location engines — City, Region, Space, Atmosphere, Facility. Roll one when you need to know what somewhere is actually like. The Atmosphere engine is blended into the others automatically so a place gets a mood as well as a shape.</p></div>
+
+<h3>Step 2 · Event checks</h3>
+<p>An event check is the heartbeat of the crisis: 2D6, rolled whenever time passes or you want to know whether the situation turns. It is the main way new trouble arrives.</p>
+<table><thead><tr><th>2D6</th><th>Result</th></tr></thead><tbody><tr><td>2</td><td>Roll for two crisis events; crisis level +2.</td></tr><tr><td>3–4</td><td>Roll for one crisis event; crisis level +1.</td></tr><tr><td>5–10</td><td>No event.</td></tr><tr><td>11–12</td><td>Opportunity event.</td></tr></tbody></table>
+<p>A crisis event is rolled on the <span class="nb">Crisis Event Engine</span>: D66 picks one of 36 focuses, then 2D6 plus the current crisis level picks the severity band (2-10 / 11-15 / 16+). Because the level is added, an escalating crisis produces harsher events by itself.</p>
+<div class="play"><div class="play-h">The session so far</div>
+<p><span class="nb">Backdraft</span> — a Global Guardian — answers an alert at the docks: a reactor casualty aboard a berthed freighter. Crisis level 0. First event check:</p>
+<p>2D6 → <span class="nb">4</span>. Roll for one crisis event; crisis level +1.</p>
+<p>The engine gives: <span class="nb">Environment: Minor environmental hazard</span> <span style="font-size:9pt">(Focus D66 31 · detail 2D6 + crisis level = 5 (2-10))</span></p>
+<p>Crisis level is now <span class="nb">1</span>.</p>
+</div>
+
+
+<h2>4 · Step 3 — choosing a crisis and starting timers</h2>
+<p>The <span class="nb">Crises</span> card lists everything you could engage: the alert seeded one, and every event check that fires adds more. <span class="nb">Engage</span> turns a crisis into a running crisis timer named after it. <span class="nb">Ignore</span> leaves it pending — ignoring a danger is a legitimate choice, and it will still be there later.</p>
+<p>Then add whichever other timers the scene needs. There are four types and they are not interchangeable — each answers a different question, and each is checked at a different moment.</p>
+<table><thead><tr><th>Timer</th><th>Question it answers</th><th>Check it when</th></tr></thead><tbody><tr><td><span class="nb">Crisis</span></td><td>How long until this goes wrong?</td><td>Time passes — between scenes, on a delay, changing location, lingering. <span class="nb">+1</span> die for anything lengthy, <span class="nb">−1</span> for anything fast.</td></tr><tr><td><span class="nb">Objective</span></td><td>Am I getting what I came for?</td><td>A milestone happens — something meaningful for or against the goal. <span class="nb">Never</span> on a clock.</td></tr><tr><td><span class="nb">Ally</span></td><td>How is the group holding up?</td><td>They face a threat or try something dangerous. Off-screen, at least once every few hours of game time.</td></tr><tr><td><span class="nb">Encounter</span></td><td>Have they found me yet?</td><td>Only while exploring or evading somewhere a fight could break out — once per zone you move through or linger in.</td></tr></tbody></table>
+<div class="box"><div class="box-h">You never have to pick a timer yourself</div><p>Step 4's control is <span class="nb">Say what your hero just did</span>. Choose from six plain descriptions of what happened — moved somewhere, searched, hit a milestone, allies in danger, a fight ended, time jumped — and the app fires the right checks in the right order with the right modifiers. The table above is the rule it is applying, printed so you can follow along.</p></div>
+<div class="play"><div class="play-h">The session so far</div>
+<p>Backdraft engages the reactor crisis. It becomes a crisis timer: <span class="nb">The reactor floods the lower decks</span>, starting at <span class="nb">distant</span> because the crisis level is still low.</p>
+<p>She also sets an objective — <span class="nb">Get the maintenance crew out</span> — at <span class="nb">Far off</span>: 2 progress dice, paying <span class="nb">4 karma</span> when reached.</p>
+<p>Nothing rolls yet. Setting an objective is bookkeeping; it only advances on a milestone.</p>
+</div>
+
+
+<h2>5 · The crisis timer</h2>
+<p>A ladder counting down to something specific happening. You name what it triggers when you start it, and that is what happens when it runs out.</p>
+<table><thead><tr><th>Proximity</th><th>Threat dice</th></tr></thead><tbody><tr><td>Distant</td><td>5</td></tr><tr><td>Approaching</td><td>4</td></tr><tr><td>Close</td><td>3</td></tr><tr><td>Imminent</td><td>2</td></tr><tr><td>Next moment</td><td>1</td></tr><tr><td>Now</td><td>0</td></tr></tbody></table>
+<p>Where it starts depends on the phase: <span class="nb">distant</span> in a low crisis, <span class="nb">close</span> in a medium one, <span class="nb">imminent</span> in a high one. Roll its threat dice when time passes; <span class="nb">every 6 moves it one rung closer</span>. Reaching <span class="nb">now</span> fires the event, raises the crisis level by 1, and removes that timer — so start another.</p>
+<h3>Movement mode</h3>
+<p>How carefully you are moving shifts both the crisis timer and the encounter timer. Set it in the Crisis Mode header.</p>
+<table><thead><tr><th>Mode</th><th>Crisis dice</th><th>Enemy dice</th><th>Your INTUITION</th><th>Their INTUITION</th></tr></thead><tbody><tr><td>Alert (default)</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>Cautious</td><td>+1</td><td>-1</td><td>+1</td><td>-1</td></tr><tr><td>Rushed</td><td>-1</td><td>+1</td><td>-1</td><td>+1</td></tr></tbody></table>
+<p>Cautious buys safety with time: fewer enemy dice and sharper senses, but crisis timers advance faster. Rushed is the reverse.</p>
+<div class="play"><div class="play-h">The session so far</div>
+<p>Backdraft moves into the flooded deck. Crisis timer, 5 threat dice: <span class="dice"><span class="die six">6</span><span class="die six">6</span><span class="die">2</span><span class="die">4</span><span class="die one">1</span></span> — <span class="nb">2 sixes</span>.</p>
+<p>Distant → <span class="nb">Close</span>.</p>
+</div>
+
+
+<h2>6 · The objective timer</h2>
+<p>Your goal, and in solo play your <span class="nb">only source of karma</span> — the ten end-of-session questions do not apply. Name the objective, give it a starting distance, and it pays out when reached.</p>
+<table><thead><tr><th>Status</th><th>Progress dice</th><th>Karma if reached</th></tr></thead><tbody><tr><td>Out of reach</td><td>1</td><td>6</td></tr><tr><td>Far off</td><td>2</td><td>4</td></tr><tr><td>Manageable</td><td>3</td><td>2</td></tr><tr><td>Near</td><td>4</td><td>1</td></tr><tr><td>Within reach</td><td>5</td><td>—</td></tr><tr><td>Achievable</td><td>6</td><td>—</td></tr><tr><td>Objective reached</td><td>—</td><td>—</td></tr></tbody></table>
+<p>Something further away is slower but pays more. Roll its dice only on a <span class="nb">milestone</span> — a development that genuinely moved the goal, for or against. Never on a timer.</p>
+<div class="box"><div class="box-h">The arithmetic</div><ul><li>Each <span class="nb">6</span> advances one step; each <span class="nb">1</span> cancels a 6.</li><li>A net <span class="nb">negative</span> result pushes the objective one step <span class="nb">back</span>, and overcoming that setback becomes your next milestone.</li><li>A medium crisis costs <span class="nb">−1</span> die, a high crisis <span class="nb">−2</span>.</li></ul></div>
+<div class="play"><div class="play-h">The session so far</div>
+<p>She finds the maintenance crew — a genuine milestone. Objective check, 2 progress dice: <span class="dice"><span class="die">2</span><span class="die six">6</span></span></p>
+<p>1 six − 0 ones = <span class="nb">1</span>. Advanced to Manageable.</p>
+</div>
+
+
+<h2>7 · The encounter timer</h2>
+<p>Tracks how close the opposition is getting. <span class="nb">Only start one when it applies</span>: your hero is moving through or searching somewhere they could be found, and it is uncertain whether they have been. A fixed scene you already understand — holding up a collapsing floor, talking someone down, fighting what is already in front of you — needs no encounter timer at all.</p>
+<p>The Encounter panel has a <span class="nb">Do I need one right now?</span> check that asks exactly that question.</p>
+<table><thead><tr><th>Enemy presence</th><th>Enemy dice</th></tr></thead><tbody><tr><td>All clear</td><td>1</td></tr><tr><td>Uncertain</td><td>2</td></tr><tr><td>Suspected</td><td>3</td></tr><tr><td>Confirmed</td><td>4</td></tr><tr><td>Closing</td><td>5</td></tr><tr><td>Near</td><td>6</td></tr><tr><td>Encountered</td><td>0</td></tr></tbody></table>
+<p>Check it once per zone you move through or linger in. Each 6 shifts the presence one rung. At <span class="nb">Encountered</span>, two things are read off the same roll:</p>
+<table><thead><tr><th>Highest die</th><th>Enemy behaviour</th></tr></thead><tbody><tr><td>6</td><td><span class="nb">Stalking, hidden or lying in wait</span> — The NPCs automatically spot you; roll INTUITION to spot them.</td></tr><tr><td>5</td><td><span class="nb">Searching or hunting</span> — You automatically spot them; they roll INTUITION to spot you.</td></tr><tr><td>4</td><td><span class="nb">Passive</span> — You automatically spot them; they are unaware.</td></tr><tr><td>3</td><td><span class="nb">False alarm</span> — Non-hostile NPCs, or unfounded paranoia.</td></tr><tr><td>2</td><td><span class="nb">False alarm</span> — Non-hostile NPCs, or unfounded paranoia.</td></tr><tr><td>no 6s</td><td><span class="nb">Ambushing</span> — Draw initiative — you are surprised.</td></tr></tbody></table>
+<table><thead><tr><th>Number of 6s</th><th>Threat size</th></tr></thead><tbody><tr><td>1</td><td><span class="nb">Lesser foe</span> — Lone soldier, guard, cultist, thug, hostile animal.</td></tr><tr><td>2</td><td><span class="nb">Greater enemy or group</span> — Squad of soldiers, killer robot, infiltrators, an organization's enforcer.</td></tr><tr><td>3+</td><td><span class="nb">Overwhelming enemy</span> — Parasite swarm, supervillain, kaiju, a Viltrumite.</td></tr></tbody></table>
+<div class="play"><div class="play-h">The session so far</div>
+<p>Backdraft sweeps the flooded deck for the crew. It is unknown ground and something aboard is moving, so she starts an encounter timer at <span class="nb">All clear</span> and checks once per zone.</p>
+<p><span class="nb">Zone 1</span> — 1 enemy die: <span class="dice"><span class="die six">6</span></span> → presence <span class="nb">Uncertain</span>. <span style="font-size:9.5pt">Imprecise power effects, vague sounds of movement, tracks, signs someone passed this way.</span></p><p><span class="nb">Zone 2</span> — 2 enemy dice: <span class="dice"><span class="die six">6</span><span class="die six">6</span></span> → presence <span class="nb">Confirmed</span>. <span style="font-size:9.5pt">Clear power effects, sightings on remote cameras, sounds coming nearer.</span></p><p><span class="nb">Zone 3</span> — 4 enemy dice: <span class="dice"><span class="die">5</span><span class="die six">6</span><span class="die one">1</span><span class="die one">1</span></span> → presence <span class="nb">Closing</span>. <span style="font-size:9.5pt">Imprecise power effects, vague sounds of movement, tracks, signs someone passed this way.</span></p><p><span class="nb">Zone 4</span> — 5 enemy dice: <span class="dice"><span class="die six">6</span><span class="die one">1</span><span class="die">3</span><span class="die six">6</span><span class="die">2</span></span> → presence <span class="nb">Encountered</span>. <span style="font-size:9.5pt">Clear power effects, sightings on remote cameras, sounds coming nearer.</span></p><p><span class="nb">Encounter — Stalking, hidden or lying in wait:</span> The NPCs automatically spot you; roll INTUITION to spot them.<br><span class="nb">Greater enemy or group</span> — Squad of soldiers, killer robot, infiltrators, an organization's enforcer.</p>
+<p>Searching is a lengthy action, so the crisis timer rolls at <span class="nb">+1 die</span>: 4 dice, <span class="dice"><span class="die">5</span><span class="die six">6</span><span class="die one">1</span><span class="die">4</span></span> → <span class="nb">Imminent</span>.</p>
+
+</div>
+<h3>Avoiding a fight</h3>
+<ul><li>Hide: decide whether the enemy actively searches (ask the Binary Engine). If they search, roll INTUITION for them; if they don't search or fail, they move out of the zone within minutes.</li><li>Back out: you can retreat from the zone without risk, but consider what that costs you in the location.</li><li>Sneak past: roll INTUITION for the enemy; on a failure you slip through to the next zone.</li></ul>
+<h3>Escaping one</h3>
+<p>Escape is an AGILITY roll. The modifiers:</p>
+<table><thead><tr><th>Situation</th><th>Dice</th></tr></thead><tbody><tr><td>You are using a movement power well suited to the environment</td><td>+1</td></tr><tr><td>You are outnumbered</td><td>-1</td></tr><tr><td>Fast movement is hampered by flooding, debris or similar</td><td>-1</td></tr><tr><td>You are escaping a speedy enemy such as a Viltrumite</td><td>-2</td></tr><tr><td>Hostile environment such as fires or extreme cold</td><td>-2</td></tr></tbody></table>
+
+<h3>The twelve-step encounter sequence</h3>
+<p>The app walks this for you — the Encounter panel shows which step you are on and offers only that step's controls. It is printed here so you can see where you are in the procedure.</p>
+<ol><li>Choose your movement mode: alert, cautious or rushed.</li><li>Make an encounter check with enemy dice for the current presence, modified by movement mode.</li><li>Each 6 shifts the enemy presence one step closer.</li><li>If the presence isn't 'encountered' yet, continue moving.</li><li>On 'encountered', check the enemy behaviour table for who spots whom.</li><li>Check the enemy threat table (or established facts) for what you're facing.</li><li>Make spotting rolls as needed. An unspotted side may reveal itself, ambush, back out or hide.</li><li>If spotted but not surprised, you may attempt to escape with an AGILITY roll.</li><li>If the encounter isn't avoided or escaped, draw initiative.</li><li>Once resolved, reset the encounter timer.</li><li>Check any active crisis timers, modified by movement mode and prolonged actions.</li><li>Repeat as you move on or linger.</li></ol>
+
+
+<h2>8 · The ally timer</h2>
+<p>A group helping you, tracked as one unit rather than as individual NPCs — a squad, a dock crew, a handful of other heroes. It measures how they are holding up.</p>
+<table><thead><tr><th>Status</th><th>Support dice</th></tr></thead><tbody><tr><td>Unified</td><td>6</td></tr><tr><td>Strained</td><td>5</td></tr><tr><td>Diminished</td><td>4</td></tr><tr><td>Overwhelmed</td><td>3</td></tr><tr><td>Desperate</td><td>2</td></tr><tr><td>Last Stand</td><td>1</td></tr><tr><td>You are Alone</td><td>0</td></tr></tbody></table>
+<div class="box"><div class="box-h">Reading an ally check</div><ul><li>Each <span class="nb">6</span> is a success. In a fight each 6 is also <span class="nb">2 damage</span> to the enemy.</li><li>Each <span class="nb">1</span> drops their status one step, toward Alone.</li><li><span class="nb">+2</span> dice if the task suits them, <span class="nb">+3</span> if the situation strongly favours them.</li><li>Allies aiding you directly instead give <span class="nb">+2 dice</span> to your own roll.</li></ul></div>
+<div class="play"><div class="play-h">The session so far</div>
+<p>The dock crew hold the bulkhead while Backdraft works — suited to them, so +2 dice. 8 dice: <span class="dice"><span class="die">2</span><span class="die one">1</span><span class="die one">1</span><span class="die">2</span><span class="die">3</span><span class="die">5</span><span class="die">4</span><span class="die">3</span></span></p>
+<p>No successes. 2 setback(s): now Diminished. They are now <span class="nb">Diminished</span>.</p>
+</div>
+
+
+<h2>9 · The oracles</h2>
+<p>Everything that answers a question a GM would otherwise answer. They live on the <span class="nb">Ask the oracles</span> card.</p>
+<h3>Yes / no — the Binary Response Engine</h3>
+<table><thead><tr><th>D6</th><th>Answer</th></tr></thead><tbody><tr><td>1</td><td>Strong no</td></tr><tr><td>2–3</td><td>No</td></tr><tr><td>4–5</td><td>Yes</td></tr><tr><td>6</td><td>Strong yes</td></tr></tbody></table>
+<p>If a yes is likely, roll 2D6 and keep the <span class="nb">highest</span>; if a no is likely, keep the <span class="nb">lowest</span>. A strong result is unequivocal and hands you something extra besides.</p>
+<h3>Complex answers</h3>
+<p>Two D66 rolls give a directive and a subject — for example <span class="nb">Abandon / Authority</span>, which might mean the officer in charge walks off the job. Take it literally, interpret it, or roll again.</p>
+<h3>Describe a place</h3>
+<p>Five location engines, rolled when you arrive somewhere and need to know what it is like:</p>
+<ul><li><span class="nb">City Engine</span> — Where in the city you are, or need to travel to.</li><li><span class="nb">Region Engine</span> — Outdoor locations and larger regions.</li><li><span class="nb">Space Engine</span> — Outer space and interstellar travel.</li><li><span class="nb">Facility Engine</span> — Interiors of buildings, complexes, bases, lairs and factories.</li><li><span class="nb">Atmosphere Engine</span> — A descriptive prompt for an area — mundane detail, mystery or obstacle.</li></ul>
+<h3>Crisis event — the jolt</h3>
+<p>If you are ever unsure what happens next: raise the crisis level by 1 and roll a crisis event. That is the book's own advice, and the app has a button for it.</p>
+<h3>Opportunity events</h3>
+<p>The positive counterpart, prompted by 11–12 on an event check. Keep them rare. One may itself count as a milestone that triggers an objective check.</p>
+<table><thead><tr><th>D66</th><th>Opportunity</th></tr></thead><tbody><tr><td>11–16</td><td>Early warning of a danger</td></tr><tr><td>21–26</td><td>Helpful item or technology</td></tr><tr><td>31–36</td><td>Needed clue or intel</td></tr><tr><td>41–43</td><td>Secure location</td></tr><tr><td>44–46</td><td>Shortcut or safer path</td></tr><tr><td>51–53</td><td>Significant device or artifact</td></tr><tr><td>54–56</td><td>Timely communication</td></tr><tr><td>61–63</td><td>Unexpected ally</td></tr><tr><td>64–66</td><td>Useful supplies or support</td></tr></tbody></table>
+<h3>Bonus 6 effects</h3>
+<p>When an <span class="nb">attribute</span> roll comes up with more 6s than it needed, one spare 6 can buy one of these. This applies to attribute rolls only — not to threat, progress, support or enemy dice.</p>
+<table><thead><tr><th>Effect</th><th>What it does</th></tr></thead><tbody><tr><td><span class="nb">Confident</span></td><td>Regain 1 point of Resolve.</td></tr><tr><td><span class="nb">Fast</span></td><td>You act faster than expected. Crisis timer checks this scene roll -1 threat die.</td></tr><tr><td><span class="nb">Impressive</span></td><td>You impress onlookers: +1 die to PRESENCE rolls in this scene.</td></tr><tr><td><span class="nb">Intimidating</span></td><td>Enemies falter: -1 die to attribute rolls and attacks made against you this scene.</td></tr><tr><td><span class="nb">Observant</span></td><td>You notice an important detail: +1 die on your next roll acting on it.</td></tr><tr><td><span class="nb">Masterful</span></td><td>+1 die on your next attribute roll.</td></tr><tr><td><span class="nb">Unnoticed</span></td><td>You act with subtlety: encounter checks and NPC INTUITION rolls take -1 die.</td></tr></tbody></table>
+<div class="play"><div class="play-h">The session so far</div>
+<p>Second event check: 2D6 → <span class="nb">8</span>. No event.</p>
+<p>Separately, a FATE response points at a positive turn — the book's other trigger for an opportunity: D66 <span class="nb">13</span> — <span class="nb">Early warning of a danger</span>.</p>
+<p>Later, unsure what the freighter's crew do next, Backdraft takes the jolt: crisis level +1, then the Crisis Event Engine. Focus D66 <span class="nb">62</span> — <span class="nb">Supervillain</span>. Detail 2D6 + crisis level = <span class="nb">12</span>, band 11-15: <span class="nb">Supervillain's enforcers</span>.</p>
+</div>
+
+
+<h2>10 · Combat</h2>
+<div class="box"><div class="box-h">A fight starts in exactly three ways</div><ol><li>An <span class="nb">encounter timer</span> reaches Encountered and you neither avoid nor escape it. The Encounter panel walks you to <span class="nb">Draw initiative</span>.</li><li>You <span class="nb">choose to attack</span> something the fiction has already put in front of you — start an action scene on the Action tab.</li><li>A <span class="nb">crisis timer fires into a fight</span>, because that is what you named it as triggering.</li></ol></div>
+<p>Combat itself is the ordinary combat system — the Action tab runs it. Initiative is a card 1–10 per combatant per round, lowest first. On your turn you have one full action plus one quick action, or two quick actions.</p>
+<p>The app deals the cards, marks whose turn it is, and gates attacking on turn order. Attacking spends your full action and ends your turn, and the marker moves to the next card automatically.</p>
+<h3>Running the enemy without a GM</h3>
+<p>The encounter roll already told you two things: <span class="nb">behaviour</span> (from the highest die) and <span class="nb">threat size</span> (from the number of 6s). Use behaviour to decide what they do on their turn, and ask the Binary Engine when it is genuinely unclear. Pull the actual stat block from the <span class="nb">NPCs</span> tab.</p>
+<h3>Powers without a GM</h3>
+<ul><li>With a relevant power such as DETECTION, ENHANCED SENSES or TELEPATHY, an encounter check that rolls at least one 6 and no more than one 1 without triggering an encounter lets you choose one option instead of rolling the next check.</li><li>Outmaneuver: if the presence is closing or worse, shift it one rank further away as you move to an adjacent zone.</li><li>Prepare: if the presence is closing or near, shift straight to encountered and ignore the behaviour table — you automatically spot them and they must roll INTUITION to spot you.</li></ul>
+<h3>Solo combat and recovery</h3>
+<ul><li>Draw initiative as normal for your hero and any NPCs; a single card covers an NPC group.</li><li>Roll for NPC actions as a GM would when they act against or aid your hero. Some push rolls and take stress for exploits; many won't.</li><li>Choose the most sensible NPC action for the circumstances. If unsure, ask the Binary Engine.</li><li>When an NPC does something that doesn't directly affect your hero, just decide whether it works — unless it's dramatic and dangerous.</li><li>Most sentient NPCs value self-preservation: when things go badly they defend or flee. Check their willingness with the Binary Engine.</li><li>When an NPC is broken you need not roll a critical injury — declare them knocked out or killed as fits the moment.</li></ul>
+<ul><li><span class="nb">If you are broken by damage or stress you can still act, at -1 die.</span></li><li><span class="nb">When broken by stress you may make a PRESENCE roll as if aided by an ally — but the aid is an important memory. Decide what comforts or inspires you in that moment.</span></li></ul>
+<p>The app shows the recovery panel exactly when it applies, including a <span class="nb">Rally on a memory</span> roll at PRESENCE with a help die.</p>
+
+
+<h2>11 · Step 5 — the social scene</h2>
+<p>After you resolve an event, a threat or an objective, play a social scene. Mechanically it restores <span class="nb">Resolve equal to your PRESENCE rating</span> — and Resolve does not come back from resting, so this is the only way to get it.</p>
+<ul><li>Condense a social scene into a brief statement rather than roleplaying a conversation with yourself.</li><li>Alternatively, frame it as a flashback relevant to the current crisis.</li><li>The social hooks table works as inspiration.</li></ul>
+<p>The app's <span class="nb">Social scene</span> button applies the recovery, prints that guidance and offers a social-hooks roll for a prompt. It also clears the "social scene due" state, so the loop moves on.</p>
+<div class="box"><div class="box-h">When it is due</div><p>The Solo tab tracks this for you: resolving a crisis, completing an objective, or a timer firing all mark a social scene as due, and the next-step card will say so. Playing one through the ordinary session lifecycle counts too.</p></div>
+
+
+<h2>12 · Step 6 — ending the crisis</h2>
+<h3>Resolve crisis</h3>
+<p>When the danger is dealt with, press <span class="nb">Resolve crisis</span>. It shows exactly what it will do first — clear the alert, drop pending crises, stop the running timers, reset the crisis level, queue a social scene — and it is undoable in one step.</p>
+<h3>Head home</h3>
+<p>With nothing left running and nothing waiting, <span class="nb">Head home</span> closes the session:</p>
+<ul><li>A few hours' rest: <span class="nb">all Health and all Resolve</span> return.</li><li>Every <span class="nb">reached objective</span> pays its karma. This is where solo karma is actually banked.</li><li>Karma spending unlocks — it is spent between sessions, in a safe location, and home counts.</li><li>The board clears, ready for the next alert.</li></ul>
+<div class="box"><div class="box-h">Karma in solo play</div><p>Solo heroes do not answer the ten earn / six bad-karma session questions — objectives replace them. With Crisis Mode on, the app's End session dialog suppresses those questions and points you back here, so the two paths can never double-count.</p></div>
+<div class="play"><div class="play-h">The session so far</div>
+<p>With the crew located, Backdraft makes the final push on the objective. Crisis level is now <span class="nb">2</span>. 3 dice: <span class="dice"><span class="die six">6</span><span class="die one">1</span><span class="die one">1</span></span></p>
+<p>1 six − 2 ones = <span class="nb">-1</span>. Complication! Pushed back to Far off. Overcoming it becomes your next milestone: Attack Containment.</p>
+<p>Crisis level ended at <span class="nb">2</span> — Low danger. Resolve the crisis, play the social scene, then head home and bank the karma.</p>
+</div>
+
+
+<h2>13 · Common mistakes</h2>
+<table><thead><tr><th>Mistake</th><th>Why it breaks play</th><th>Do this instead</th></tr></thead><tbody><tr><td>Letting every timer stop</td><td>Nothing is pushing back, so the story stalls and you end up inventing pressure by hand.</td><td>Keep at least one crisis timer running at all times. When one fires, start another.</td></tr><tr><td>Rolling the objective on a clock</td><td>Objectives are not timers. Rolling them as time passes makes karma automatic and drains the tension.</td><td>Roll it only on a milestone — something that genuinely moved the goal, for or against.</td></tr><tr><td>Starting an encounter timer for every scene</td><td>Fixed, known scenes have nothing to discover, so the check is noise.</td><td>Only while exploring or evading. Use the panel's <span class="nb">Do I need one right now?</span> check.</td></tr><tr><td>Taking bonus 6 effects on timer rolls</td><td>They are scoped to attribute rolls. Threat, progress, support and enemy dice are not attribute rolls.</td><td>Only on attribute rolls — and the app only offers them there.</td></tr><tr><td>Answering the session karma questions</td><td>Solo karma comes from objectives; answering both double-counts it.</td><td>Bank karma by reaching objectives and heading home. The app suppresses the questions in solo mode.</td></tr><tr><td>Overriding an oracle you dislike</td><td>The oracles are the GM. Ignoring them makes you the GM again, and the surprise goes.</td><td>Take the answer and make it fit. If it truly cannot fit, read adjacent rows rather than re-rolling.</td></tr></tbody></table>
+
+
+<div class="newpage"></div>
+<h2>Appendix A · Crisis Event Engine</h2>
+<p>D66 for the focus, then 2D6 + the current crisis level for the detail. If the event does not fit your situation, read the adjacent rows for inspiration, or choose a focus deliberately and roll only the detail.</p>
+<table><thead><tr><th>D66</th><th>Focus</th><th>2-10</th><th>11-15</th><th>16+</th></tr></thead><tbody><tr><td>11</td><td><span class="nb">Adversary</span></td><td>Adversary revealed</td><td>Adversary gains an advantage</td><td>Adversary seizes an objective</td></tr><tr><td>12</td><td><span class="nb">Alert</span></td><td>Under surveillance</td><td>Security protocols activated</td><td>Blaring alarms</td></tr><tr><td>13</td><td><span class="nb">Alien</span></td><td>Reported abductions</td><td>First contact</td><td>Major presence</td></tr><tr><td>14</td><td><span class="nb">Ally</span></td><td>Ally in danger</td><td>Separated from each other</td><td>True identity or motive revealed</td></tr><tr><td>15</td><td><span class="nb">City</span></td><td>Crime witnessed</td><td>Structural instability</td><td>Panic in the streets</td></tr><tr><td>16</td><td><span class="nb">Command</span></td><td>New orders</td><td>Incompetent leaders</td><td>Left for dead</td></tr><tr><td>21</td><td><span class="nb">Communication</span></td><td>Distress signal</td><td>Desperate plea</td><td>Comms go quiet</td></tr><tr><td>22</td><td><span class="nb">Community</span></td><td>Isolated community</td><td>Threatened habitat</td><td>Abandoned or destroyed</td></tr><tr><td>23</td><td><span class="nb">Contamination</span></td><td>Signs of contamination</td><td>Quarantined</td><td>Sudden outbreak</td></tr><tr><td>24</td><td><span class="nb">Corporation</span></td><td>Scheming influence</td><td>Company takes control</td><td>True motivation revealed</td></tr><tr><td>25</td><td><span class="nb">Creatures</span></td><td>Lone creature</td><td>Creature group</td><td>Swarming creatures</td></tr><tr><td>26</td><td><span class="nb">Dimension</span></td><td>Extradimensional visitor</td><td>Portal opened</td><td>Full-scale invasion</td></tr><tr><td>31</td><td><span class="nb">Environment</span></td><td>Minor environmental hazard</td><td>Hostile environment</td><td>Environmental disaster</td></tr><tr><td>32</td><td><span class="nb">Fear</span></td><td>Fears kindled</td><td>Fear overrides logic</td><td>Widespread hysteria</td></tr><tr><td>33</td><td><span class="nb">Gear</span></td><td>Depleted or malfunctioning item</td><td>Lost or broken equipment</td><td>Vital gear lost or broken</td></tr><tr><td>34</td><td><span class="nb">Heroes</span></td><td>Strange disappearances</td><td>Casualties</td><td>Wiped out</td></tr><tr><td>35</td><td><span class="nb">Information</span></td><td>Troubling intel</td><td>False leads</td><td>Distressing revelation</td></tr><tr><td>36</td><td><span class="nb">Isolation</span></td><td>Cut off</td><td>Left behind</td><td>Outnumbered</td></tr><tr><td>41</td><td><span class="nb">Machine</span></td><td>Minor malfunction</td><td>Dangerous malfunction</td><td>Total failure</td></tr><tr><td>42</td><td><span class="nb">Magic</span></td><td>Amateur in over their head</td><td>Dangerous occult ritual</td><td>Magical devastation</td></tr><tr><td>43</td><td><span class="nb">Military</span></td><td>Minor military presence</td><td>Major intervention</td><td>Scorched earth</td></tr><tr><td>44</td><td><span class="nb">Mission</span></td><td>Minor complication</td><td>Major complication</td><td>Mission undone</td></tr><tr><td>45</td><td><span class="nb">Mutation</span></td><td>Parasitic infestation</td><td>Emerging lifeforms</td><td>Body remade</td></tr><tr><td>46</td><td><span class="nb">Organization</span></td><td>Antagonistic organization revealed</td><td>Organization exerts force or influence</td><td>Organizations at war</td></tr><tr><td>51</td><td><span class="nb">Power</span></td><td>Power fluctuations</td><td>Power fails</td><td>Reactor meltdown</td></tr><tr><td>52</td><td><span class="nb">Robot</span></td><td>Malfunctioning or damaged</td><td>Twitchy</td><td>Corrupted or destructive</td></tr><tr><td>53</td><td><span class="nb">Route</span></td><td>Treacherous route</td><td>Blocked or sealed route</td><td>Deadly route</td></tr><tr><td>54</td><td><span class="nb">Science</span></td><td>Unexplained phenomenon</td><td>Dangerous experiment</td><td>Containment breach</td></tr><tr><td>55</td><td><span class="nb">Sound</span></td><td>Mysterious sound</td><td>Unsettling sound</td><td>Horrifying sound</td></tr><tr><td>56</td><td><span class="nb">Space</span></td><td>Oppressive void</td><td>Collision course</td><td>Celestial catastrophe</td></tr><tr><td>61</td><td><span class="nb">Supernatural</span></td><td>Mysterious sighting</td><td>Paranormal activity</td><td>Otherworldly incursion</td></tr><tr><td>62</td><td><span class="nb">Supervillain</span></td><td>Supervillain's minions</td><td>Supervillain's enforcers</td><td>Supervillain showdown</td></tr><tr><td>63</td><td><span class="nb">Team</span></td><td>Squabbling teammates</td><td>Infighting</td><td>Betrayal or abandonment</td></tr><tr><td>64</td><td><span class="nb">Technology</span></td><td>Failing technology</td><td>Sabotaged technology</td><td>Rogue technology</td></tr><tr><td>65</td><td><span class="nb">Time</span></td><td>Wasted time</td><td>Impending deadline</td><td>Time runs out</td></tr><tr><td>66</td><td><span class="nb">Violence</span></td><td>Signs of violence</td><td>Grisly remains</td><td>Carnage</td></tr></tbody></table>
+
+
+<div class="newpage"></div>
+<h2>Appendix B · Complex Response Engine</h2>
+<p>Two D66 rolls: a directive and a subject. Read the pair literally, interpret it, or roll again.</p>
+<div style="column-count:2;column-gap:14pt">
+<table><thead><tr><th>D66</th><th>Directive</th></tr></thead><tbody><tr><td>11</td><td>Abandon</td></tr><tr><td>12</td><td>Aid</td></tr><tr><td>13</td><td>Alert</td></tr><tr><td>14</td><td>Ambush</td></tr><tr><td>15</td><td>Attack</td></tr><tr><td>16</td><td>Betray</td></tr><tr><td>21</td><td>Breach</td></tr><tr><td>22</td><td>Capture</td></tr><tr><td>23</td><td>Command</td></tr><tr><td>24</td><td>Construct</td></tr><tr><td>25</td><td>Create</td></tr><tr><td>26</td><td>Deliver</td></tr><tr><td>31</td><td>Destroy</td></tr><tr><td>32</td><td>Discover</td></tr><tr><td>33</td><td>Escape</td></tr><tr><td>34</td><td>Escort</td></tr><tr><td>35</td><td>Explore</td></tr><tr><td>36</td><td>Heal</td></tr><tr><td>41</td><td>Hide</td></tr><tr><td>42</td><td>Hunt</td></tr><tr><td>43</td><td>Infest</td></tr><tr><td>44</td><td>Investigate</td></tr><tr><td>45</td><td>Isolate</td></tr><tr><td>46</td><td>Preserve</td></tr><tr><td>51</td><td>Protect</td></tr><tr><td>52</td><td>Quarantine</td></tr><tr><td>53</td><td>Reclaim</td></tr><tr><td>54</td><td>Repair</td></tr><tr><td>55</td><td>Sabotage</td></tr><tr><td>56</td><td>Scavenge</td></tr><tr><td>61</td><td>Secure</td></tr><tr><td>62</td><td>Survive</td></tr><tr><td>63</td><td>Threaten</td></tr><tr><td>64</td><td>Transform</td></tr><tr><td>65</td><td>Transport</td></tr><tr><td>66</td><td>Unearth</td></tr></tbody></table>
+<table><thead><tr><th>D66</th><th>Subject</th></tr></thead><tbody><tr><td>11</td><td>Alarm</td></tr><tr><td>12</td><td>Alien</td></tr><tr><td>13</td><td>Artifact</td></tr><tr><td>14</td><td>Authority</td></tr><tr><td>15</td><td>Cargo</td></tr><tr><td>16</td><td>City</td></tr><tr><td>21</td><td>Computer</td></tr><tr><td>22</td><td>Containment</td></tr><tr><td>23</td><td>Corporation</td></tr><tr><td>24</td><td>Creature</td></tr><tr><td>25</td><td>Darkness</td></tr><tr><td>26</td><td>Data</td></tr><tr><td>31</td><td>Death</td></tr><tr><td>32</td><td>Destruction</td></tr><tr><td>33</td><td>Device</td></tr><tr><td>34</td><td>Environment</td></tr><tr><td>35</td><td>Experiment</td></tr><tr><td>36</td><td>Fear</td></tr><tr><td>41</td><td>Focus</td></tr><tr><td>42</td><td>Hostility</td></tr><tr><td>43</td><td>Injury</td></tr><tr><td>44</td><td>Machine</td></tr><tr><td>45</td><td>Message</td></tr><tr><td>46</td><td>Military</td></tr><tr><td>51</td><td>Mission</td></tr><tr><td>52</td><td>Outbreak</td></tr><tr><td>53</td><td>People</td></tr><tr><td>54</td><td>Planet</td></tr><tr><td>55</td><td>Robot</td></tr><tr><td>56</td><td>Ship</td></tr><tr><td>61</td><td>Space</td></tr><tr><td>62</td><td>Supplies</td></tr><tr><td>63</td><td>Time</td></tr><tr><td>64</td><td>Trap</td></tr><tr><td>65</td><td>Violence</td></tr><tr><td>66</td><td>Weapon</td></tr></tbody></table>
+</div>
+
+
+<div class="newpage"></div>
+<h2>13 · Transitions at a glance</h2>
+<p>The single hardest part of solo play is knowing when to move from one thing to the next. This is the whole answer on one page.</p>
+<table><thead><tr><th>You just…</th><th>Roll this</th><th>Then</th></tr></thead><tbody><tr><td>Generated an alert</td><td>Nothing</td><td>Event check (step 2)</td></tr><tr><td>Made an event check that fired</td><td>Crisis Event Engine</td><td>The event joins the Crises card — engage or ignore it</td></tr><tr><td>Engaged a crisis</td><td>Nothing</td><td>Play. Say what your hero did</td></tr><tr><td>Set an objective</td><td>Nothing</td><td>Play. It only moves on a milestone</td></tr><tr><td>Moved to a new place</td><td>Encounter check, then crisis timers</td><td>If Encountered: reveal, avoid, escape or fight</td></tr><tr><td>Searched, waited or worked</td><td>Encounter check, then crisis timers <span class="nb">+1 die</span></td><td>Same</td></tr><tr><td>Hit a milestone</td><td>Objective check, then an event check</td><td>If reached, claim karma when you head home</td></tr><tr><td>Sent allies into danger</td><td>Ally check</td><td>Each 1 drops their status a step</td></tr><tr><td>Finished a fight or long scene</td><td>Crisis timers <span class="nb">+1 die</span>, then an event check</td><td>Social scene if something resolved</td></tr><tr><td>Had a crisis timer fire</td><td>Nothing further</td><td>Deal with it, start another timer, social scene</td></tr><tr><td>Resolved the crisis</td><td>Nothing</td><td>Social scene, then head home</td></tr></tbody></table>
+<h3>Deciding whether you need an encounter timer</h3>
+<p>Ask one question: <span class="nb">is my hero moving through or searching somewhere the opposition could find them?</span> Patrol, sweep of an unknown building, sneaking past a cordon, an escape — yes. A fixed, known scene — no, and the crisis timers and objective carry on regardless.</p>
+<h3>If you are stuck</h3>
+<ol><li>Check the next-step card at the top of the Solo tab. It always names one action.</li><li>If the fiction has stalled rather than the procedure, take the jolt: crisis level +1 and roll a crisis event.</li><li>If a specific question is blocking you, ask the Binary Engine and accept the answer.</li></ol>
+
+
+<div class="newpage"></div>
+<h2>Appendix C · One-page play aid</h2>
+<h3>The loop</h3>
+<ol><li>Generate a crisis alert from the random threat tables or the Complex Response Engine.</li><li>Start the crisis level at 0 and begin making event checks.</li><li>Choose a crisis and start a crisis timer, plus any ally, objective or encounter timers.</li><li>Make checks, track timers and the crisis level, and engage threats or opportunities.</li><li>After resolving an event, threat or objective, play a social scene — especially to recover Resolve.</li><li>Return to any remaining crisis dangers, or head home to rest, recover and earn karma.</li></ol>
+<h3>Timer triggers</h3>
+<table><thead><tr><th>Timer</th><th>Check it when</th></tr></thead><tbody><tr><td>Crisis</td><td>Time passes. +1 die lengthy, −1 fast. Each 6 moves it closer; at <span class="nb">now</span> it fires and the level rises.</td></tr><tr><td>Objective</td><td>A milestone. 6s advance, 1s cancel 6s, net-negative pushes it back. Medium −1 die, high −2.</td></tr><tr><td>Ally</td><td>They face danger. Each 6 a success (2 damage in a fight), each 1 drops a step.</td></tr><tr><td>Encounter</td><td>Per zone while exploring or evading only. Each 6 shifts presence.</td></tr></tbody></table>
+<h3>Event check — 2D6</h3>
+<table><thead><tr><th>Roll</th><th>Result</th></tr></thead><tbody><tr><td>2</td><td>Roll for two crisis events; crisis level +2.</td></tr><tr><td>3–4</td><td>Roll for one crisis event; crisis level +1.</td></tr><tr><td>5–10</td><td>No event.</td></tr><tr><td>11–12</td><td>Opportunity event.</td></tr></tbody></table>
+<h3>Binary — D6</h3>
+<table><thead><tr><th>Roll</th><th>Answer</th></tr></thead><tbody><tr><td>1</td><td>Strong no</td></tr><tr><td>2–3</td><td>No</td></tr><tr><td>4–5</td><td>Yes</td></tr><tr><td>6</td><td>Strong yes</td></tr></tbody></table>
+<p>Likely yes: 2D6 keep highest. Likely no: keep lowest.</p>
+<h3>Stuck?</h3>
+<p>Crisis level +1, roll a crisis event. That is the book's own answer.</p>
+
+
+<h2>Appendix D · Glossary</h2>
+<table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody><tr><td>Crisis alert</td><td>The briefing that opens a crisis — rolled from the threat tables for your rank.</td></tr><tr><td>Crisis level</td><td>0–10 counter for how bad things are. Feeds crisis-event severity and objective penalties.</td></tr><tr><td>Crisis event</td><td>A new or worsening complication, rolled on the Crisis Event Engine. Raises the level by 1.</td></tr><tr><td>Opportunity event</td><td>The positive counterpart. Rare. May count as a milestone.</td></tr><tr><td>Milestone</td><td>Something that genuinely moved your objective, for or against. The only trigger for an objective check.</td></tr><tr><td>Proximity</td><td>Which rung a crisis timer is on, from distant to now.</td></tr><tr><td>Presence</td><td>Which rung an encounter timer is on, from All clear to Encountered.</td></tr><tr><td>Movement mode</td><td>Alert, cautious or rushed. Shifts crisis and encounter dice in opposite directions.</td></tr><tr><td>Stressed out</td><td>Resolve 0. You act normally but cannot push and cannot spend stress on powers.</td></tr><tr><td>Broken</td><td>Health 0. In solo play you can still act, at −1 die.</td></tr></tbody></table>
+</body></html>

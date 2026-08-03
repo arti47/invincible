@@ -2,11 +2,12 @@
   "name": "invincible-player",
   "version": "1.0.0",
   "private": true,
-  "description": "Player-character app for Invincible — Superhero Roleplaying. No build step; vanilla ES modules.",
+  "description": "Player-character app for Invincible \u2014 Superhero Roleplaying. No build step; vanilla ES modules.",
   "type": "module",
   "scripts": {
     "test": "node tests/run.js",
-    "serve": "npx --yes http-server -p 8080 -c-1 ."
+    "serve": "npx --yes http-server -p 8080 -c-1 .",
+    "guide": "node docs/build-guide.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.56.1"
