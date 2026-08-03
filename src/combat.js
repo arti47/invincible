@@ -141,6 +141,173 @@ export function stageCard() {
     el("div", { class: "row-actions" }, action));
 }
 
+/* ---------------------------------------------------------------- attacking from the board */
+
+/**
+ * The whole attack, resolved against a combatant already on the board: pick a kind, pick a target
+ * off the initiative list, let the defender declare a block or dodge (rolled from their own
+ * attributes, not typed in), roll, then APPLY the damage. Nothing is copied by hand.
+ */
+async function openAttack(attacker, combat, mount) {
+  const targets = combat.combatants.filter((c) => c.id !== attacker.id && c.health > 0);
+  if (!targets.length) { showToast("Nobody left to attack.", { variant: "warn" }); return; }
+
+  const kind = await chooseModal(`${attacker.name} attacks — how?`, [
+    { label: "Slugfest", hint: "FIGHTING, same zone, full action. Blockable.", value: "slugfest" },
+    { label: "Shooting", hint: "AGILITY at range, full action. Dodgeable.", value: "shooting" },
+    { label: "Charge", hint: "STRENGTH, full + quick. Cannot be blocked, can be dodged.", value: "charge" },
+    { label: "Grapple", hint: "FIGHTING, no weapon. Blockable.", value: "grapple" },
+  ]);
+  if (!kind) return;
+
+  const targetId = targets.length === 1 ? targets[0].id : await chooseModal("Attack whom?", targets.map((t) => ({
+    label: t.name + (t.minionCount > 0 ? ` (${t.health} left)` : ""),
+    hint: `${t.altitude} · Health ${t.health}/${t.maxHealth}${t.armor ? ` · Armor ${t.armor}` : ""}${t.huge ? " · Huge" : ""}`,
+    value: t.id })));
+  const target = targets.find((t) => t.id === targetId);
+  if (!target) return;
+
+  const conf = Roller.ATTACK_KINDS[kind];
+  if (kind === "grapple" && target.huge) { showToast("Huge creatures cannot be grappled.", { variant: "warn" }); return; }
+
+  // The defence is declared before any dice are rolled (§3.2).
+  const defKind = conf.blockable ? "block" : conf.dodgeable ? "dodge" : null;
+  const defAttr = defKind === "block" ? "fighting" : "agility";
+  let defence = null;
+  if (defKind && !target.huge) {
+    const dice = target.attrs?.[defAttr] || 0;
+    const declared = dice > 0 && await confirmModal(
+      `Declared before the roll: does ${target.name} spend a quick action to ${defKind}? They would roll ${dice} ${defAttr.toUpperCase()} dice, and each 6 cancels one of the attacker's.`,
+      { title: defKind === "block" ? "Block?" : "Dodge?", confirmLabel: `They ${defKind}`, cancelLabel: "No defence" });
+    if (declared) defence = { kind: defKind, dice };
+  }
+
+  const heroChar = attacker.refId ? Store.getCharacter(attacker.refId) : null;
+  const weapon = heroChar ? await pickWeapon(heroChar) : null;
+  const roll = heroChar
+    ? Roller.makeAttack(heroChar, kind, { weapon, huge: target.huge, targetName: target.name })
+    : npcAttack(attacker, kind, target);
+
+  let resolved = null;
+  if (defence) {
+    const dr = Roller.rollRaw(defence.dice, `${target.name} ${defence.kind}s`, { pushable: false });
+    resolved = { ...defence, roll: dr,
+      ...(defence.kind === "block" ? Roller.resolveBlock(roll, dr) : Roller.resolveDodge(roll, dr)) };
+  }
+  showAttack(attacker, target, kind, roll, resolved, combat, mount);
+}
+
+/** Weapons the hero could be swinging; skipped entirely when they have none. */
+async function pickWeapon(hero) {
+  const weapons = (hero.inventory?.items || []).filter((i) => i.damage || i.bonus);
+  if (!weapons.length) return null;
+  const pick = await chooseModal("Weapon?", [{ label: "Unarmed / powers", value: "__none" },
+    ...weapons.map((w) => ({ label: w.name, hint: `Bonus +${w.bonus || 0}, Damage ${w.damage || "—"}`, value: w.name }))]);
+  return weapons.find((w) => w.name === pick) || null;
+}
+
+/** An NPC attacking: the same arithmetic, rolled off the profile's attributes. */
+function npcAttack(attacker, kind, target) {
+  const attr = Roller.ATTACK_KINDS[kind].attr;
+  const dice = Math.max(1, attacker.attrs?.[attr] || 1);
+  const r = Roller.rollRaw(dice, `${attacker.name} — ${Roller.ATTACK_KINDS[kind].label} → ${target.name}`, { pushable: false });
+  r.meta = { kind, damage: attacker.slugfest || 1, damageSource: "Slugfest Damage",
+    stunts: Roller.stuntsFor(kind, { huge: target.huge }) };
+  return r;
+}
+
+function showAttack(attacker, target, kind, roll, defence, combat, mount) {
+  const effective = defence ? defence.remainingSixes : roll.sixes;
+  const stunts = Roller.stuntsFor(kind, { huge: target.huge });
+  const available = Math.max(0, effective - 1);
+  const chosen = new Set();
+
+  const body = el("div", {});
+  const draw = () => {
+    clear(body);
+    body.append(el("div", { class: "dice-row" }, ...roll.dice.map((v) =>
+      el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+    if (defence) {
+      body.append(el("p", { class: "muted small", text: `${target.name} ${defence.kind}s: ${defence.roll.sixes} six${defence.roll.sixes === 1 ? "" : "es"} cancelling.` }),
+        el("div", { class: "dice-row" }, ...defence.roll.dice.map((v) =>
+          el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+    }
+    const dmg = damageFor();
+    body.append(el("p", { class: `outcome ${effective ? "good" : "bad"}`,
+      text: effective
+        ? `Hit — ${dmg} damage${target.armor ? ` before ${target.name}'s Armor ${target.armor}` : ""}.`
+        : defence ? `Stopped — the ${defence.kind} cancelled it.` : "Miss." }));
+    if (defence?.note) body.append(el("p", { class: "warn", text: defence.note }));
+
+    if (effective && available) {
+      body.append(el("p", { class: "muted small", text: `${available} stunt${available === 1 ? "" : "s"} available — tap to apply.` }));
+      const row = el("div", { class: "chiprow" });
+      for (const st of stunts) {
+        row.append(el("button", {
+          class: `chip selectable ${chosen.has(st.name) ? "selected" : ""}`, title: st.desc,
+          onclick: () => {
+            if (chosen.has(st.name)) chosen.delete(st.name);
+            else if (chosen.size < available) chosen.add(st.name);
+            else { showToast(`Only ${available} stunt${available === 1 ? "" : "s"} to spend.`, { variant: "warn" }); return; }
+            draw();
+          },
+        }, st.name));
+      }
+      body.append(row);
+      for (const name of chosen) {
+        const st = stunts.find((x) => x.name === name);
+        if (st) body.append(el("p", { class: "small" }, el("strong", { text: `${st.name}: ` }), st.desc));
+      }
+    }
+    body.append(el("p", { class: "cite" }, el("a", { href: "#/rules/stunts", class: "rules-link" }, "Rules: Stunts")));
+  };
+
+  const damageFor = () => {
+    let d = roll.meta.damage || 0;
+    if (chosen.has("Double Damage")) d *= 2;
+    return d;
+  };
+
+  draw();
+  const actions = [{ label: "Done", variant: "ghost" }];
+  if (effective) {
+    actions.push({ label: "Apply damage", variant: "primary", onClick: () => {
+      applyAttackDamage(target, damageFor(), combat, [...chosen]);
+      return true;
+    } });
+  }
+  modal({ title: `${attacker.name} → ${target.name}`, body, actions }).promise.then(() => renderCombat(mount));
+}
+
+/** Damage lands on the board: minions drop one per point, heroes route through the crit engine. */
+export function applyAttackDamage(target, amount, combat, stunts = []) {
+  const after = Math.max(0, amount - (target.armor || 0));
+  if (target.minionCount > 0) {
+    target.health = Math.max(0, target.health - after);
+    showToast(`${after} minion(s) down. ${target.health} remain.`, { variant: "good" });
+  } else if (target.refId) {
+    Store.updateCharacter((ch) => { Roller.applyDamage(ch, amount, { armor: target.armor }); }, { id: target.refId });
+    const updated = Store.getCharacter(target.refId);
+    target.health = updated.state.health;
+    showToast(`${target.name} takes ${after}${updated.state.broken ? " — BROKEN" : ""}.`, { variant: updated.state.broken ? "danger" : "" });
+  } else {
+    target.health = Math.max(0, target.health - after);
+    showToast(target.health === 0
+      ? `${target.name} is broken — knocked out or killed, as fits the moment.`
+      : `${target.name} takes ${after} damage.`, { variant: target.health === 0 ? "danger" : "good", timeout: 5000 });
+  }
+  for (const st of stunts) applyStunt(target, st);
+  save(combat);
+}
+
+/** Stunts that change the board rather than the damage number. */
+function applyStunt(target, name) {
+  if (name === "Stun") target.conditions = { ...target.conditions, stunned: true };
+  if (name === "Trap") target.conditions = { ...target.conditions, immobilised: true };
+  if (name === "Suppressed") target.conditions = { ...target.conditions, suppressed: true };
+  if (name === "Knockback") target.zone = (target.zone || 1) + 1;
+}
+
 /* ---------------------------------------------------------------- rendering */
 
 export function renderCombat(mount) {
@@ -202,9 +369,10 @@ function combatantCard(cb, combat, mount, isUp = false) {
       el("span", { text: cb.altitude })),
     // A turn in order: pass your place, move, resolve what hits you, then mark the turn spent.
     el("div", { class: "cbt-actions" },
+      cb.health > 0 ? el("button", { class: "btn tiny primary", onclick: () => openAttack(cb, combat, mount) }, "Attack") : null,
       el("button", { class: "btn tiny ghost", onclick: () => holdOff(cb, combat, mount) }, "Hold off"),
       el("button", { class: "btn tiny ghost", onclick: () => cycleAltitude(cb, combat, mount) }, "Altitude"),
-      el("button", { class: "btn tiny danger", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
+      el("button", { class: "btn tiny ghost", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
       el("button", { class: "btn tiny", onclick: () => { cb.acted = !cb.acted; save(combat); renderCombat(mount); } }, cb.acted ? "Un-act" : "Acted"),
       el("button", { class: "btn tiny ghost", onclick: () => { combat.combatants = combat.combatants.filter((x) => x.id !== cb.id); save(combat); renderCombat(mount); } }, "Remove")));
 }

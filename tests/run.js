@@ -981,8 +981,8 @@ const run = async () => {
   ok("round controls run set up → act → advance → finish",
     JSON.stringify(combatSeq.head) === JSON.stringify(["Add combatant", "Wreck a zone", "Next round", "End scene"]),
     combatSeq.head.join(" | "));
-  ok("a combatant's controls run hold off → move → take damage → mark acted",
-    JSON.stringify(combatSeq.turn) === JSON.stringify(["Hold off", "Altitude", "Damage", "Acted", "Remove"]),
+  ok("a combatant's controls run attack → hold off → move → take damage → mark acted",
+    JSON.stringify(combatSeq.turn) === JSON.stringify(["Attack", "Hold off", "Altitude", "Damage", "Acted", "Remove"]),
     combatSeq.turn.join(" | "));
 
   // Turn order is the sequence of play: lowest card acts first, and reinforcements must not
@@ -1253,6 +1253,85 @@ const run = async () => {
       && soloBuild.build.favourPowers.join() === "DUPLICATION,HEALING,QUICKNESS"
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
+
+  /* ------------------------------------------------- attacking applies damage to the board */
+  const fight = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const N = await import("/data-npcs.js");
+
+    const h = Derived.blankCharacter();
+    h.id = "fight_hero"; h.identity.heroName = "Bruiser";
+    h.attributes = { fighting: 7, agility: 5, strength: 6, reason: 3, intuition: 3, presence: 4 };
+    Store.saveCharacter(h); Store.setActiveCharacter("fight_hero");
+    Store.clearCombat();
+    const combat = Combat.startActionScene();
+    const thug = N.NPC_PROFILES.find((p) => p.name === "Thugs");
+    const grunt = Combat.combatantFromProfile(N.NPC_PROFILES.find((p) => !p.minion && p.health > 3), { count: 1 });
+    grunt.armor = 1;
+    Combat.joinCombat(combat, Combat.combatantFromProfile(thug, { count: 5 }));
+    Combat.joinCombat(combat, grunt);
+    Store.saveCombat(combat);
+
+    const c = Store.getCombat();
+    const minions = c.combatants.find((x) => x.minionCount > 0);
+    const single = c.combatants.find((x) => x.id === grunt.id);
+    const hero = c.combatants.find((x) => x.side === "hero");
+
+    // damage lands on a minion group one per point, ignoring crits
+    const minionsBefore = minions.health;
+    Combat.applyAttackDamage(minions, 3, c);
+    const minionsAfter = minions.health;
+
+    // a single NPC takes damage after its own armor
+    const singleBefore = single.health;
+    Combat.applyAttackDamage(single, 4, c);
+    const singleAfter = single.health;
+
+    // a stunt that changes the board is applied with the damage
+    Combat.applyAttackDamage(single, 1, c, ["Stun"]);
+    const stunned = !!single.conditions?.stunned;
+
+    // the hero routes through the crit engine and the sheet follows
+    const heroBefore = Store.getCharacter("fight_hero").state.health;
+    Combat.applyAttackDamage(hero, 99, c);
+    const sheet = Store.getCharacter("fight_hero").state;
+
+    // the Action tab offers Attack on every living combatant
+    location.hash = "#/combat";
+    await new Promise((r) => setTimeout(r, 250));
+    const cards = Array.from(document.querySelectorAll("#screen .combatant"));
+    const withAttack = cards.filter((n) => Array.from(n.querySelectorAll("button")).some((b) => b.textContent.trim() === "Attack")).length;
+    const living = Store.getCombat().combatants.filter((x) => x.health > 0).length;
+    const down = Store.getCombat().combatants.filter((x) => x.health <= 0).length;
+
+    // driving one: kind → target → defence → roll, then Apply damage
+    const first = cards.find((n) => Array.from(n.querySelectorAll("button")).some((b) => b.textContent.trim() === "Attack"));
+    Array.from(first.querySelectorAll("button")).find((b) => b.textContent.trim() === "Attack").click();
+    await new Promise((r) => setTimeout(r, 150));
+    const kindTitle = document.querySelector(".modal")?.getAttribute("aria-label") || "";
+    const kinds = Array.from(document.querySelectorAll(".modal .choice")).map((x) => x.textContent);
+    document.querySelector(".modal .modal-head .icon-btn")?.click();
+
+    Store.clearCombat();
+    return { minionsBefore, minionsAfter, singleBefore, singleAfter, stunned,
+      heroBefore, heroNow: sheet.health, broken: sheet.broken, crits: sheet.crits.length,
+      withAttack, living, down, total: cards.length, kindTitle, kinds };
+  });
+  ok("every living combatant can attack from the board, and a broken one cannot",
+    fight.withAttack === fight.living && fight.living >= 2 && fight.down >= 1,
+    `${fight.withAttack} attack / ${fight.living} living / ${fight.down} down`);
+  ok("the attack asks for a kind first", /attacks — how\?/.test(fight.kindTitle) && fight.kinds.length === 4,
+    `${fight.kindTitle} — ${fight.kinds.length}`);
+  ok("damage to a minion group drops one per point",
+    fight.minionsBefore - fight.minionsAfter === 3, `${fight.minionsBefore} → ${fight.minionsAfter}`);
+  ok("damage to an NPC subtracts its armor", fight.singleBefore - fight.singleAfter === 3,
+    `${fight.singleBefore} → ${fight.singleAfter} (armor 1, 4 damage)`);
+  ok("a board stunt is applied with the damage", fight.stunned);
+  ok("damage to the hero routes through the crit engine and updates the sheet",
+    fight.heroNow === 0 && fight.broken === true && fight.crits >= 1,
+    JSON.stringify({ before: fight.heroBefore, now: fight.heroNow, crits: fight.crits }));
 
   /* ------------------------------------------------- all twelve encounter steps are executable */
   const steps12 = await page.evaluate(async () => {
