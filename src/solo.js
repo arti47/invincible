@@ -4,6 +4,7 @@ import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup } from "./core.js"
 import { modal, showToast, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as S from "../data-solo.js";
 import { NPC_PROFILES } from "../data-npcs.js";
+import { ADVERSARIES } from "../data-monsters.js";
 import { D } from "./rules.js";
 import * as R from "./rules.js";
 import * as Derived from "./derived.js";
@@ -1548,6 +1549,7 @@ function encounterCard(state, mount) {
     }
   } else if (phase === "revealed") {
     row.append(el("button", { class: "btn primary", onclick: () => spottingCheck(state, mount) }, "Spotting check"));
+    row.append(el("button", { class: "btn", onclick: () => nameTheThreat(state, mount) }, "I know what this is"));
   } else if (phase === "standoff") {
     if (enc.surprised) {
       row.append(el("button", { class: "btn danger", onclick: () => drawForEncounter(state, mount) }, "Draw initiative — you are surprised"));
@@ -1667,6 +1669,23 @@ function encounterCheck(state, mount) {
   }
   save(state);
   modal({ title: "Encounter check", body, actions: [{ label: "OK", variant: "primary" }] });
+  renderSolo(mount);
+}
+
+/** Step 6's other half: "or established facts" — override the rolled threat with what you know. */
+async function nameTheThreat(state, mount) {
+  const enc = state.encounter;
+  const text = await promptModal("What is actually out there?", {
+    title: "Established facts",
+    value: enc.threat?.name || "",
+    hints: ["The threat table is for when you do not already know. If the fiction has already told you who this is, say so and skip it.",
+      "The behaviour result stands either way — it decides who spots whom, not what they are."],
+  });
+  if (!text || !text.trim()) return;
+  enc.threat = { sixes: enc.threat?.sixes || 1, name: text.trim(), examples: "Established by the fiction, not the table." };
+  enc.detail = { kind: `${enc.behaviour?.name || "Encounter"} · ${text.trim()}`, text: enc.behaviour?.effect || "", note: "Established by the fiction." };
+  logEvent(state, `Encounter threat set by the fiction: ${text.trim()}`);
+  save(state);
   renderSolo(mount);
 }
 
@@ -1816,20 +1835,64 @@ async function escapeEncounter(state, mount) {
 }
 
 /** Step 9: draw initiative. Starts a real action scene, carrying the surprise across. */
-function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
+/**
+ * The threat band the encounter check produced decides where the enemy comes from: a lone foe from
+ * the Ch.6 individual profiles, a group from the minion profiles, an overwhelming one from Ch.8.
+ * The chapter allows "established facts" instead of the table, so naming it yourself is an option.
+ */
+async function pickEncounterEnemy(state) {
+  const sixes = Math.min(3, state.encounter?.lastCheck?.sixes || 1);
+  const threat = state.encounter?.threat || S.ENEMY_THREAT[0];
+  const minions = NPC_PROFILES.filter((n) => n.minion);
+  const singles = NPC_PROFILES.filter((n) => !n.minion);
+  const pool = sixes >= 3 ? ADVERSARIES : sixes === 2 ? minions : singles;
+  const pick = await chooseModal(`What are you facing? (${threat.name})`, [
+    { label: "Roll one from the book", hint: threat.examples, value: "__roll" },
+    { label: "Name it myself", hint: "Established facts beat the table — a blank enemy you fill in", value: "__own" },
+    { label: "Nothing yet", hint: "Add it on the Action tab instead", value: "__skip" },
+    ...pool.map((p) => ({ label: p.name, hint: p.desc || p.descriptor || "", value: p.name })),
+  ]);
+  if (!pick || pick === "__skip") return null;
+  if (pick === "__own") {
+    const name = await promptModal("Who or what is it?", { title: "Name the enemy",
+      hints: ["You can flesh it out on the Action tab — this just puts something on the board with a card."] });
+    if (!name || !name.trim()) return null;
+    return Combat.blankCombatant(name.trim());
+  }
+  const profile = pick === "__roll" ? pool[Math.floor(Math.random() * pool.length)] : pool.find((p) => p.name === pick);
+  if (!profile) return null;
+  let n = 1;
+  if (profile.minion) {
+    n = Number(await promptModal(`How many ${profile.name.toLowerCase()}?`, { title: profile.name, value: sixes >= 2 ? "5" : "1" })) || 1;
+  }
+  return Combat.combatantFromProfile(profile, { count: n });
+}
+
+/** Step 9: draw initiative. Starts a real action scene and puts the enemy on the board with you. */
+async function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
   const enc = state.encounter;
+  const enemy = await pickEncounterEnemy(state);
   enc.phase = "fight";
   enc.detail = { kind: "Initiative drawn", text: enc.surprised
     ? "You are surprised — you take the worst card in round 1."
     : enemySurprised ? "You have the drop on them." : "The fight is on." };
-  logEvent(state, `Encounter joined${enc.surprised ? " (hero surprised)" : enemySurprised ? " (enemy surprised)" : ""}.`);
+  logEvent(state, `Encounter joined${enemy ? ` against ${enemy.name}` : ""}${enc.surprised ? " (hero surprised)" : enemySurprised ? " (enemy surprised)" : ""}.`);
   save(state);
+
   const combat = Combat.startActionScene();
-  if (enc.surprised && combat) {
-    const cb = combat.combatants.find((x) => x.side === "hero");
-    if (cb) { cb.surprised = true; Combat.drawInitiative(combat); Store.saveCombat(combat); }
+  if (enemy) {
+    if (enemySurprised) enemy.surprised = true;
+    Combat.joinCombat(combat, enemy);
   }
-  showToast("Action scene started — the Action tab has initiative and the combatants.", { variant: "good", timeout: 6000 });
+  if (enc.surprised) {
+    const cb = combat.combatants.find((x) => x.side === "hero");
+    if (cb) cb.surprised = true;
+  }
+  if (enc.surprised || enemySurprised) Combat.drawInitiative(combat);
+  Store.saveCombat(combat);
+  showToast(enemy
+    ? `Action scene started — ${enemy.name} is on the board. Initiative is on the Action tab.`
+    : "Action scene started — add the enemy on the Action tab.", { variant: "good", timeout: 6000 });
   renderSolo(mount);
 }
 

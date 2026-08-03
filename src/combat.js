@@ -609,11 +609,35 @@ export function lifecycleButtons() {
       Store.canUndo() ? el("button", { class: "btn warn", onclick: () => { Store.undo(); showToast("Last lifecycle change undone."); } }, `Undo ${Store.undoLabel()}`) : null));
 }
 
-/** Start an action scene: new combat, the active hero in it, initiative drawn. */
+/**
+ * Start an action scene: new combat, the active hero in it, initiative drawn. A scene that is
+ * already running is returned untouched — starting one must never wipe a fight in progress.
+ */
 export function startActionScene() {
+  const running = getCombat();
+  if (running?.active) return running;
   const c = newCombat();
   const hero = Store.activeCharacter();
   if (hero) c.combatants.push(combatantFromCharacter(hero));
   save(drawInitiative(c));
   return c;
+}
+
+/** Put a combatant into a running scene without disturbing anyone else's card or turn. */
+export function joinCombat(combat, combatant) {
+  combat.combatants.push(combatant);
+  dealCard(combat, combatant);
+  save(combat);
+  return combatant;
+}
+
+/** A combatant with nothing but a name — for an enemy the player is inventing on the spot. */
+export function blankCombatant(name, { health = 4, slugfest = 2 } = {}) {
+  return {
+    id: uid("cbt"), refId: null, name: name || "Enemy", side: "adversary",
+    attrs: { fighting: 3, agility: 3, strength: 3, reason: 2, intuition: 2, presence: 2 },
+    health, maxHealth: health, resolve: 3, maxResolve: 3, armor: 0, slugfest,
+    conditions: {}, altitude: "ground", zone: 1, minionCount: 0, huge: false,
+    card: null, acted: false, actions: { full: true, quick: true },
+  };
 }

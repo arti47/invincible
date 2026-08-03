@@ -1254,6 +1254,77 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- all twelve encounter steps are executable */
+  const steps12 = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const Combat = await import("/src/combat.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    const h = Derived.blankCharacter();
+    h.id = "step_hero"; h.identity.heroName = "Runner";
+    Store.saveCharacter(h); Store.setActiveCharacter("step_hero");
+    Store.clearCombat();
+
+    const board = (enc) => JSON.stringify({ crisisLevel: 2, alert: "x", alertParts: null, crises: [],
+      timers: [{ id: "t1", name: "Roof falls", proximity: "close" }], allies: [], objectives: [],
+      encounter: enc, mode: "alert", log: [], eventChecks: 1, awaitingSocial: false,
+      lastOracle: null, place: null, resolved: 0, showAllLog: false });
+    const show = async (enc) => {
+      localStorage.setItem("invincible:solo", board(enc));
+      location.hash = "#/home"; location.hash = "#/solo";
+      await new Promise((r) => setTimeout(r, 220));
+      return document.querySelector("#solo-encounter");
+    };
+    const labels = (panel) => Array.from(panel.querySelectorAll(".row-actions button, .row-actions a")).map((b) => b.textContent.trim());
+
+    const S = await import("/data-solo.js");
+    const revealed = await show({ presence: "encountered", phase: "revealed",
+      behaviour: S.ENEMY_BEHAVIOUR[1], threat: S.ENEMY_THREAT[0],
+      lastCheck: { faces: [6, 5], sixes: 1, ones: 0, highest: 6 }, spotted: null });
+    const revealedLabels = labels(revealed);
+
+    // step 9 must put an enemy on the board, not just start an empty scene
+    const spotted = await show({ presence: "encountered", phase: "standoff",
+      behaviour: S.ENEMY_BEHAVIOUR[1], threat: S.ENEMY_THREAT[0],
+      lastCheck: { faces: [6, 5], sixes: 1, ones: 0, highest: 6 }, spotted: { hero: true, npcs: true } });
+    Array.from(spotted.querySelectorAll("button")).find((b) => b.textContent.trim() === "Draw initiative").click();
+    await new Promise((r) => setTimeout(r, 200));
+    const askedWhat = (document.querySelector(".modal")?.getAttribute("aria-label") || "");
+    const enemyChoices = Array.from(document.querySelectorAll(".modal .choice")).map((c) => c.textContent);
+    Array.from(document.querySelectorAll(".modal .choice")).find((c) => /Roll one from the book/.test(c.textContent)).click();
+    await new Promise((r) => setTimeout(r, 300));
+    const combat = Store.getCombat();
+    const sides = (combat?.combatants || []).map((c) => c.side);
+    const cards = (combat?.combatants || []).map((c) => c.card);
+
+    // starting a scene must never wipe one already running
+    const before = Store.getCombat().combatants.length;
+    Combat.startActionScene();
+    const after = Store.getCombat().combatants.length;
+
+    Store.clearCombat();
+    localStorage.removeItem("invincible:solo");
+    return { revealedLabels, askedWhat, enemyChoices, sides, cards, before, after };
+  });
+  ok("step 6 allows established facts instead of the threat table",
+    steps12.revealedLabels.includes("I know what this is"), steps12.revealedLabels.join(" | "));
+  ok("step 9 asks what you are facing", /What are you facing/.test(steps12.askedWhat), steps12.askedWhat);
+  ok("it offers the book's list, your own name, or nothing yet",
+    steps12.enemyChoices.some((c) => /Roll one from the book/.test(c))
+      && steps12.enemyChoices.some((c) => /Name it myself/.test(c))
+      && steps12.enemyChoices.some((c) => /Nothing yet/.test(c))
+      && steps12.enemyChoices.length > 5,
+    String(steps12.enemyChoices.length));
+  ok("drawing initiative puts hero and enemy on the board with cards",
+    steps12.sides.includes("hero") && steps12.sides.includes("adversary")
+      && steps12.cards.every((c) => c >= 1 && c <= 10),
+    JSON.stringify({ sides: steps12.sides, cards: steps12.cards }));
+  ok("starting an action scene never wipes one already running", steps12.before === steps12.after,
+    `${steps12.before} → ${steps12.after}`);
+
   /* ------------------------------------------------- the crisis log is an editable record */
   const logUi = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
