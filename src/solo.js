@@ -9,6 +9,7 @@ import { D } from "./rules.js";
 import * as R from "./rules.js";
 import * as Derived from "./derived.js";
 import * as Store from "./store.js";
+import * as Journal from "./journal.js";
 import { setLearnTab } from "./learn.js";
 import * as Combat from "./combat.js";
 import { STORAGE_PREFIX } from "./core.js";
@@ -127,6 +128,7 @@ async function headHome(state, mount) {
   state.eventChecks = 0;
   state.resolved = 0;
   logEvent(state, "Headed home: rested, recovered and banked objective karma.");
+  Journal.endSession();
   save(state);
   showToast(`Rested${owed ? `, +${owed} karma` : ""}. Karma spending is open — the next alert starts a new crisis.`, { variant: "good", timeout: 6000 });
   renderSolo(mount);
@@ -187,6 +189,8 @@ const diceRow = (faces) => el("div", { class: "dice-row" },
 function logEvent(state, text) {
   state.log.unshift({ id: uid("log"), at: Date.now(), text, note: "" });
   state.log = state.log.slice(0, 60);
+  // The crisis log stays as the at-a-glance view of the current crisis; the journal is the record.
+  Journal.record({ kind: "solo", text, characterId: Store.activeCharacter()?.id || null });
   announce(text);
 }
 

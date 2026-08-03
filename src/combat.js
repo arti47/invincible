@@ -9,6 +9,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import * as Roller from "./roller.js";
 import { Settings } from "./settings.js";
+import * as Journal from "./journal.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
 
@@ -631,6 +632,17 @@ export async function openLifecycle(kind) {
 
   const summaryLines = await applyBundle(kind, { id: c.id });
 
+  // Boundaries are where people actually want to write. Optional, one tap to skip.
+  if (kind !== "start") {
+    const written = await promptModal(
+      kind === "action" ? "What happened in that action scene?"
+        : kind === "social" ? "What happened in that social scene?"
+        : kind === "session" ? "How did the session end?"
+        : "How did the adventure end?",
+      { title: "Journal — optional", multiline: true, placeholder: "Leave blank to skip" });
+    if (written && written.trim()) Journal.addNote(written.trim(), c.id);
+  }
+
   showToast(`${bundle.title} applied. ${summaryLines.join(" ")}`, {
     variant: "good", timeout: 8000,
     action: { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
@@ -694,6 +706,12 @@ export async function applyBundle(kind, { id } = {}) {
       summaryLines.push("Adventure logged and session flags cleared; karma spending unlocked.");
     }
   }, { id });
+
+  // The journal's sessions are the app's sessions, so entries land under the right heading.
+  if (kind === "start") Journal.startSession("", id || Store.activeCharacterId());
+  Journal.record({ kind: "lifecycle", text: `${bundle.title}${summaryLines.length ? ` — ${summaryLines.join(" ")}` : ""}`,
+    characterId: id || Store.activeCharacterId() });
+  if (kind === "session" || kind === "adventure") Journal.endSession();
 
   if (socialScenePlayed) {
     const Solo = await import("./solo.js");

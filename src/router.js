@@ -19,7 +19,8 @@ const ROUTES = [
   { path: "solo", label: "Solo", icon: "◉", render: (m) => Solo.renderSolo(m), gate: () => Settings.soloMode() },
   { path: "gm", label: "GM", icon: "★", render: (m) => GM.renderGM(m), gate: () => Settings.gmScreen() },
   { path: "learn", label: "Learn", icon: "?", render: (m) => Learn.renderLearn(m), nav: false },
-  { path: "log", label: "Log", icon: "≡", render: (m) => Screens.renderRollLog(m), nav: false },
+  { path: "journal", label: "Journal", icon: "≡", render: (m, arg) => Screens.renderJournal(m, arg) },
+  { path: "log", label: "Log", icon: "≡", render: (m) => Screens.renderJournal(m, "dice"), nav: false },
   { path: "settings", label: "Settings", icon: "⚙", render: (m) => Screens.renderSettings(m), nav: false },
   { path: "create", label: "Create", icon: "+", render: (m) => startWizard(m), nav: false },
 ];
@@ -75,8 +76,7 @@ function renderNav() {
       el("span", { class: "nav-icon", "aria-hidden": "true", text: r.icon }),
       el("span", { class: "nav-label", text: r.label })));
   }
-  navHost.append(el("a", { class: "nav-item", href: "#/log", "data-path": "log" },
-    el("span", { class: "nav-icon", "aria-hidden": "true", text: "≡" }), el("span", { class: "nav-label", text: "Log" })));
+
   navHost.append(el("a", { class: "nav-item", href: "#/settings", "data-path": "settings" },
     el("span", { class: "nav-icon", "aria-hidden": "true", text: "⚙" }), el("span", { class: "nav-label", text: "Settings" })));
   // Enabling Solo and/or GM pushes the bar to 8-9 tabs; tighten so nothing is clipped at 360px.

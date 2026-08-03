@@ -1,7 +1,7 @@
 // screens.js — home, rules library, compendium, roll log, settings & about.
 
 import { el, clear, dieFace } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, announce } from "./ui.js";
+import { modal, showToast, confirmModal, promptModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -11,6 +11,7 @@ import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
 import * as Sync from "./sync.js";
+import * as Journal from "./journal.js";
 
 /* ---------------------------------------------------------------- home */
 
@@ -73,7 +74,7 @@ export function renderHome(mount) {
     el("div", { class: "row-actions" },
       el("a", { class: "btn ghost", href: "#/rules" }, "Open the rules library"),
       el("a", { class: "btn ghost", href: "#/learn" }, "Tutorials"),
-      el("a", { class: "btn ghost", href: "#/log" }, "Roll log"))));
+      el("a", { class: "btn ghost", href: "#/journal" }, "Journal"))));
 }
 
 async function openPregens() {
@@ -216,6 +217,145 @@ export function renderRollLog(mount) {
       if (await confirmModal("Clear the roll log?", { title: "Clear log" })) { Store.clearRollLog(); renderRollLog(mount); }
     } }, "Clear log"),
     list));
+}
+
+/* ---------------------------------------------------------------- journal screen */
+
+/**
+ * The campaign record. One timeline per hero, grouped into sessions, with the dice and the
+ * player's own words in the same place. Replaces the old roll-log screen, which is now the
+ * "Dice" filter.
+ */
+export function renderJournal(mount, arg) {
+  clear(mount);
+  const chars = Store.listCharacters();
+  const active = Store.activeCharacter();
+  if (arg === "dice" && !journalFilter.kinds) journalFilter.kinds = ["roll"];
+
+  const scope = journalFilter.allHeroes || !active ? null : active.id;
+  const groups = Journal.grouped({ characterId: scope, kinds: journalFilter.kinds });
+  const st = Journal.stats();
+  const open = Journal.openSession();
+
+  const head = el("section", { class: "card" },
+    el("h2", { text: "Journal" }),
+    helpPanel([
+      "Everything that happens in play lands here: every roll, every solo check, every scene boundary — and whatever you write alongside them.",
+      "Entries collect under the session they happened in. Start session and End session open and close one; in solo play an alert and Head home do the same job.",
+      "Tap Note on any entry to add your own words to it. Written entries and anything you have annotated are never pruned.",
+    ]),
+    el("p", { class: "stat-line", text: `${st.entries} entries · ${st.written} written · ${st.annotated} annotated · ${st.sessions} session${st.sessions === 1 ? "" : "s"}` }),
+    open ? el("p", { class: "good small", text: `Session open${open.title ? `: ${open.title}` : ""} — new entries are filing under it.` })
+      : el("p", { class: "muted small", text: "No session open. Entries file loose until you start one." }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn primary", onclick: () => writeEntry(mount) }, "Write an entry"),
+      el("button", { class: "btn ghost", onclick: () => exportMarkdown(scope) }, "Export markdown")));
+
+  // Filters: which kinds, and whose journal.
+  const filters = el("div", { class: "chiprow" });
+  const kindChip = (label, kinds) => {
+    const on = JSON.stringify(journalFilter.kinds) === JSON.stringify(kinds);
+    return el("button", { class: `chip selectable ${on ? "selected" : ""}`, onclick: () => {
+      journalFilter.kinds = on ? null : kinds;
+      renderJournal(mount);
+    } }, label);
+  };
+  filters.append(
+    kindChip("Everything", null),
+    kindChip("Written only", ["note"]),
+    kindChip("Dice only", ["roll"]),
+    kindChip("Solo", ["solo"]),
+    kindChip("Scenes", ["lifecycle", "state"]));
+  head.append(filters);
+  if (chars.length > 1) {
+    head.append(el("label", { class: "check" },
+      el("input", { type: "checkbox", checked: journalFilter.allHeroes,
+        onchange: (e) => { journalFilter.allHeroes = e.target.checked; renderJournal(mount); } }),
+      " Show every hero's journal"));
+  }
+  mount.append(head);
+
+  if (!groups.length) {
+    mount.append(el("div", { class: "empty" },
+      el("h3", { text: "Nothing recorded yet" }),
+      el("p", { text: "Roll some dice, or write the first entry." })));
+    return;
+  }
+
+  for (const g of groups) {
+    const card = el("section", { class: "card" });
+    const title = el("h3", { text: g.title });
+    card.append(el("div", { class: "identity-head" }, title,
+      el("div", { class: "chosen-actions" },
+        g.session ? el("button", { class: "btn tiny ghost", onclick: async () => {
+          const t = await promptModal("Name this session — an issue title works well.",
+            { title: "Rename session", value: g.session.title || "" });
+          if (t !== null) { Journal.retitleSession(g.session.id, t); renderJournal(mount); }
+        } }, "Rename") : null,
+        el("button", { class: "btn tiny ghost", onclick: () => exportMarkdown(scope, g.session?.id) }, "Export"))));
+    card.append(el("p", { class: "muted small", text: `${g.entries.length} entr${g.entries.length === 1 ? "y" : "ies"}` }));
+
+    for (const e of g.entries) {
+      card.append(entryRow(e, mount));
+    }
+    mount.append(card);
+  }
+}
+
+const journalFilter = { kinds: null, allHeroes: false };
+
+function entryRow(e, mount) {
+  const meta = Journal.KINDS[e.kind] || { name: e.kind, icon: "•" };
+  const row = el("div", { class: `jr-entry jr-${e.kind}` },
+    el("div", { class: "jr-head" },
+      el("span", { class: "jr-icon", "aria-hidden": "true", text: meta.icon }),
+      el("span", { class: "jr-when", text: new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }),
+      el("span", { class: "jr-kind", text: meta.name })),
+    el("p", { class: e.kind === "note" ? "jr-text written" : "jr-text", text: e.text }));
+
+  if (e.kind === "roll" && e.detail?.dice?.length) {
+    row.append(el("div", { class: "dice-row small" }, ...e.detail.dice.map((v) =>
+      el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+  }
+  if (e.note) row.append(el("p", { class: "jr-note", text: e.note }));
+
+  row.append(el("div", { class: "chosen-actions" },
+    el("button", { class: "btn tiny ghost", onclick: async () => {
+      const n = await promptModal("Your own words about this moment.",
+        { title: e.note ? "Edit note" : "Add a note", value: e.note || "", multiline: true });
+      if (n !== null) { Journal.annotate(e.id, n); renderJournal(mount); }
+    } }, e.note ? "Edit note" : "Note"),
+    e.kind === "note" ? el("button", { class: "btn tiny ghost", onclick: async () => {
+      const t = await promptModal("Edit this entry.", { title: "Edit", value: e.text, multiline: true });
+      if (t !== null) { Journal.editEntry(e.id, t); renderJournal(mount); }
+    } }, "Edit") : null,
+    el("button", { class: "btn tiny ghost", onclick: async () => {
+      if (await confirmModal("Remove this entry from the journal?", { title: "Remove", confirmLabel: "Remove", variant: "danger" })) {
+        Journal.removeEntry(e.id); renderJournal(mount);
+      }
+    } }, "Remove")));
+  return row;
+}
+
+async function writeEntry(mount) {
+  const text = await promptModal("What happened? Write it however you like.",
+    { title: "Journal entry", multiline: true });
+  if (!text) return;
+  Journal.addNote(text, Store.activeCharacterId());
+  showToast("Written to the journal.", { variant: "good" });
+  renderJournal(mount);
+}
+
+function exportMarkdown(characterId, sessionId = null) {
+  const hero = characterId ? Store.getCharacter(characterId) : null;
+  const md = Journal.toMarkdown({ characterId, sessionId,
+    heroName: hero?.identity?.heroName || hero?.identity?.realName || null });
+  const blob = new Blob([md], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = el("a", { href: url, download: `journal-${new Date().toISOString().slice(0, 10)}.md` });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("Journal exported as markdown.", { variant: "good" });
 }
 
 /* ---------------------------------------------------------------- settings & about */

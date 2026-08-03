@@ -533,3 +533,16 @@ select.select option { background: var(--panel); color: var(--ink); }
 .log-time { font-size: .68rem; letter-spacing: .1em; color: var(--muted); font-variant-numeric: tabular-nums; }
 .log-text { margin: 0; font-size: .88rem; }
 .log-note { margin: .15rem 0 0; font-size: .85rem; padding-left: .5rem; border-left: 3px solid var(--accent); }
+
+/* ---- journal ---- */
+.jr-entry { border-left: 3px solid var(--line); padding: .35rem 0 .35rem .6rem; margin: .5rem 0; }
+.jr-entry.jr-note { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.jr-entry.jr-solo { border-left-color: var(--accent-2); }
+.jr-entry.jr-state { border-left-color: var(--danger); }
+.jr-head { display: flex; gap: .45rem; align-items: baseline; font-size: .72rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .04em; }
+.jr-icon { font-size: .85rem; }
+.jr-text { margin: .2rem 0 .3rem; }
+.jr-text.written { font-size: 1.02rem; }
+.jr-note { margin: .25rem 0 .3rem; padding-left: .5rem; border-left: 2px solid var(--accent);
+  color: var(--muted); font-style: italic; }

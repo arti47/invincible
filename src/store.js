@@ -4,6 +4,7 @@
 import { STORAGE_PREFIX, uid, deepClone, clamp } from "./core.js";
 import { normalizeCharacter, blankCharacter, maxHealth, maxResolve } from "./derived.js";
 import * as R from "./rules.js";
+import * as Journal from "./journal.js";
 import { D } from "./rules.js";
 
 const K = {
@@ -40,7 +41,8 @@ let undoStack = null;
 
 export function snapshot(label) {
   undoStack = { label, at: Date.now(), characters: read(K.characters, []), team: read(K.team, null),
-    combat: read(K.combat, null), tasks: read(K.tasks, []), rollLog: read(K.rollLog, []),
+    combat: read(K.combat, null), tasks: read(K.tasks, []),
+    journal: Journal.exportState(),   // the roll log lives here now
     solo: localStorage.getItem(`${STORAGE_PREFIX}solo`) };
 }
 export function canUndo() { return !!undoStack; }
@@ -51,7 +53,7 @@ export function undo() {
   if (undoStack.team) write(K.team, undoStack.team); else localStorage.removeItem(K.team);
   if (undoStack.combat) write(K.combat, undoStack.combat); else localStorage.removeItem(K.combat);
   write(K.tasks, undoStack.tasks || []);
-  write(K.rollLog, undoStack.rollLog || []);
+  if (undoStack.journal) Journal.importState(undoStack.journal);
   if (undoStack.solo) localStorage.setItem(`${STORAGE_PREFIX}solo`, undoStack.solo);
   else localStorage.removeItem(`${STORAGE_PREFIX}solo`);
   undoStack = null;
@@ -193,17 +195,33 @@ export function discountedCost(cost, { personal = true, trained = false } = {}) 
 
 /* ---------------------------------------------------------------- roll log */
 
-export function rollLog() { return read(K.rollLog, []); }
+/**
+ * The roll log is a view over the journal's dice entries — one timeline is the record (§6.1).
+ * The shape callers already expect is reconstructed from each entry's detail.
+ */
+export function rollLog() {
+  return Journal.entries({ kinds: ["roll"] }).map((e) => ({ id: e.id, ts: e.at, ...(e.detail || {}) }));
+}
 
 export function pushRollLog(entry) {
-  const log = read(K.rollLog, []);
-  log.unshift({ id: uid("roll"), ts: Date.now(), ...entry });
-  write(K.rollLog, log.slice(0, ROLL_LOG_CAP));
+  const label = entry.label || "Roll";
+  const faces = (entry.dice || []).join(" ");
+  Journal.record({
+    kind: "roll",
+    text: `${label}${faces ? ` — ${faces}` : ""}${entry.outcome ? ` · ${entry.outcome}` : ""}`,
+    detail: entry,
+    characterId: entry.by || null,
+  });
   emit("rollLog");
   return entry;
 }
 
-export function clearRollLog() { write(K.rollLog, []); emit("rollLog"); }
+export function clearRollLog() {
+  const j = Journal.load();
+  j.entries = j.entries.filter((e) => e.kind !== "roll" || e.note);
+  Journal.save(j);
+  emit("rollLog");
+}
 
 /* ---------------------------------------------------------------- combat & tasks */
 
@@ -220,7 +238,7 @@ export function wipeMissionData() {
   const cleared = {
     combat: !!read(K.combat, null),
     tasks: read(K.tasks, []).length,
-    rollLog: read(K.rollLog, []).length,
+    rollLog: rollLog().length,
     solo: !!localStorage.getItem(`${STORAGE_PREFIX}solo`),
     heroes: listCharacters().length,
   };
@@ -228,7 +246,8 @@ export function wipeMissionData() {
   localStorage.removeItem(K.combat);
   localStorage.removeItem(K.tasks);
   localStorage.removeItem(`${STORAGE_PREFIX}solo`);
-  write(K.rollLog, []);
+  // Clears the mission, not the campaign record: written and annotated journal entries survive.
+  clearRollLog();
   const chars = listCharacters().map((c) => {
     c.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
     c.state.session = { ...c.state.session, karmaAnswers: {}, badKarmaAnswers: {}, wreckedZones: [], stage: "idle", spendUnlocked: true };
@@ -263,6 +282,7 @@ export function exportBackup() {
     rollLog: read(K.rollLog, []),
     tasks: read(K.tasks, []),
     combat: read(K.combat, null),
+    journal: Journal.exportState(),
   };
 }
 
@@ -280,7 +300,8 @@ export function importBackup(json, { merge = false } = {}) {
   } else {
     write(K.characters, incoming);
     if (data.team !== undefined) { if (data.team) write(K.team, data.team); else localStorage.removeItem(K.team); }
-    if (data.rollLog) write(K.rollLog, data.rollLog);
+    if (data.journal) Journal.importState(data.journal);
+    else if (data.rollLog) write(K.rollLog, data.rollLog);   // pre-journal backup
     if (data.tasks) write(K.tasks, data.tasks);
     if (data.combat) write(K.combat, data.combat); else localStorage.removeItem(K.combat);
   }

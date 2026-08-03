@@ -586,6 +586,93 @@ const run = async () => {
     needed.actions.some((a) => /exploring or evading/i.test(a)) && needed.actions.some((a) => /fixed, known scene/i.test(a)),
     needed.actions.join(" | "));
 
+  /* ---------------------------------------------------------------- journal */
+  section("Journal");
+  const journal = await page.evaluate(async () => {
+    const J = await import("/src/journal.js");
+    const Store = await import("/src/store.js");
+    localStorage.clear();
+    J.clearAll();
+    const hero = Store.createCharacter({});
+    Store.setActiveCharacter(hero.id);
+
+    // Rolls flow in automatically, and the roll log is a view over them.
+    Store.pushRollLog({ label: "FIGHTING roll", dice: [6, 3, 1], sixes: 1, ones: 1, pool: 3,
+      outcome: "Success", by: hero.id });
+    const viaRollLog = Store.rollLog();
+
+    // Sessions group what happens inside them.
+    const sess = J.startSession("Issue #1", hero.id);
+    const written = J.addNote("Backdraft kicks the door in.", hero.id);
+    Store.pushRollLog({ label: "STRENGTH roll", dice: [6, 6], sixes: 2, ones: 0, pool: 2,
+      outcome: "Success with 1 stunt", by: hero.id });
+    const groupsOpen = J.grouped({}).map((g) => ({ title: g.title, n: g.entries.length }));
+    J.endSession();
+
+    // Annotating an entry, and the filters.
+    J.annotate(viaRollLog[0].id, "this is where it went wrong");
+    const annotated = J.entries({ kinds: ["roll"] }).filter((e) => e.note).length;
+    const onlyWritten = J.entries({ kinds: ["note"] }).length;
+
+    // Pruning keeps writing and anything annotated; only routine dice go.
+    for (let i = 0; i < 2100; i++) {
+      J.record({ kind: "roll", text: `filler ${i}`, detail: { dice: [2] }, characterId: hero.id });
+    }
+    const afterPrune = {
+      rolls: J.entries({ kinds: ["roll"] }).length,
+      routine: J.entries({ kinds: ["roll"] }).filter((e) => !e.note).length,
+      written: J.entries({ kinds: ["note"] }).length,
+      annotatedKept: J.entries({ kinds: ["roll"] }).filter((e) => e.note).length,
+    };
+
+    const md = J.toMarkdown({ heroName: "Backdraft" });
+    const backup = JSON.parse(Store.exportBackupString());
+    return {
+      viaRollLog: viaRollLog.length, rollShape: viaRollLog[0]?.label, dice: viaRollLog[0]?.dice,
+      sessionTitled: J.grouped({})[0]?.title, groupsOpen, writtenId: !!written.id,
+      annotated, onlyWritten, afterPrune,
+      mdHasHeading: /^## Issue #1/m.test(md), mdHasWriting: /kicks the door in/.test(md),
+      mdHasNote: /went wrong/.test(md),
+      backupHasJournal: !!backup.journal && Array.isArray(backup.journal.entries),
+      sessionId: sess.id,
+    };
+  });
+  ok("a roll lands in the journal and the roll log reads it back",
+    journal.viaRollLog === 1 && journal.rollShape === "FIGHTING roll" && JSON.stringify(journal.dice) === "[6,3,1]",
+    JSON.stringify(journal.viaRollLog));
+  ok("entries group under the open session", journal.sessionTitled === "Issue #1", String(journal.sessionTitled));
+  ok("a written entry is recorded", journal.writtenId && journal.onlyWritten === 1, String(journal.onlyWritten));
+  ok("any entry can be annotated", journal.annotated === 1, String(journal.annotated));
+  // The cap applies to un-annotated dice; annotated ones are exempt, so the total can exceed it.
+  ok("pruning caps routine dice", journal.afterPrune.routine === 2000,
+    `${journal.afterPrune.routine} routine of ${journal.afterPrune.rolls} rolls`);
+  ok("pruning never drops writing or annotated entries",
+    journal.afterPrune.written === 1 && journal.afterPrune.annotatedKept === 1,
+    JSON.stringify(journal.afterPrune));
+  ok("markdown export carries sessions, prose and notes",
+    journal.mdHasHeading && journal.mdHasWriting && journal.mdHasNote,
+    JSON.stringify({ h: journal.mdHasHeading, w: journal.mdHasWriting, n: journal.mdHasNote }));
+  ok("the journal rides along in the JSON backup", journal.backupHasJournal);
+
+  await page.evaluate(() => { location.hash = "#/journal"; });
+  await page.waitForTimeout(250);
+  const journalUi = await page.evaluate(() => {
+    const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    return {
+      heading: document.querySelector("#screen h2")?.textContent || "",
+      write: labels.includes("Write an entry"),
+      exportMd: labels.includes("Export markdown"),
+      filters: ["Everything", "Written only", "Dice only", "Solo", "Scenes"].every((f) => labels.includes(f)),
+      entries: document.querySelectorAll(".jr-entry").length,
+      navHasJournal: !!document.querySelector('.nav-item[data-path="journal"]'),
+    };
+  });
+  ok("the Journal screen renders", /Journal/.test(journalUi.heading), journalUi.heading);
+  ok("it offers writing and markdown export", journalUi.write && journalUi.exportMd);
+  ok("it filters by kind", journalUi.filters);
+  ok("it lists entries", journalUi.entries > 0, String(journalUi.entries));
+  ok("Journal has the nav slot the roll log used", journalUi.navHasJournal);
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {

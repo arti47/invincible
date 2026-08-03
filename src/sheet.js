@@ -9,6 +9,7 @@ import * as Store from "./store.js";
 import * as Roller from "./roller.js";
 import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from "./power-automation.js";
 import { Settings } from "./settings.js";
+import * as Journal from "./journal.js";
 import { stageCard } from "./combat.js";
 
 /* ---------------------------------------------------------------- persistent header */
@@ -34,7 +35,20 @@ export function renderResourceHeader(mount) {
       s.armor.value ? el("span", { class: "res-pill flat", title: s.armor.sources.map((x) => x.name).join(", ") }, el("span", { class: "res-label", text: "Armor" }), el("span", { class: "res-value", text: String(s.armor.value) })) : null,
       c.state.broken ? el("span", { class: "res-pill danger", text: "BROKEN" }) : null,
       c.state.resolve === 0 ? el("span", { class: "res-pill warn", text: "STRESSED OUT" }) : null,
-      c.state.dying?.active ? el("span", { class: "res-pill danger blink", text: "DYING" }) : null));
+      c.state.dying?.active ? el("span", { class: "res-pill danger blink", text: "DYING" }) : null,
+      // Jot without leaving whatever screen you are on.
+      el("button", { class: "res-pill", "aria-label": "Write a journal entry", title: "Write a journal entry",
+        onclick: () => quickJournal(c) }, el("span", { class: "res-label", text: "Journal" }), el("span", { class: "res-value", text: "✎" }))));
+}
+
+/** Write straight into the journal from anywhere in the app. */
+async function quickJournal(c) {
+  const text = await promptModal("What happened? Write it however you like.",
+    { title: "Journal entry", multiline: true });
+  if (text && text.trim()) {
+    Journal.addNote(text.trim(), c?.id || null);
+    showToast("Written to the journal.", { variant: "good" });
+  }
 }
 
 function openVitalEditor(kind) {
@@ -76,6 +90,10 @@ export function applyDamageFlow(amount, { ignoreArmor = false, doubled = false }
     outcome = Roller.applyDamage(ch, amount, { ignoreArmor, doubled });
   }, { id: c.id });
   if (!outcome) return;
+  Journal.record({ kind: "state", characterId: c.id,
+    text: outcome.crit
+      ? `${outcome.damageTaken} damage — broken. Critical injury: ${outcome.crit.entry.name}`
+      : `${outcome.damageTaken} damage taken${outcome.absorbed ? ` (${outcome.absorbed} absorbed)` : ""}` });
   if (outcome.crit) {
     const entry = outcome.crit.entry;
     showToast(`Broken! Critical injury: ${entry.name}`, { variant: "danger", timeout: 6000 });
