@@ -365,14 +365,21 @@ async function whatHappened(state, mount) {
   renderSolo(mount);
 }
 
-/** The card that fronts it — the second thing on the tab, under "do this next". */
+/**
+ * The card that fronts it. At loop step 4 the next-step card above is already offering this exact
+ * control as its primary action, so this one drops to the reference table alone — two big buttons
+ * running the same function read as a bug, not as emphasis.
+ */
 function whatHappenedCard(state, mount) {
+  const duplicated = currentStep(state) === 3;
   return el("section", { class: "card", id: "solo-move" },
-    el("h3", { text: "What did your hero just do?" }),
-    el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
-    el("div", { class: "row-actions" },
+    el("h3", { text: duplicated ? "Which timer fires when?" : "What did your hero just do?" }),
+    duplicated
+      ? el("p", { class: "muted small", text: "Reference for the control above: this is what each timer reacts to." })
+      : el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
+    duplicated ? null : el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it")),
-    el("details", { class: "help" }, el("summary", { text: "Which timer fires when?" }),
+    el("details", { class: "help", open: duplicated }, el("summary", { text: "Which timer fires when?" }),
       el("div", { class: "tablewrap" },
         el("table", { class: "data-table" },
           el("tr", {}, el("th", { text: "Timer" }), el("th", { text: "Check it when" })),

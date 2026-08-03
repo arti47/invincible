@@ -562,11 +562,15 @@ const run = async () => {
       heading: card?.querySelector("h2")?.textContent || "",
       why: card?.querySelector(".next-step-why")?.textContent || "",
       hasNeedCheck: labels.includes("Do I need one right now?"),
+      rollButtons: labels.filter((l) => /^(Say what your hero just did|Something happened — roll it)$/.test(l)).length,
     };
   });
   ok("step 4 offers the narrate-then-roll control", /what your hero just did/i.test(soloStuck.heading), soloStuck.heading);
   ok("step 4 explains you never pick a timer yourself", /which checks that action triggers/i.test(soloStuck.why), soloStuck.why.slice(0, 60));
   ok("the encounter panel answers whether a timer is needed", soloStuck.hasNeedCheck);
+  // Two cards must never front the same control: at step 4 the next-step card owns it.
+  ok("the narrate-then-roll control is offered exactly once",
+    soloStuck.rollButtons === 1, `${soloStuck.rollButtons} buttons`);
 
   const needed = await page.evaluate(async () => {
     Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "Do I need one right now?").click();
@@ -1837,6 +1841,13 @@ const run = async () => {
     await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
     const card = document.querySelector("#solo-move");
     const cardLabels = card ? Array.from(card.querySelectorAll("button")).map((b) => b.textContent.trim()) : [];
+    // At loop step 4 the next-step card owns this control and #solo-move drops to reference only,
+    // so look for it across the screen rather than inside one card.
+    const rollCtl = () => Array.from(document.querySelectorAll("#screen button"))
+      .find((b) => /Something happened|Say what your hero just did/.test(b.textContent));
+    const rollLabels = Array.from(document.querySelectorAll("#screen button"))
+      .map((b) => b.textContent.trim())
+      .filter((l) => /^(Something happened — roll it|Say what your hero just did)$/.test(l));
     const triggerCount = document.querySelectorAll("#solo-timers .trigger").length;
     const triggers = Array.from(document.querySelectorAll("#solo-timers .trigger")).map((p) => p.textContent);
 
@@ -1844,7 +1855,7 @@ const run = async () => {
     const encText = document.querySelector("#solo-encounter")?.textContent || "";
 
     // driving a move must roll the timers it says it rolls
-    Array.from(card.querySelectorAll("button")).find((b) => /Something happened/.test(b.textContent)).click();
+    rollCtl().click();
     await new Promise((r) => setTimeout(r, 150));
     const choices = Array.from(document.querySelectorAll(".modal .choice")).map((c) => c.textContent);
     const before = JSON.parse(localStorage.getItem("invincible:solo")).timers[0].proximity;
@@ -1857,8 +1868,7 @@ const run = async () => {
 
     // with no encounter timer running, a move that would roll one simply skips it
     await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
-    const card2 = document.querySelector("#solo-move");
-    Array.from(card2.querySelectorAll("button")).find((b) => /Something happened/.test(b.textContent)).click();
+    rollCtl().click();
     await new Promise((r) => setTimeout(r, 150));
     Array.from(document.querySelectorAll(".modal .choice")).find((c) => /I moved to a new place/.test(c.textContent)).click();
     await new Promise((r) => setTimeout(r, 250));
@@ -1866,11 +1876,11 @@ const run = async () => {
     document.querySelector(".modal .modal-actions button")?.click();
     localStorage.removeItem("invincible:solo");
 
-    return { cardLabels, triggerCount, triggers, encText, choices, before, reportHeads,
+    return { cardLabels, rollLabels, triggerCount, triggers, encText, choices, before, reportHeads,
       afterProx: after.timers[0]?.proximity, eventChecks: after.eventChecks, skipHeads };
   });
-  ok("the Solo tab fronts one control that rolls the right checks for you",
-    moves.cardLabels.some((l) => /Something happened/.test(l)), moves.cardLabels.join(" | "));
+  ok("the Solo tab fronts exactly one control that rolls the right checks for you",
+    moves.rollLabels.length === 1, moves.rollLabels.join(" | "));
   ok("every timer group states its own trigger", moves.triggerCount === 4, String(moves.triggerCount));
   ok("the triggers name the right conditions",
     /time passes/i.test(moves.triggers[0]) && /faces a threat/i.test(moves.triggers[1])
