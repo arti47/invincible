@@ -592,7 +592,9 @@ function crisesCard(state, mount) {
 async function engageCrisis(state, crisis, mount) {
   const start = await chooseProximity(state, "How close is it?");
   if (!start) return;
-  state.timers.push({ id: uid("timer"), name: crisis.text, proximity: start, crisisId: crisis.id });
+  const name = crisis.parts?.headline || crisis.text;
+  const detail = crisis.parts?.complication ? `Complication: ${crisis.parts.complication}` : null;
+  state.timers.push({ id: uid("timer"), name, proximity: start, crisisId: crisis.id, detail });
   state.crises = state.crises.filter((x) => x.id !== crisis.id);
   logEvent(state, `Engaged: ${crisis.text} (timer starts ${start})`);
   save(state);
@@ -902,6 +904,30 @@ async function generateAlert(state, mount) {
     actions: [{ label: "OK", variant: "primary" }] });
 }
 
+/* ---------------------------------------------------------------- reading a timer at a glance */
+
+/**
+ * One shape for every timer row. A bare status name ("Imminent", "Overwhelmed") tells you nothing
+ * about which way is bad or how much road is left, so each row shows a ladder of pips, the dice it
+ * rolls right now, and one plain sentence saying what happens next.
+ */
+function timerRow({ name, ladder, index, diceLabel, meaning, tone, note, actions }) {
+  const steps = ladder.length - 1;                       // the last rung is the outcome, not a step
+  const left = steps - index;
+  const pips = el("span", { class: `pips ${tone}`, "aria-hidden": "true" });
+  ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= index ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
+  return el("div", { class: `timer ${tone}` },
+    el("div", { class: "timer-main" },
+      el("strong", { class: "timer-name", text: name }),
+      el("div", { class: "timer-track" }, pips,
+        el("span", { class: "timer-status", text: `${ladder[index].name}${diceLabel ? ` · ${diceLabel}` : ""}` })),
+      el("p", { class: "timer-meaning", text: meaning }),
+      note ? el("p", { class: "muted small", text: note }) : null),
+    el("div", { class: "chosen-actions" }, ...actions.filter(Boolean)));
+}
+
+const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 /* ---------------------------------------------------------------- crisis timers */
 
 function timersCard(state, mount) {
@@ -910,16 +936,28 @@ function timersCard(state, mount) {
     el("p", { class: "trigger", text: "Check when: time passes — between scenes, on a delay, changing location, or lingering somewhere." }),
     el("p", { class: "muted small", text: S.CRISIS_TIMER.sourceGap ? "Proximity labels follow the surrounding rules text; the supplied table was partly truncated." : "" }));
   for (const t of state.timers) {
-    const rung = S.CRISIS_TIMER.ladder.find((l) => l.key === t.proximity) || S.CRISIS_TIMER.ladder[0];
-    card.append(el("div", { class: "timer" },
-      el("div", {}, el("strong", { text: t.name }), el("p", { class: "muted small", text: `${rung.name} · ${rung.dice} threat dice` })),
-      el("div", { class: "chosen-actions" },
+    const ladder = S.CRISIS_TIMER.ladder;
+    const idx = Math.max(0, ladder.findIndex((l) => l.key === t.proximity));
+    const left = ladder.length - 1 - idx;
+    card.append(timerRow({
+      name: t.name,
+      ladder, index: idx, tone: left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
+      diceLabel: `roll ${count(ladder[idx].dice, "die", "dice")}`,
+      meaning: left === 0
+        ? "It is happening now. Deal with the consequences, then start another timer."
+        : `${count(left, "step")} from happening. Every 6 you roll moves it one step closer.`,
+      note: t.detail || null,
+      actions: [
         el("button", { class: "btn tiny primary", onclick: () => checkTimer(state, t, mount) }, "Check"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.timers = state.timers.filter((x) => x.id !== t.id); logEvent(state, `Timer stopped: ${t.name}`); save(state); renderSolo(mount); } }, "Stop"))));
+        el("button", { class: "btn tiny ghost", onclick: () => { state.timers = state.timers.filter((x) => x.id !== t.id); logEvent(state, `Timer stopped: ${t.name}`); save(state); renderSolo(mount); } }, "Stop"),
+      ],
+    }));
   }
   if (!state.timers.length) card.append(el("p", { class: "warn small", text: "No timer running. Always keep at least one." }));
   const mode = S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0];
-  card.append(el("p", { class: "muted small", text: `Moving ${mode.name.toLowerCase()}: ${mode.crisis > 0 ? "+" : ""}${mode.crisis} crisis dice.` }));
+  card.append(el("p", { class: "muted small", text: mode.crisis === 0
+    ? `Moving ${mode.name.replace(" (default)", "").toLowerCase()}: these checks roll as printed.`
+    : `Moving ${mode.name.toLowerCase()} adds ${mode.crisis > 0 ? "+1 die to" : "-1 die from"} every check here.` }));
   const row = el("div", { class: "row-actions" });
   if (state.timers.length > 1) row.append(el("button", { class: "btn", onclick: () => checkAllTimers(state, mount) }, "Time passes — check every timer"));
   row.append(el("button", { class: currentStep(state) === 2 ? "btn primary" : "btn", onclick: () => addTimer(state, mount) }, "Start a crisis timer"));
@@ -1038,14 +1076,26 @@ function objectivesCard(state, mount) {
     helpPanel(["What your hero is trying to achieve. Objectives are how you earn karma in solo play, replacing the end-of-session questions.", "Roll Progress to advance along the ladder. 1s cancel 6s, and a net-negative result pushes the objective one step back.", "When it reaches the top of the ladder, claim the karma shown on the row."]),
     el("p", { class: "trigger", text: "Check when: a milestone happens — something meaningful for or against the goal. Never on a clock." }));
   for (const o of state.objectives) {
-    const rung = S.OBJECTIVE_TIMER.ladder.find((l) => l.key === o.status);
-    card.append(el("div", { class: "timer" },
-      el("div", {}, el("strong", { text: o.name }), el("p", { class: "muted small", text: `${rung.name} · ${rung.dice} progress dice · ${o.karma} karma on completion` })),
-      el("div", { class: "chosen-actions" },
-        rung.key === "reached"
+    const ladder = S.OBJECTIVE_TIMER.ladder;
+    const idx = Math.max(0, ladder.findIndex((l) => l.key === o.status));
+    const left = ladder.length - 1 - idx;
+    const phase = phaseFor(state.crisisLevel);
+    const pen = phase.key === "medium" ? -1 : phase.key === "high" ? -2 : 0;
+    const dice = Math.max(1, ladder[idx].dice + pen);
+    card.append(timerRow({
+      name: o.name,
+      ladder, index: idx, tone: left === 0 ? "t-done" : "t-good",
+      diceLabel: left === 0 ? `worth ${o.karma} karma` : `roll ${count(dice, "die", "dice")}${pen ? ` (${pen} for ${phase.name.toLowerCase()})` : ""}`,
+      meaning: left === 0
+        ? `Reached. Claim ${count(o.karma, "karma point")} — it pays what the objective was worth when you set it.`
+        : `${count(left, "step")} to go, then ${count(o.karma, "karma point")}. Every 6 advances it; every 1 cancels a 6, and more 1s than 6s pushes it back a step.`,
+      actions: [
+        left === 0
           ? el("button", { class: "btn tiny primary", onclick: () => completeObjective(state, o, mount) }, "Claim karma")
           : el("button", { class: "btn tiny primary", onclick: () => objectiveCheck(state, o, mount) }, "Progress"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.objectives = state.objectives.filter((x) => x.id !== o.id); save(state); renderSolo(mount); } }, "Drop"))));
+        el("button", { class: "btn tiny ghost", onclick: () => { state.objectives = state.objectives.filter((x) => x.id !== o.id); save(state); renderSolo(mount); } }, "Drop"),
+      ],
+    }));
   }
   card.append(el("p", { class: "muted small", text: S.OBJECTIVE_TIMER.rules[0] }));
   card.append(el("button", { class: "btn", onclick: () => addObjective(state, mount) }, "Set an objective"));
@@ -1138,13 +1188,24 @@ function alliesCard(state, mount) {
     helpPanel(["A group helping you, tracked as one unit rather than as individual NPCs.", "Check them to see how they hold up: each 6 is a success (2 damage each in a fight), each 1 drops their status one step toward Alone.", "Allies aiding you directly give +2 dice to your own roll."]),
     el("p", { class: "trigger", text: "Check when: the group faces a threat or tries something dangerous. Off-screen, once every few hours of game time." }));
   for (const a of state.allies) {
-    const rung = S.ALLY_TIMER.ladder.find((l) => l.key === a.status);
-    card.append(el("div", { class: "timer" },
-      el("div", {}, el("strong", { text: a.name }), el("p", { class: "muted small", text: `${rung.name} · ${rung.dice} support dice` })),
-      el("div", { class: "chosen-actions" },
-        el("button", { class: "btn tiny primary", onclick: () => allyCheck(state, a, mount, false) }, "Check"),
-        el("button", { class: "btn tiny", onclick: () => allyCheck(state, a, mount, true) }, "Fight"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.allies = state.allies.filter((x) => x.id !== a.id); save(state); renderSolo(mount); } }, "Drop"))));
+    const ladder = S.ALLY_TIMER.ladder;
+    const idx = Math.max(0, ladder.findIndex((l) => l.key === a.status));
+    const left = ladder.length - 1 - idx;
+    const gone = ladder[idx].dice === 0;
+    card.append(timerRow({
+      name: a.name,
+      ladder, index: idx, tone: gone ? "t-gone" : left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
+      diceLabel: gone ? "nobody left" : `roll ${count(ladder[idx].dice, "die", "dice")}`,
+      meaning: gone
+        ? "There is nobody left to roll for. You finish this alone."
+        : `${count(left, "step")} from being wiped out. Every 6 is a win for them (2 damage in a fight); every 1 costs them a step.`,
+      note: gone ? null : "They give you +2 dice when they are directly helping with what you are doing.",
+      actions: [
+        gone ? null : el("button", { class: "btn tiny primary", onclick: () => allyCheck(state, a, mount, false) }, "Check"),
+        gone ? null : el("button", { class: "btn tiny", onclick: () => allyCheck(state, a, mount, true) }, "Fight"),
+        el("button", { class: "btn tiny ghost", onclick: () => { state.allies = state.allies.filter((x) => x.id !== a.id); save(state); renderSolo(mount); } }, "Drop"),
+      ],
+    }));
   }
   if (!state.allies.length) card.append(el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
   card.append(el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
@@ -1304,7 +1365,18 @@ function encounterCard(state, mount) {
   const rung = encRung(enc.presence);
   const mode = encMode(state);
   const dice = Math.max(1, rung.dice + mode.encounter);
-  card.append(el("p", { class: "stat-line", text: `${rung.name}${rung.dice ? ` · ${dice} enemy dice` : ""} · moving ${mode.name.replace(" (default)", "")}` }));
+  {
+    const ladder = S.ENCOUNTER_TIMER.ladder;
+    const idx = Math.max(0, encIndex(enc.presence));
+    const left = ladder.length - 1 - idx;
+    const pips = el("span", { class: `pips ${left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool"}`, "aria-hidden": "true" });
+    ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= idx ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
+    card.append(el("div", { class: "timer-track" }, pips,
+      el("span", { class: "timer-status", text: `${rung.name}${rung.dice ? ` · roll ${count(dice, "die", "dice")}` : ""}` })));
+    card.append(el("p", { class: "timer-meaning", text: left === 0
+      ? "Something is here. Work through the steps below."
+      : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer, and moving ${mode.name.replace(" (default)", "").toLowerCase()} means ${mode.encounter === 0 ? "no change to the dice" : `${mode.encounter > 0 ? "+" : ""}${mode.encounter} enemy die`}.` }));
+  }
   card.append(el("p", { class: "stage-label", text: `Step ${sequenceIndex(state) + 1} of 12 — ${S.ENCOUNTER_SEQUENCE[sequenceIndex(state)]}` }));
 
   const row = el("div", { class: "row-actions" });

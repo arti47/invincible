@@ -477,3 +477,24 @@ select.select option { background: var(--panel); color: var(--ink); }
 .crisis-comp { margin: .15rem 0 0; font-size: .85rem; padding-left: .5rem; border-left: 3px solid var(--warn); }
 .crisis-comp strong { text-transform: uppercase; font-size: .68rem; letter-spacing: .1em; color: var(--warn); display: block; }
 .alert-box .crisis-head { font-size: 1.05rem; }
+
+/* ---- solo: a timer you can read at a glance ---- */
+.timer-main { min-width: 0; display: flex; flex-direction: column; gap: .2rem; }
+.timer-name { font-size: 1rem; line-height: 1.3; }
+.timer-track { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+.timer-status { font-size: .8rem; font-weight: 700; letter-spacing: .02em; }
+.timer-meaning { margin: 0; font-size: .85rem; color: var(--muted); }
+.pips { display: inline-flex; gap: 3px; align-items: center; }
+.pip { width: 9px; height: 9px; border: 2px solid var(--line); border-radius: 50%; background: transparent; }
+.pip.end { border-radius: 2px; transform: rotate(45deg); }
+.pips.t-cool .pip.on { background: var(--accent-2); }
+.pips.t-warm .pip.on { background: var(--warn); }
+.pips.t-hot .pip.on { background: var(--danger); }
+.pips.t-good .pip.on { background: var(--good); }
+.pips.t-done .pip.on { background: var(--accent); }
+.pips.t-gone .pip.on { background: var(--muted); }
+.timer.t-hot { border-color: var(--danger); }
+.timer.t-done { border-color: var(--good); }
+.timer.t-gone { opacity: .7; }
+/* the tone class must never repaint the row's text - .good/.warn are global colour utilities */
+.timer[class*="t-"] { color: var(--ink); }

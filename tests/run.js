@@ -1254,6 +1254,63 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- every timer reads the same way */
+  const timerFmt = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 5, alert: "x", alertParts: null, crises: [],
+      timers: [{ id: "t1", name: "The roof gives way", proximity: "imminent", detail: "Complication: reporters in the way" }],
+      allies: [{ id: "a1", name: "Hazmat crews", status: "desperate" }, { id: "a2", name: "Bystanders", status: "alone" }],
+      objectives: [{ id: "o1", name: "Find who released it", status: "near", karma: 4 },
+        { id: "o2", name: "Get the reporters clear", status: "reached", karma: 2 }],
+      encounter: { presence: "closing", phase: "moving" }, mode: "cautious", log: [], eventChecks: 2,
+      awaitingSocial: false, lastOracle: null, place: null, resolved: 0 }));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const rows = Array.from(document.querySelectorAll("#solo-timers .timer"));
+    const read = (r) => ({
+      name: r.querySelector(".timer-name")?.textContent || "",
+      status: r.querySelector(".timer-status")?.textContent || "",
+      meaning: r.querySelector(".timer-meaning")?.textContent || "",
+      pips: r.querySelectorAll(".pip").length,
+      lit: r.querySelectorAll(".pip.on").length,
+      colour: getComputedStyle(r).color,
+    });
+    const inkColour = getComputedStyle(document.querySelector("#solo-timers")).color;
+    const all = rows.map(read);
+    const enc = {
+      status: document.querySelector("#solo-encounter .timer-status")?.textContent || "",
+      meaning: document.querySelector("#solo-encounter .timer-meaning")?.textContent || "",
+      pips: document.querySelectorAll("#solo-encounter .pip").length,
+    };
+    const alone = all.find((r) => /Bystanders/.test(r.name));
+    const reached = all.find((r) => /reporters clear/.test(r.name));
+    const modeNote = Array.from(document.querySelectorAll("#solo-timers p")).map((p) => p.textContent)
+      .find((t) => /Moving cautious/.test(t)) || "";
+    localStorage.removeItem("invincible:solo");
+    return { all, enc, alone, reached, inkColour, modeNote };
+  });
+  ok("every timer row shows a ladder, a status and a plain meaning",
+    timerFmt.all.length === 5 && timerFmt.all.every((r) => r.status && r.meaning && r.pips > 0),
+    JSON.stringify(timerFmt.all.map((r) => r.status)));
+  ok("the ladder is lit up to the current rung",
+    timerFmt.all.every((r) => r.lit >= 1 && r.lit <= r.pips), JSON.stringify(timerFmt.all.map((r) => `${r.lit}/${r.pips}`)));
+  ok("statuses say how many dice to roll, in plain words",
+    timerFmt.all.filter((r) => /roll \d+ (die|dice)/.test(r.status)).length >= 3,
+    timerFmt.all.map((r) => r.status).join(" | "));
+  ok("meanings say how many steps are left and what a 6 does",
+    timerFmt.all.filter((r) => /step/.test(r.meaning)).length >= 3, timerFmt.all.map((r) => r.meaning).join(" | "));
+  ok("a spent ally group says nobody is left, not a dice count",
+    /nobody left/.test(timerFmt.alone.status) && !/roll/.test(timerFmt.alone.status), timerFmt.alone.status);
+  ok("a reached objective shows its karma instead of dice",
+    /karma/.test(timerFmt.reached.status) && /Claim/.test(timerFmt.reached.meaning), timerFmt.reached.status);
+  ok("the encounter panel reads the same way", !!timerFmt.enc.status && /step|here/.test(timerFmt.enc.meaning) && timerFmt.enc.pips === 7,
+    `${timerFmt.enc.status} — ${timerFmt.enc.meaning}`);
+  ok("the tone colour never repaints the row's text",
+    timerFmt.all.every((r) => r.colour === timerFmt.inkColour), JSON.stringify(timerFmt.all.map((r) => r.colour)));
+  ok("the movement-mode note is a sentence, not a fragment", /adds \+1 die to every check/.test(timerFmt.modeNote), timerFmt.modeNote);
+
   /* ------------------------------------------------- a crisis reads as facts, not a run-on line */
   const crisisFmt = await page.evaluate(async () => {
     const Solo = await import("/src/solo.js");
@@ -1506,7 +1563,7 @@ const run = async () => {
       return {
         labels: Array.from(panel.querySelectorAll(".row-actions button, .row-actions a")).map((b) => b.textContent.trim()),
         step: panel.querySelector(".stage-label")?.textContent || "",
-        stats: panel.querySelector(".stat-line")?.textContent || "",
+        stats: panel.querySelector(".timer-status")?.textContent || "",
       };
     };
     const moving = await controlsFor({ presence: "confirmed", phase: "moving" });
@@ -1544,7 +1601,7 @@ const run = async () => {
     encounter.resetPhase.labels.includes("Reset the encounter timer")
       && encounter.advance.labels.includes("Advance time — check crisis timers"));
   ok("movement mode changes the enemy dice on the panel",
-    /4 enemy dice/.test(encounter.moving.stats) && /3 enemy dice/.test(encounter.cautious.stats) && /5 enemy dice/.test(encounter.rushed.stats),
+    /roll 4 dice/.test(encounter.moving.stats) && /roll 3 dice/.test(encounter.cautious.stats) && /roll 5 dice/.test(encounter.rushed.stats),
     `${encounter.moving.stats} || ${encounter.cautious.stats} || ${encounter.rushed.stats}`);
   ok("the powers option needs a power, a 6 and at most one 1, with the enemy closing",
     encounter.opt.good && !encounter.opt.tooManyOnes && !encounter.opt.noSix && !encounter.opt.tooFar && !encounter.opt.triggered,
