@@ -163,25 +163,47 @@ export const BONUS_SIX_EFFECTS = [
 ];
 
 export const CRISIS_TIMER = {
+  // Re-extracted from the printed table (page image supplied 2026-08-04). The earlier ladder was
+  // reconstructed from surrounding prose while the table was truncated: it was missing Remote
+  // entirely and carried two invented rungs ("Close", "Next moment") in place of Soon and Looming.
   ladder: [
+    { key: "remote", name: "Remote", dice: 6 },
     { key: "distant", name: "Distant", dice: 5 },
     { key: "approaching", name: "Approaching", dice: 4 },
-    { key: "close", name: "Close", dice: 3 },
-    { key: "imminent", name: "Imminent", dice: 2 },
-    { key: "next", name: "Next moment", dice: 1 },
+    { key: "soon", name: "Soon", dice: 3 },
+    { key: "looming", name: "Looming", dice: 2 },
+    { key: "imminent", name: "Imminent", dice: 1 },
     { key: "now", name: "Now", dice: 0 },
   ],
-  // Source note: the supplied Ch.9 crisis-timer table's proximity/threat-dice columns are partially
-  // truncated. The ladder above uses the proximity names given in the surrounding prose ("from
-  // distant to approaching", "when a crisis timer drops to now") with dice decreasing as the event
-  // nears, exactly as the prose describes. Flagged for re-check against a printing.
-  sourceGap: true,
-  startByPhase: { low: "distant", medium: "close", high: "imminent" },
+  sourceGap: false,
+  /**
+   * Where a new timer starts: roll 2D6 and read the column for the current crisis phase. A high
+   * crisis can never start Remote, and only medium and high can start Imminent.
+   */
+  startTable: {
+    low: [
+      { range: [2, 4], key: "remote" }, { range: [5, 6], key: "distant" },
+      { range: [7, 8], key: "approaching" }, { range: [9, 10], key: "soon" },
+      { range: [11, 12], key: "looming" },
+    ],
+    medium: [
+      { range: [2, 3], key: "remote" }, { range: [4, 5], key: "distant" },
+      { range: [6, 7], key: "approaching" }, { range: [8, 9], key: "soon" },
+      { range: [10, 11], key: "looming" }, { range: [12, 12], key: "imminent" },
+    ],
+    high: [
+      { range: [2, 3], key: "distant" }, { range: [4, 6], key: "approaching" },
+      { range: [7, 8], key: "soon" }, { range: [9, 10], key: "looming" },
+      { range: [11, 12], key: "imminent" },
+    ],
+  },
+  paceModifier: { prolonged: 1, speedy: -1, minimumDice: 1 },
   rules: [
     "Decide what the timer will trigger. If you have no specific event in mind, flag it as 'bad thing happens' and find out together.",
+    "Give a new timer its proximity: roll 2D6 and read the column for the current crisis phase, or simply choose one if you already know how close the danger is.",
     "Check active timers as time passes between scenes, on delays, when you change location, or when you linger or perform something complex.",
     "Roll threat dice for the proximity; each 6 shifts the event one step closer. Repeat for every active timer.",
-    "Roll +1 die for lengthy scenes or actions, and -1 (minimum 1) for anything done faster than normal.",
+    "Roll +1 die for prolonged scenes or actions, and -1 for speedy ones (minimum 1 die).",
     "Reaching 'now' fires the event and raises the crisis level by 1.",
     "You may be able to stop a timer entirely — finding the bomb and cutting the right wire.",
     "Once a timer is triggered or stopped, start another. Always keep at least one running.",

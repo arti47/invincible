@@ -155,7 +155,15 @@ ${p(`Nothing rolls yet. Setting an objective is bookkeeping; it only advances on
 ${h2("5 · The crisis timer")}
 ${p("A ladder counting down to something specific happening. You name what it triggers when you start it, and that is what happens when it runs out.")}
 ${table(["Proximity", "Threat dice"], tables.crisisLadder.map((l) => [esc(l.name), String(l.dice)]))}
-${p(`Where it starts depends on the phase: <span class="nb">${esc(tables.crisisStart.low)}</span> in a low crisis, <span class="nb">${esc(tables.crisisStart.medium)}</span> in a medium one, <span class="nb">${esc(tables.crisisStart.high)}</span> in a high one. Roll its threat dice when time passes; <span class="nb">every 6 moves it one rung closer</span>. Reaching <span class="nb">now</span> fires the event, raises the crisis level by 1, and removes that timer — so start another.`)}
+${p(`Where a new timer starts is either your choice or a roll: <span class="nb">2D6</span>, read against the column for the crisis phase you are in. A high crisis can never start Remote; only medium and high can start Imminent.`)}
+${table(["Proximity", "Low 2D6", "Medium 2D6", "High 2D6", "Threat dice"], tables.crisisLadder.filter((l) => l.key !== "now").map((l) => {
+  const cell = (ph) => {
+    const row = (tables.crisisStart[ph] || []).find((r) => r.key === l.key);
+    return row ? (row.range[0] === row.range[1] ? String(row.range[0]) : `${row.range[0]}-${row.range[1]}`) : "—";
+  };
+  return [esc(l.name), cell("low"), cell("medium"), cell("high"), String(l.dice)];
+}))}
+${p(`Roll its threat dice when time passes; <span class="nb">every 6 moves it one rung closer</span>. Reaching <span class="nb">now</span> fires the event, raises the crisis level by 1, and removes that timer — so start another.`)}
 ${h3("Movement mode")}
 ${p("How carefully you are moving shifts both the crisis timer and the encounter timer. Set it in the Crisis Mode header.")}
 ${table(["Mode", "Crisis dice", "Enemy dice", "Your INTUITION", "Their INTUITION"], tables.modes.map((m) => {

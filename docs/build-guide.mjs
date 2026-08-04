@@ -156,7 +156,7 @@ const tables = await page.evaluate(async () => {
     socialScenes: S.SOLO_SETUP.socialScenes, recovery: S.SOLO_SETUP.recovery,
     phases: S.CRISIS_LEVEL.phases, eventCheck: S.EVENT_CHECK.entries,
     binary: S.BINARY_ENGINE.entries, bonusSix: S.BONUS_SIX_EFFECTS,
-    crisisLadder: S.CRISIS_TIMER.ladder, crisisStart: S.CRISIS_TIMER.startByPhase,
+    crisisLadder: S.CRISIS_TIMER.ladder, crisisStart: S.CRISIS_TIMER.startTable,
     allyLadder: S.ALLY_TIMER.ladder, objectiveLadder: S.OBJECTIVE_TIMER.ladder,
     encounterLadder: S.ENCOUNTER_TIMER.ladder, behaviour: S.ENEMY_BEHAVIOUR, threat: S.ENEMY_THREAT,
     escape: S.ESCAPE_MODIFIERS, avoiding: S.AVOIDING_ENCOUNTERS, sequence: S.ENCOUNTER_SEQUENCE,

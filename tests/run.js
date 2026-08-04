@@ -928,6 +928,41 @@ const run = async () => {
   ok("five location engines", solo.engines === 5);
   ok("A24 objective arithmetic (advance / regress / hold)", JSON.stringify(solo.a24) === "[4,1,2]", JSON.stringify(solo.a24));
   ok("A25 ally successes convert to 2 damage each", solo.a25.damage === 6);
+  // The crisis-timer ladder and its 2D6 start table, re-extracted from the printed page.
+  const crisisTimer = await page.evaluate(async () => {
+    const S = await import("/data-solo.js");
+    const Solo = await import("/src/solo.js");
+    const L = S.CRISIS_TIMER.ladder;
+    const cover = (ph) => {
+      const seen = new Set();
+      for (const r of S.CRISIS_TIMER.startTable[ph]) for (let v = r.range[0]; v <= r.range[1]; v++) seen.add(v);
+      const missing = []; for (let v = 2; v <= 12; v++) if (!seen.has(v)) missing.push(v);
+      return missing;
+    };
+    const rolled = { low: new Set(), high: new Set() };
+    for (let i = 0; i < 300; i++) {
+      rolled.low.add(Solo.rollStartProximity({ crisisLevel: 0 }).key);
+      rolled.high.add(Solo.rollStartProximity({ crisisLevel: 10 }).key);
+    }
+    return {
+      keys: L.map((l) => l.key), dice: L.map((l) => l.dice),
+      gap: S.CRISIS_TIMER.sourceGap,
+      missing: { low: cover("low"), medium: cover("medium"), high: cover("high") },
+      lowKeys: [...rolled.low].sort(), highKeys: [...rolled.high].sort(),
+    };
+  });
+  ok("the crisis ladder runs Remote 6 down to Now",
+    JSON.stringify(crisisTimer.keys) === JSON.stringify(["remote", "distant", "approaching", "soon", "looming", "imminent", "now"]),
+    crisisTimer.keys.join(" "));
+  ok("threat dice run 6 down to 0", JSON.stringify(crisisTimer.dice) === JSON.stringify([6, 5, 4, 3, 2, 1, 0]), crisisTimer.dice.join(" "));
+  ok("the crisis-timer source gap is closed", crisisTimer.gap === false);
+  ok("every phase column covers 2-12",
+    !crisisTimer.missing.low.length && !crisisTimer.missing.medium.length && !crisisTimer.missing.high.length,
+    JSON.stringify(crisisTimer.missing));
+  ok("a high crisis never starts Remote, a low one never starts Imminent",
+    !crisisTimer.highKeys.includes("remote") && !crisisTimer.lowKeys.includes("imminent"),
+    `low ${crisisTimer.lowKeys.join("/")} · high ${crisisTimer.highKeys.join("/")}`);
+
   ok("Crisis Event Engine covers all 36 D66 focuses", solo.crisisFocus === 36 && solo.crisisD66Complete, String(solo.crisisFocus));
   ok("every crisis focus publishes three detail bands", solo.crisisBands);
   ok("Opportunity Event Engine covers every D66 result", solo.opportunityGaps.length === 0, solo.opportunityGaps.join(","));
@@ -1730,7 +1765,7 @@ const run = async () => {
     Store.clearCombat();
 
     const board = (enc) => JSON.stringify({ crisisLevel: 2, alert: "x", alertParts: null, crises: [],
-      timers: [{ id: "t1", name: "Roof falls", proximity: "close" }], allies: [], objectives: [],
+      timers: [{ id: "t1", name: "Roof falls", proximity: "soon" }], allies: [], objectives: [],
       encounter: enc, mode: "alert", log: [], eventChecks: 1, awaitingSocial: false,
       lastOracle: null, place: null, resolved: 0, showAllLog: false });
     const show = async (enc) => {
@@ -2063,7 +2098,7 @@ const run = async () => {
       await new Promise((r) => setTimeout(r, 220));
     };
 
-    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
+    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "soon" }] }));
     const card = document.querySelector("#solo-move");
     const cardLabels = card ? Array.from(card.querySelectorAll("button")).map((b) => b.textContent.trim()) : [];
     // At loop step 4 the next-step card owns this control and #solo-move drops to reference only,
@@ -2092,7 +2127,7 @@ const run = async () => {
     const after = JSON.parse(localStorage.getItem("invincible:solo"));
 
     // with no encounter timer running, a move that would roll one simply skips it
-    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "close" }] }));
+    await show(board({ timers: [{ id: "t1", name: "Roof falls", proximity: "soon" }] }));
     rollCtl().click();
     await new Promise((r) => setTimeout(r, 150));
     Array.from(document.querySelectorAll(".modal .choice")).find((c) => /I moved to a new place/.test(c.textContent)).click();

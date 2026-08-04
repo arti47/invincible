@@ -1089,18 +1089,31 @@ function timersCard(state, mount) {
 
 /**
  * "Give the event a proximity using the table. If unsure, roll 2D6 to pick one based on the current
- * crisis phase." The supplied 2D6 table is truncated (CRISIS_TIMER.sourceGap), so the roll falls
- * back to the phase's starting rung named in the surrounding prose — flagged as such in the dialog.
+ * crisis phase." Both paths are the book's: choose a rung deliberately, or roll 2D6 and read the
+ * column for the phase you are in.
  */
+export function rollStartProximity(state) {
+  const phase = phaseFor(state.crisisLevel);
+  const rows = S.CRISIS_TIMER.startTable[phase.key] || S.CRISIS_TIMER.startTable.low;
+  const value = roll2d6();
+  const hit = rows.find((r) => value >= r.range[0] && value <= r.range[1]);
+  return { value, phase, key: (hit || rows[rows.length - 1]).key };
+}
+
 async function chooseProximity(state, title) {
   const phase = phaseFor(state.crisisLevel);
-  const fallback = S.CRISIS_TIMER.startByPhase[phase.key];
-  const options = S.CRISIS_TIMER.ladder.slice(0, 5).map((l) => ({
+  // Every rung except "now" — a timer that starts at now has already happened.
+  const options = S.CRISIS_TIMER.ladder.slice(0, -1).map((l) => ({
     label: l.name, hint: `${l.dice} threat dice`, value: l.key }));
-  options.push({ label: `Unsure — roll for it (${phase.name})`, hint: `Rolls 2D6 against the ${phase.name.toLowerCase()} column`, value: "__roll" });
+  options.push({ label: `Unsure — roll 2D6 for it`, hint: `Reads the ${phase.name.toLowerCase()} column of the proximity table`, value: "__roll" });
   const pick = await chooseModal(title, options);
   if (!pick) return null;
-  return pick === "__roll" ? fallback : pick;
+  if (pick !== "__roll") return pick;
+  const rolled = rollStartProximity(state);
+  const rung = S.CRISIS_TIMER.ladder.find((l) => l.key === rolled.key);
+  showToast(`2D6 → ${rolled.value} on the ${phase.name.toLowerCase()} column: ${rung.name} (${rung.dice} threat dice).`,
+    { variant: "good", timeout: 6000 });
+  return rolled.key;
 }
 
 /** The book's two suggested seeds for "what does this timer trigger?". */
