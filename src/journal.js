@@ -19,13 +19,16 @@ export const KINDS = {
   state: { name: "Hero", icon: "◆" },
 };
 
-function blank() { return { sessions: [], entries: [], schema: 1 }; }
+function blank() { return { sessions: [], entries: [], seq: 0, schema: 1 }; }
 
 function read() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY));
     if (!raw || typeof raw !== "object") return blank();
-    return { ...blank(), ...raw, sessions: raw.sessions || [], entries: raw.entries || [] };
+    const j = { ...blank(), ...raw, sessions: raw.sessions || [], entries: raw.entries || [] };
+    // Back-fill ordering on journals written before `seq` existed.
+    if (!j.seq) { j.entries.forEach((e, i) => { if (e.seq === undefined) e.seq = i; }); j.seq = j.entries.length; }
+    return j;
   } catch { return blank(); }
 }
 
@@ -92,7 +95,8 @@ export function record({ kind = "note", text = "", detail = null, characterId = 
   const j = read();
   const session = openSession(j);
   const entry = {
-    id: uid("jr"), at, kind, text: String(text || ""), detail: detail ? deepClone(detail) : null,
+    // Timestamps collide within a millisecond, so a monotonic sequence decides order, not the sort.
+    id: uid("jr"), seq: j.seq = (j.seq || 0) + 1, at, kind, text: String(text || ""), detail: detail ? deepClone(detail) : null,
     sessionId: session ? session.id : null,
     characterId: characterId || session?.characterId || null,
     note: "",
@@ -152,7 +156,7 @@ export function prune(j) {
 /** Entries newest first, optionally narrowed to one hero and/or a set of kinds. */
 export function entries({ characterId = null, kinds = null } = {}) {
   const j = read();
-  let list = j.entries.slice().sort((a, b) => b.at - a.at);
+  let list = j.entries.slice().sort((a, b) => (b.at - a.at) || ((b.seq || 0) - (a.seq || 0)));
   if (characterId) list = list.filter((e) => e.characterId === characterId || e.characterId === null);
   if (kinds && kinds.length) list = list.filter((e) => kinds.includes(e.kind));
   return list;
@@ -179,6 +183,58 @@ export function grouped({ characterId = null, kinds = null } = {}) {
   const loose = bySession.get("__loose");
   if (loose && loose.length) out.push({ session: null, title: "Outside any session", entries: loose });
   return out;
+}
+
+/**
+ * The feed is a projection, not the raw log (standard activity-feed practice): consecutive dice
+ * from the same burst collapse into one row so a combat round costs a line instead of twelve.
+ * Nothing is lost — the burst carries its entries and expands.
+ */
+const BURST_GAP_MS = 4 * 60 * 1000;
+
+export function aggregate(list) {
+  const out = [];
+  for (const e of list) {
+    const last = out[out.length - 1];
+    const burstable = e.kind === "roll" && !e.note;
+    if (burstable && last && last.burst && Math.abs(e.at - last.to) <= BURST_GAP_MS) {
+      last.entries.push(e);
+      last.to = Math.max(last.to, e.at);
+      last.from = Math.min(last.from, e.at);
+      continue;
+    }
+    if (burstable) out.push({ burst: true, id: `burst_${e.id}`, entries: [e], from: e.at, to: e.at });
+    else out.push(e);
+  }
+  // A burst of one is just an entry.
+  return out.map((x) => (x.burst && x.entries.length === 1 ? x.entries[0] : x));
+}
+
+/** What a collapsed burst says on its one line. */
+export function burstSummary(burst) {
+  const n = burst.entries.length;
+  const sixes = burst.entries.reduce((t, e) => t + (e.detail?.sixes || 0), 0);
+  const crits = burst.entries.filter((e) => /crit/i.test(e.detail?.label || "")).length;
+  const stress = burst.entries.reduce((t, e) => t + (e.detail?.stressTaken || 0), 0);
+  const bits = [`${n} rolls`];
+  if (sixes) bits.push(`${sixes} success${sixes === 1 ? "" : "es"}`);
+  if (crits) bits.push(`${crits} crit${crits === 1 ? "" : "s"}`);
+  if (stress) bits.push(`${stress} stress`);
+  return bits.join(" · ");
+}
+
+/** Free-text over what was written and what was recorded. */
+export function search(query, opts = {}) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return entries(opts);
+  return entries(opts).filter((e) =>
+    e.text.toLowerCase().includes(q) || (e.note || "").toLowerCase().includes(q));
+}
+
+/** The most recent entry of a kind — used to attach a note to what just landed. */
+export function lastOfKind(kind) {
+  const list = entries({ kinds: [kind] });
+  return list[0] || null;
 }
 
 export function stats() {

@@ -221,97 +221,177 @@ export function renderRollLog(mount) {
 
 /* ---------------------------------------------------------------- journal screen */
 
+const journalView = { kinds: null, allHeroes: false, query: "", openSessions: null };
+
 /**
- * The campaign record. One timeline per hero, grouped into sessions, with the dice and the
- * player's own words in the same place. Replaces the old roll-log screen, which is now the
- * "Dice" filter.
+ * The campaign record, written as you play. Prose is the point, so the page reads like a diary:
+ * sessions newest first, entries inside one oldest first, and the compose box where the next
+ * entry goes. Mechanical entries are a projection of the raw log — consecutive dice collapse into
+ * a single expandable row rather than flooding the page.
  */
 export function renderJournal(mount, arg) {
   clear(mount);
   const chars = Store.listCharacters();
   const active = Store.activeCharacter();
-  if (arg === "dice" && !journalFilter.kinds) journalFilter.kinds = ["roll"];
+  if (arg === "dice" && journalView.kinds === null) journalView.kinds = ["roll"];
 
-  const scope = journalFilter.allHeroes || !active ? null : active.id;
-  const groups = Journal.grouped({ characterId: scope, kinds: journalFilter.kinds });
-  const st = Journal.stats();
+  const scope = journalView.allHeroes || !active ? null : active.id;
   const open = Journal.openSession();
+  if (journalView.openSessions === null) journalView.openSessions = new Set(open ? [open.id] : []);
 
-  const head = el("section", { class: "card" },
-    el("h2", { text: "Journal" }),
-    helpPanel([
-      "Everything that happens in play lands here: every roll, every solo check, every scene boundary — and whatever you write alongside them.",
-      "Entries collect under the session they happened in. Start session and End session open and close one; in solo play an alert and Head home do the same job.",
-      "Tap Note on any entry to add your own words to it. Written entries and anything you have annotated are never pruned.",
-    ]),
-    el("p", { class: "stat-line", text: `${st.entries} entries · ${st.written} written · ${st.annotated} annotated · ${st.sessions} session${st.sessions === 1 ? "" : "s"}` }),
-    open ? el("p", { class: "good small", text: `Session open${open.title ? `: ${open.title}` : ""} — new entries are filing under it.` })
-      : el("p", { class: "muted small", text: "No session open. Entries file loose until you start one." }),
-    el("div", { class: "row-actions" },
-      el("button", { class: "btn primary", onclick: () => writeEntry(mount) }, "Write an entry"),
-      el("button", { class: "btn ghost", onclick: () => exportMarkdown(scope) }, "Export markdown")));
+  mount.append(journalHeader(mount, chars, scope, open));
 
-  // Filters: which kinds, and whose journal.
-  const filters = el("div", { class: "chiprow" });
-  const kindChip = (label, kinds) => {
-    const on = JSON.stringify(journalFilter.kinds) === JSON.stringify(kinds);
-    return el("button", { class: `chip selectable ${on ? "selected" : ""}`, onclick: () => {
-      journalFilter.kinds = on ? null : kinds;
-      renderJournal(mount);
-    } }, label);
-  };
-  filters.append(
-    kindChip("Everything", null),
-    kindChip("Written only", ["note"]),
-    kindChip("Dice only", ["roll"]),
-    kindChip("Solo", ["solo"]),
-    kindChip("Scenes", ["lifecycle", "state"]));
-  head.append(filters);
-  if (chars.length > 1) {
-    head.append(el("label", { class: "check" },
-      el("input", { type: "checkbox", checked: journalFilter.allHeroes,
-        onchange: (e) => { journalFilter.allHeroes = e.target.checked; renderJournal(mount); } }),
-      " Show every hero's journal"));
+  let groups = Journal.grouped({ characterId: scope, kinds: journalView.kinds });
+  if (journalView.query.trim()) {
+    const hits = new Set(Journal.search(journalView.query, { characterId: scope }).map((e) => e.id));
+    groups = groups.map((g) => ({ ...g, entries: g.entries.filter((e) => hits.has(e.id)) }))
+      .filter((g) => g.entries.length);
   }
-  mount.append(head);
 
-  if (!groups.length) {
+  if (!groups.length && !open) {
     mount.append(el("div", { class: "empty" },
-      el("h3", { text: "Nothing recorded yet" }),
-      el("p", { text: "Roll some dice, or write the first entry." })));
+      el("h3", { text: journalView.query ? "Nothing matches" : "Nothing written yet" }),
+      el("p", { text: journalView.query ? "Try a different word." : "Start a session, then write the first entry." })));
     return;
   }
 
-  for (const g of groups) {
-    const card = el("section", { class: "card" });
-    const title = el("h3", { text: g.title });
-    card.append(el("div", { class: "identity-head" }, title,
-      el("div", { class: "chosen-actions" },
-        g.session ? el("button", { class: "btn tiny ghost", onclick: async () => {
-          const t = await promptModal("Name this session — an issue title works well.",
-            { title: "Rename session", value: g.session.title || "" });
-          if (t !== null) { Journal.retitleSession(g.session.id, t); renderJournal(mount); }
-        } }, "Rename") : null,
-        el("button", { class: "btn tiny ghost", onclick: () => exportMarkdown(scope, g.session?.id) }, "Export"))));
-    card.append(el("p", { class: "muted small", text: `${g.entries.length} entr${g.entries.length === 1 ? "y" : "ies"}` }));
-
-    for (const e of g.entries) {
-      card.append(entryRow(e, mount));
-    }
-    mount.append(card);
+  // An open session always shows, even before anything has landed in it.
+  if (open && !groups.some((g) => g.session?.id === open.id)) {
+    groups.unshift({ session: open, title: Journal.sessionTitle(open, Journal.load().sessions.length), entries: [] });
   }
+
+  for (const g of groups) mount.append(sessionCard(g, mount, open));
 }
 
-const journalFilter = { kinds: null, allHeroes: false };
+function journalHeader(mount, chars, scope, open) {
+  const st = Journal.stats();
+  const card = el("section", { class: "card" },
+    el("h2", { text: "Journal" }),
+    helpPanel([
+      "Your record of the campaign. Write whatever you like as you play — the dice, the solo checks and the scene boundaries file themselves around what you write.",
+      "Sessions read newest first; inside a session the story reads top to bottom, the way it happened.",
+      "Runs of dice collapse into one line. Tap it to see every roll. Tap any entry for its actions.",
+    ]),
+    el("p", { class: "stat-line", text: `${st.written} written · ${st.entries} entries · ${st.sessions} session${st.sessions === 1 ? "" : "s"}` }));
 
-function entryRow(e, mount) {
+  const search = el("input", { class: "input", type: "search", placeholder: "Search the journal…",
+    "aria-label": "Search the journal", value: journalView.query });
+  search.addEventListener("input", () => {
+    journalView.query = search.value;
+    if (search.value.trim()) journalView.openSessions = "all";
+    const at = search.selectionStart;
+    renderJournal(mount);
+    const again = document.querySelector('#screen input[type="search"]');
+    if (again) { again.focus(); again.setSelectionRange(at, at); }
+  });
+  card.append(search);
+
+  const filters = el("div", { class: "chiprow" });
+  const chip = (label, kinds) => {
+    const on = JSON.stringify(journalView.kinds) === JSON.stringify(kinds);
+    return el("button", { class: `chip selectable ${on ? "selected" : ""}`,
+      onclick: () => { journalView.kinds = on && kinds ? null : kinds; renderJournal(mount); } }, label);
+  };
+  filters.append(chip("Everything", null), chip("Written only", ["note"]), chip("Dice only", ["roll"]),
+    chip("Solo", ["solo"]), chip("Scenes", ["lifecycle", "state"]));
+  card.append(filters);
+
+  const row = el("div", { class: "row-actions" },
+    open
+      ? el("button", { class: "btn ghost", onclick: () => { Journal.endSession(); renderJournal(mount); } }, "Close session")
+      : el("button", { class: "btn", onclick: async () => {
+          const t = await promptModal("Name this session, or leave blank.", { title: "Start a session" });
+          if (t === null) return;
+          Journal.startSession(t, Store.activeCharacterId());
+          journalView.openSessions = new Set([Journal.openSession()?.id]);
+          renderJournal(mount);
+        } }, "Start a session"),
+    el("button", { class: "btn ghost", onclick: () => exportMarkdown(scope) }, "Export markdown"));
+  card.append(row);
+
+  if (chars.length > 1) {
+    card.append(el("label", { class: "check" },
+      el("input", { type: "checkbox", checked: journalView.allHeroes,
+        onchange: (e) => { journalView.allHeroes = e.target.checked; renderJournal(mount); } }),
+      " Show every hero's journal"));
+  }
+  return card;
+}
+
+const sessionIsOpen = (id) =>
+  journalView.openSessions === "all" || (journalView.openSessions && journalView.openSessions.has(id));
+
+function sessionCard(g, mount, openSession) {
+  const id = g.session?.id || "__loose";
+  const isCurrent = openSession && g.session?.id === openSession.id;
+  const expanded = sessionIsOpen(id) || isCurrent;
+  const card = el("section", { class: `card session ${isCurrent ? "current" : ""}` });
+
+  const head = el("button", { class: "session-head", "aria-expanded": expanded ? "true" : "false",
+    onclick: () => {
+      if (journalView.openSessions === "all") journalView.openSessions = new Set([id]);
+      else if (journalView.openSessions.has(id)) journalView.openSessions.delete(id);
+      else journalView.openSessions.add(id);
+      renderJournal(mount);
+    } },
+    el("span", { class: "session-caret", "aria-hidden": "true", text: expanded ? "▾" : "▸" }),
+    el("span", {}, el("strong", { text: g.title }),
+      el("span", { class: "muted small", text: ` · ${g.entries.length} entr${g.entries.length === 1 ? "y" : "ies"}${isCurrent ? " · open" : ""}` })));
+  card.append(head);
+
+  if (!expanded) return card;
+
+  if (g.session) {
+    card.append(el("div", { class: "chosen-actions" },
+      el("button", { class: "btn tiny ghost", onclick: async () => {
+        const t = await promptModal("Name this session — an issue title works well.",
+          { title: "Rename session", value: g.session.title || "" });
+        if (t !== null) { Journal.retitleSession(g.session.id, t); renderJournal(mount); }
+      } }, "Rename"),
+      el("button", { class: "btn tiny ghost", onclick: () => exportMarkdown(null, g.session.id) }, "Export")));
+  }
+
+  // Oldest first: a session reads the way it happened.
+  const chronological = g.entries.slice().reverse();
+  for (const item of Journal.aggregate(chronological)) {
+    card.append(item.burst ? burstRow(item, mount) : entryRow(item, mount));
+  }
+
+  if (isCurrent) card.append(composeBox(mount));
+  return card;
+}
+
+/** A run of dice as one line, expandable to every roll. */
+function burstRow(burst, mount) {
+  const wrap = el("div", { class: "jr-entry jr-burst" });
+  const body = el("div", { class: "jr-burst-detail", hidden: true });
+  const head = el("button", { class: "jr-burst-head", onclick: () => {
+    body.hidden = !body.hidden;
+    head.querySelector(".session-caret").textContent = body.hidden ? "▸" : "▾";
+  } },
+    el("span", { class: "session-caret", "aria-hidden": "true", text: "▸" }),
+    el("span", { class: "jr-when", text: new Date(burst.from).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }),
+    el("span", { text: Journal.burstSummary(burst) }));
+  for (const e of burst.entries) body.append(entryRow(e, mount, { compact: true }));
+  wrap.append(head, body);
+  return wrap;
+}
+
+function entryRow(e, mount, { compact = false } = {}) {
   const meta = Journal.KINDS[e.kind] || { name: e.kind, icon: "•" };
-  const row = el("div", { class: `jr-entry jr-${e.kind}` },
-    el("div", { class: "jr-head" },
+  const isOracle = e.kind === "solo" && /→|answer|Engine|oracle/i.test(e.text);
+  const row = el("div", { class: `jr-entry jr-${e.kind} ${compact ? "compact" : ""} ${isOracle ? "jr-oracle" : ""}` });
+
+  const main = el("button", { class: "jr-main", onclick: () => {
+    const acts = row.querySelector(".jr-actions");
+    if (acts) acts.hidden = !acts.hidden;
+  } },
+    el("span", { class: "jr-head" },
       el("span", { class: "jr-icon", "aria-hidden": "true", text: meta.icon }),
       el("span", { class: "jr-when", text: new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }),
-      el("span", { class: "jr-kind", text: meta.name })),
-    el("p", { class: e.kind === "note" ? "jr-text written" : "jr-text", text: e.text }));
+      compact ? null : el("span", { class: "jr-kind", text: meta.name })),
+    el("span", { class: e.kind === "note" ? "jr-text written" : "jr-text", text: e.text }));
+  row.append(main);
 
   if (e.kind === "roll" && e.detail?.dice?.length) {
     row.append(el("div", { class: "dice-row small" }, ...e.detail.dice.map((v) =>
@@ -319,7 +399,12 @@ function entryRow(e, mount) {
   }
   if (e.note) row.append(el("p", { class: "jr-note", text: e.note }));
 
-  row.append(el("div", { class: "chosen-actions" },
+  // Actions stay out of the way until the entry is tapped.
+  row.append(el("div", { class: "jr-actions chosen-actions", hidden: true },
+    isOracle ? el("button", { class: "btn tiny primary", onclick: () => {
+      const box = document.querySelector("#jr-compose");
+      if (box) { box.value = `${box.value}${box.value ? "\n\n" : ""}`; box.focus(); box.scrollIntoView({ block: "center" }); }
+    } }, "Write from this") : null,
     el("button", { class: "btn tiny ghost", onclick: async () => {
       const n = await promptModal("Your own words about this moment.",
         { title: e.note ? "Edit note" : "Add a note", value: e.note || "", multiline: true });
@@ -330,20 +415,33 @@ function entryRow(e, mount) {
       if (t !== null) { Journal.editEntry(e.id, t); renderJournal(mount); }
     } }, "Edit") : null,
     el("button", { class: "btn tiny ghost", onclick: async () => {
-      if (await confirmModal("Remove this entry from the journal?", { title: "Remove", confirmLabel: "Remove", variant: "danger" })) {
+      if (await confirmModal("Remove this from the journal?", { title: "Remove", confirmLabel: "Remove", variant: "danger" })) {
         Journal.removeEntry(e.id); renderJournal(mount);
       }
     } }, "Remove")));
   return row;
 }
 
-async function writeEntry(mount) {
-  const text = await promptModal("What happened? Write it however you like.",
-    { title: "Journal entry", multiline: true });
-  if (!text) return;
-  Journal.addNote(text, Store.activeCharacterId());
-  showToast("Written to the journal.", { variant: "good" });
-  renderJournal(mount);
+/** Always present at the foot of the open session — no dialog, no mode. */
+function composeBox(mount) {
+  const ta = el("textarea", { class: "input", id: "jr-compose", rows: 3,
+    placeholder: "What just happened? Write it however you like…", "aria-label": "Write a journal entry" });
+  const save = () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    Journal.addNote(text, Store.activeCharacterId());
+    ta.value = "";
+    renderJournal(mount);
+    const again = document.querySelector("#jr-compose");
+    if (again) again.focus();
+  };
+  ta.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); save(); }
+  });
+  return el("div", { class: "jr-compose" }, ta,
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn primary", onclick: save }, "Save entry"),
+      el("span", { class: "muted small", text: "⌘/Ctrl + Enter" })));
 }
 
 function exportMarkdown(characterId, sessionId = null) {

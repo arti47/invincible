@@ -654,24 +654,79 @@ const run = async () => {
     JSON.stringify({ h: journal.mdHasHeading, w: journal.mdHasWriting, n: journal.mdHasNote }));
   ok("the journal rides along in the JSON backup", journal.backupHasJournal);
 
-  await page.evaluate(() => { location.hash = "#/journal"; });
-  await page.waitForTimeout(250);
-  const journalUi = await page.evaluate(() => {
+  // The screen is a diary first: inline compose, chronological inside a session, dice collapsed.
+  const journalUi = await page.evaluate(async () => {
+    const J = await import("/src/journal.js");
+    const Store = await import("/src/store.js");
+    localStorage.clear();
+    J.clearAll();
+    const hero = Store.createCharacter({});
+    Store.setActiveCharacter(hero.id);
+    J.startSession("Issue #1", hero.id);
+    J.addNote("First thing that happened.", hero.id);
+    for (let i = 0; i < 6; i++) {
+      Store.pushRollLog({ label: `Roll ${i}`, dice: [6, 2], sixes: 1, ones: 0, pool: 2, outcome: "Success", by: hero.id });
+    }
+    J.addNote("Last thing that happened.", hero.id);
+    location.hash = "#/home"; location.hash = "#/journal";
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Reset the kind filter: an earlier test visits #/log, which pins it to dice.
+    Array.from(document.querySelectorAll("#screen .chip")).find((c) => c.textContent.trim() === "Everything")?.click();
+    await new Promise((r) => setTimeout(r, 200));
     const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    // Only top-level rows: a burst's expanded rolls are .jr-entry too.
+    const texts = Array.from(document.querySelectorAll(".card.session > .jr-entry > .jr-main > .jr-text"))
+      .map((n) => n.textContent);
+    const burst = document.querySelector(".jr-burst");
+    const burstLine = burst?.querySelector(".jr-burst-head")?.textContent || "";
+    const beforeExpand = burst ? burst.querySelectorAll(".jr-burst-detail .jr-entry").length : 0;
+    const detailHidden = !!burst?.querySelector(".jr-burst-detail")?.hidden;
+    burst?.querySelector(".jr-burst-head")?.click();
+    const detailShown = !burst?.querySelector(".jr-burst-detail")?.hidden;
+
+    // Actions stay hidden until an entry is tapped.
+    const first = document.querySelector(".card.session > .jr-entry.jr-note");
+    const actionsHiddenAtRest = !!first?.querySelector(".jr-actions")?.hidden;
+    first?.querySelector(".jr-main")?.click();
+    const actionsAfterTap = !first?.querySelector(".jr-actions")?.hidden;
+
     return {
       heading: document.querySelector("#screen h2")?.textContent || "",
-      write: labels.includes("Write an entry"),
+      compose: !!document.querySelector("#jr-compose"),
       exportMd: labels.includes("Export markdown"),
       filters: ["Everything", "Written only", "Dice only", "Solo", "Scenes"].every((f) => labels.includes(f)),
-      entries: document.querySelectorAll(".jr-entry").length,
+      hasSearch: !!document.querySelector('#screen input[type="search"]'),
+      firstText: texts[0] || "", lastText: texts[texts.length - 1] || "",
+      burstLine, beforeExpand, detailHidden, detailShown,
+      actionsHiddenAtRest, actionsAfterTap,
       navHasJournal: !!document.querySelector('.nav-item[data-path="journal"]'),
     };
   });
   ok("the Journal screen renders", /Journal/.test(journalUi.heading), journalUi.heading);
-  ok("it offers writing and markdown export", journalUi.write && journalUi.exportMd);
-  ok("it filters by kind", journalUi.filters);
-  ok("it lists entries", journalUi.entries > 0, String(journalUi.entries));
+  ok("writing is inline, not a dialog", journalUi.compose);
+  ok("it offers markdown export and kind filters", journalUi.exportMd && journalUi.filters);
+  ok("it has a search box", journalUi.hasSearch);
+  ok("a session reads oldest first",
+    /First thing/.test(journalUi.firstText) && /Last thing/.test(journalUi.lastText),
+    `${journalUi.firstText} … ${journalUi.lastText}`);
+  ok("a run of dice collapses into one line", /6 rolls/.test(journalUi.burstLine), journalUi.burstLine);
+  ok("the burst is collapsed until tapped", journalUi.detailHidden && journalUi.detailShown);
+  ok("the burst still carries every roll", journalUi.beforeExpand === 6, String(journalUi.beforeExpand));
+  ok("entry actions are revealed by tapping, not always shown",
+    journalUi.actionsHiddenAtRest && journalUi.actionsAfterTap);
   ok("Journal has the nav slot the roll log used", journalUi.navHasJournal);
+
+  const journalSearch = await page.evaluate(async () => {
+    const box = document.querySelector('#screen input[type="search"]');
+    box.value = "Last thing";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    const texts = Array.from(document.querySelectorAll(".card.session > .jr-entry > .jr-main > .jr-text"))
+      .map((n) => n.textContent);
+    return { n: texts.length, hit: texts.some((t) => /Last thing/.test(t)), miss: texts.some((t) => /First thing/.test(t)) };
+  });
+  ok("search narrows the journal", journalSearch.hit && !journalSearch.miss, JSON.stringify(journalSearch));
 
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");

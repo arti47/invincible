@@ -41,14 +41,21 @@ export function renderResourceHeader(mount) {
         onclick: () => quickJournal(c) }, el("span", { class: "res-label", text: "Journal" }), el("span", { class: "res-value", text: "✎" }))));
 }
 
-/** Write straight into the journal from anywhere in the app. */
+/**
+ * Jump to the journal's compose box. Writing is inline there, so this navigates and focuses
+ * rather than opening yet another dialog.
+ */
 async function quickJournal(c) {
-  const text = await promptModal("What happened? Write it however you like.",
-    { title: "Journal entry", multiline: true });
-  if (text && text.trim()) {
-    Journal.addNote(text.trim(), c?.id || null);
-    showToast("Written to the journal.", { variant: "good" });
+  if (location.hash.startsWith("#/journal")) {
+    const box = document.querySelector("#jr-compose");
+    if (box) { box.focus(); box.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
   }
+  if (!Journal.openSession()) Journal.startSession("", c?.id || null);
+  location.hash = "#/journal";
+  setTimeout(() => {
+    const box = document.querySelector("#jr-compose");
+    if (box) { box.focus(); box.scrollIntoView({ behavior: "smooth", block: "center" }); }
+  }, 220);
 }
 
 function openVitalEditor(kind) {

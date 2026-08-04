@@ -546,3 +546,21 @@ select.select option { background: var(--panel); color: var(--ink); }
 .jr-text.written { font-size: 1.02rem; }
 .jr-note { margin: .25rem 0 .3rem; padding-left: .5rem; border-left: 2px solid var(--accent);
   color: var(--muted); font-style: italic; }
+
+/* ---- journal: diary first, mechanics quiet ---- */
+.card.session.current { outline: 3px solid var(--accent); }
+.session-head { display: flex; gap: .5rem; align-items: baseline; width: 100%; text-align: left;
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.session-caret { flex: 0 0 1rem; }
+.jr-main { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0;
+  font: inherit; color: inherit; cursor: pointer; }
+.jr-entry.compact { margin: .2rem 0; padding-left: .4rem; font-size: .9rem; }
+.jr-entry.jr-burst { border-left-color: var(--muted); }
+.jr-burst-head { display: flex; gap: .5rem; align-items: baseline; width: 100%; text-align: left;
+  background: none; border: 0; padding: .15rem 0; font: inherit; font-size: .85rem;
+  color: var(--muted); cursor: pointer; }
+.jr-burst-detail { padding-left: .6rem; border-left: 2px dotted var(--line); margin-top: .3rem; }
+.jr-entry.jr-oracle { border-left-color: var(--accent-2); background: color-mix(in srgb, var(--accent-2) 6%, transparent); }
+.jr-entry.jr-oracle .jr-text { font-style: italic; }
+.jr-compose { margin-top: .8rem; padding-top: .7rem; border-top: 2px dashed var(--line); }
+.jr-compose .row-actions { align-items: center; }

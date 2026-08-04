@@ -632,20 +632,21 @@ export async function openLifecycle(kind) {
 
   const summaryLines = await applyBundle(kind, { id: c.id });
 
-  // Boundaries are where people actually want to write. Optional, one tap to skip.
-  if (kind !== "start") {
-    const written = await promptModal(
-      kind === "action" ? "What happened in that action scene?"
-        : kind === "social" ? "What happened in that social scene?"
-        : kind === "session" ? "How did the session end?"
-        : "How did the adventure end?",
-      { title: "Journal — optional", multiline: true, placeholder: "Leave blank to skip" });
-    if (written && written.trim()) Journal.addNote(written.trim(), c.id);
-  }
-
+  // A boundary is where people want to write, but it must never block play: the entry has already
+  // landed, and the toast simply offers to annotate it.
+  const landed = kind === "start" ? null : Journal.lastOfKind("lifecycle");
   showToast(`${bundle.title} applied. ${summaryLines.join(" ")}`, {
-    variant: "good", timeout: 8000,
-    action: { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
+    variant: "good", timeout: 9000,
+    action: landed
+      ? { label: "Add a note", onClick: async () => {
+          const written = await promptModal("What happened, in your words?",
+            { title: bundle.title, multiline: true });
+          if (written && written.trim()) {
+            Journal.annotate(landed.id, written.trim());
+            showToast("Written to the journal.", { variant: "good" });
+          }
+        } }
+      : { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
   });
   announce(`${bundle.title} applied.`);
 }
