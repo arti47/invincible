@@ -728,6 +728,89 @@ const run = async () => {
   });
   ok("search narrows the journal", journalSearch.hit && !journalSearch.miss, JSON.stringify(journalSearch));
 
+  // Per-session wipe and reload.
+  const perSession = await page.evaluate(async () => {
+    const J = await import("/src/journal.js");
+    const Store = await import("/src/store.js");
+    localStorage.clear();
+    J.clearAll();
+    const hero = Store.createCharacter({});
+    Store.setActiveCharacter(hero.id);
+
+    const a = J.startSession("Issue #1", hero.id);
+    J.addNote("alpha", hero.id);
+    J.endSession();
+    const b = J.startSession("Issue #2", hero.id);
+    J.addNote("beta", hero.id);
+    J.endSession();
+
+    const listed = J.listSessions().map((s) => `${s.label}:${s.entries}`);
+
+    // Reopening resumes writing into that session and closes any other open one.
+    J.startSession("Issue #3", hero.id);
+    J.reopenSession(a.id);
+    const reopened = J.openSession();
+    const thirdClosed = !!J.load().sessions.find((s) => s.title === "Issue #3")?.endedAt;
+    J.addNote("alpha again", hero.id);
+    const backInA = J.grouped({}).find((g) => g.session?.id === a.id)?.entries.length;
+
+    // Wipe one session, keeping the writing: the heading goes, the entries stay unfiled.
+    const keep = J.deleteSession(b.id, { keepEntries: true });
+    const afterKeep = { sessions: J.load().sessions.length, beta: J.entries({}).some((e) => e.text === "beta") };
+
+    // Wipe the other outright, with the store snapshot making it undoable.
+    Store.snapshot("Wipe Issue #1");
+    const gone = J.deleteSession(a.id, {});
+    const afterAll = { sessions: J.load().sessions.length, alpha: J.entries({}).some((e) => e.text === "alpha") };
+    Store.undo();
+    const restored = { sessions: J.load().sessions.length, alpha: J.entries({}).some((e) => e.text === "alpha") };
+
+    return { listed, reopened: reopened?.id === a.id, thirdClosed, backInA,
+      keptEntries: keep.entries, afterKeep, removed: gone.entries, afterAll, restored };
+  });
+  ok("sessions can be listed with their entry counts",
+    perSession.listed.length === 2 && perSession.listed.every((x) => /:1$/.test(x)), perSession.listed.join(" | "));
+  ok("a closed session can be reopened and written into again",
+    perSession.reopened && perSession.backInA === 2, JSON.stringify({ r: perSession.reopened, n: perSession.backInA }));
+  ok("reopening closes whichever session was current", perSession.thirdClosed);
+  ok("wiping a session can keep the writing",
+    perSession.afterKeep.sessions === 2 && perSession.afterKeep.beta === true, JSON.stringify(perSession.afterKeep));
+  ok("wiping a session outright removes its entries",
+    perSession.afterAll.alpha === false && perSession.removed === 2, JSON.stringify(perSession.afterAll));
+  ok("a session wipe is undoable", perSession.restored.alpha === true, JSON.stringify(perSession.restored));
+
+  const wipeUi = await page.evaluate(async () => {
+    const J = await import("/src/journal.js");
+    const Store = await import("/src/store.js");
+    localStorage.clear(); J.clearAll();
+    const hero = Store.createCharacter({}); Store.setActiveCharacter(hero.id);
+    J.startSession("Issue #9", hero.id); J.addNote("something", hero.id); J.endSession();
+    location.hash = "#/home"; location.hash = "#/journal";
+    await new Promise((r) => setTimeout(r, 300));
+    // Reset filter and search: both persist across renders and an earlier test leaves them set.
+    const box = document.querySelector('#screen input[type="search"]');
+    if (box && box.value) { box.value = ""; box.dispatchEvent(new Event("input", { bubbles: true })); await new Promise((r) => setTimeout(r, 200)); }
+    Array.from(document.querySelectorAll("#screen .chip")).find((c) => c.textContent.trim() === "Everything")?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const head = Array.from(document.querySelectorAll(".session-head"))
+      .find((h) => /Issue #9/.test(h.textContent));
+    head?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent.trim());
+    Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "Wipe")?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const dlg = document.querySelector(".modal");
+    const actions = Array.from(dlg?.querySelectorAll(".modal-actions .btn") || []).map((b) => b.textContent.trim());
+    document.querySelectorAll(".modal-backdrop").forEach((n) => n.remove());
+    return { labels, actions };
+  });
+  ok("a closed session offers Reopen and Wipe",
+    wipeUi.labels.includes("Reopen") && wipeUi.labels.includes("Wipe"), wipeUi.labels.join(" | "));
+  ok("the header has a session picker", wipeUi.labels.includes("Sessions…"), wipeUi.labels.join(" | "));
+  ok("the wipe dialog offers keeping the writing",
+    wipeUi.actions.some((a) => /Keep my writing/.test(a)) && wipeUi.actions.some((a) => /Delete everything/.test(a)),
+    wipeUi.actions.join(" | "));
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {

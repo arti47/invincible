@@ -1,7 +1,7 @@
 // screens.js — home, rules library, compendium, roll log, settings & about.
 
 import { el, clear, dieFace } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, announce, helpPanel } from "./ui.js";
+import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -306,6 +306,7 @@ function journalHeader(mount, chars, scope, open) {
           journalView.openSessions = new Set([Journal.openSession()?.id]);
           renderJournal(mount);
         } }, "Start a session"),
+    el("button", { class: "btn ghost", onclick: () => openSessionPicker(mount) }, "Sessions…"),
     el("button", { class: "btn ghost", onclick: () => exportMarkdown(scope) }, "Export markdown"));
   card.append(row);
 
@@ -342,13 +343,22 @@ function sessionCard(g, mount, openSession) {
   if (!expanded) return card;
 
   if (g.session) {
+    const closed = !!g.session.endedAt;
     card.append(el("div", { class: "chosen-actions" },
       el("button", { class: "btn tiny ghost", onclick: async () => {
         const t = await promptModal("Name this session — an issue title works well.",
           { title: "Rename session", value: g.session.title || "" });
         if (t !== null) { Journal.retitleSession(g.session.id, t); renderJournal(mount); }
       } }, "Rename"),
-      el("button", { class: "btn tiny ghost", onclick: () => exportMarkdown(null, g.session.id) }, "Export")));
+      // Resuming a closed session files new entries under it again.
+      closed ? el("button", { class: "btn tiny", onclick: () => {
+        Journal.reopenSession(g.session.id);
+        journalView.openSessions = new Set([g.session.id]);
+        showToast(`Writing into "${g.title}" again.`, { variant: "good" });
+        renderJournal(mount);
+      } }, "Reopen") : null,
+      el("button", { class: "btn tiny ghost", onclick: () => exportMarkdown(null, g.session.id) }, "Export"),
+      el("button", { class: "btn tiny danger", onclick: () => wipeSession(g, mount) }, "Wipe")));
   }
 
   // Oldest first: a session reads the way it happened.
@@ -442,6 +452,63 @@ function composeBox(mount) {
     el("div", { class: "row-actions" },
       el("button", { class: "btn primary", onclick: save }, "Save entry"),
       el("span", { class: "muted small", text: "⌘/Ctrl + Enter" })));
+}
+
+/**
+ * Wipe one session. Destroying a session heading should never silently destroy the writing under
+ * it, so the choice is explicit — and either way it is undoable, since store.snapshot covers the
+ * journal.
+ */
+async function wipeSession(g, mount) {
+  const n = g.entries.length;
+  const written = g.entries.filter((e) => e.kind === "note" || e.note).length;
+  const choice = await modal({ title: `Wipe "${g.title}"?`,
+    body: el("div", {},
+      el("p", { text: `${n} entr${n === 1 ? "y" : "ies"} in this session${written ? `, ${written} of them written by you` : ""}.` }),
+      el("p", { class: "muted small", text: "Keep my writing removes the session heading but leaves its entries in the journal, unfiled. Delete everything removes both." })),
+    actions: [
+      { label: "Cancel", value: null, variant: "ghost" },
+      { label: "Keep my writing", value: "keep", variant: "" },
+      { label: "Delete everything", value: "all", variant: "danger" },
+    ] }).promise;
+  if (!choice) return;
+  Store.snapshot(`Wipe ${g.title}`);
+  const res = Journal.deleteSession(g.session.id, { keepEntries: choice === "keep" });
+  journalView.openSessions = null;
+  renderJournal(mount);
+  showToast(choice === "keep"
+    ? `Session removed; ${res.entries} entr${res.entries === 1 ? "y" : "ies"} kept.`
+    : `Session and ${res.entries} entr${res.entries === 1 ? "y" : "ies"} deleted.`,
+    { variant: "warn", timeout: 9000,
+      action: { label: "Undo", onClick: () => { Store.undo(); renderJournal(mount); showToast("Restored."); } } });
+}
+
+/** Pick any session to resume or wipe without scrolling to find it. */
+async function openSessionPicker(mount) {
+  const list = Journal.listSessions();
+  if (!list.length) { showToast("No sessions yet.", { variant: "warn" }); return; }
+  const pick = await chooseModal("Which session?", list.map((s) => ({
+    label: s.label,
+    hint: `${s.entries} entr${s.entries === 1 ? "y" : "ies"} · ${s.endedAt ? "closed" : "open"}`,
+    value: s.id })));
+  if (!pick) return;
+  const chosen = list.find((s) => s.id === pick);
+  if (!chosen.endedAt) {
+    journalView.openSessions = new Set([pick]);
+    renderJournal(mount);
+    return;
+  }
+  const what = await chooseModal(chosen.label, [
+    { label: "Reopen and write into it", hint: "New entries file under this session again", value: "reopen" },
+    { label: "Just show it", hint: "Expand it where it sits", value: "show" },
+  ]);
+  if (!what) return;
+  if (what === "reopen") {
+    Journal.reopenSession(pick);
+    showToast(`Writing into "${chosen.label}" again.`, { variant: "good" });
+  }
+  journalView.openSessions = new Set([pick]);
+  renderJournal(mount);
 }
 
 function exportMarkdown(characterId, sessionId = null) {

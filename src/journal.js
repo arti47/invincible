@@ -78,6 +78,57 @@ export function retitleSession(id, title) {
   return true;
 }
 
+/**
+ * Wipe one session. Either the whole thing, or just the heading — "keep my writing" unfiles the
+ * entries rather than destroying them, so a mistaken session boundary is not a data loss.
+ */
+export function deleteSession(id, { keepEntries = false } = {}) {
+  const j = read();
+  const s = j.sessions.find((x) => x.id === id);
+  if (!s) return null;
+  const mine = j.entries.filter((e) => e.sessionId === id);
+  if (keepEntries) mine.forEach((e) => { e.sessionId = null; });
+  else j.entries = j.entries.filter((e) => e.sessionId !== id);
+  j.sessions = j.sessions.filter((x) => x.id !== id);
+  write(j);
+  return { session: s, entries: mine.length, kept: keepEntries };
+}
+
+/** Clear a session's entries but keep the session itself, ready to be written into again. */
+export function clearSessionEntries(id) {
+  const j = read();
+  const before = j.entries.length;
+  j.entries = j.entries.filter((e) => e.sessionId !== id);
+  write(j);
+  return before - j.entries.length;
+}
+
+/**
+ * Resume a closed session: new entries file under it again. Only one session is ever open, so
+ * whichever was current is closed first.
+ */
+export function reopenSession(id) {
+  const j = read();
+  const s = j.sessions.find((x) => x.id === id);
+  if (!s) return null;
+  const current = j.sessions.find((x) => !x.endedAt && x.id !== id);
+  if (current) current.endedAt = Date.now();
+  s.endedAt = null;
+  write(j);
+  return s;
+}
+
+/** Every session, newest first, for pickers. */
+export function listSessions() {
+  const j = read();
+  const order = j.sessions.slice().sort((a, b) => a.startedAt - b.startedAt);
+  return order.map((s, i) => ({
+    ...s,
+    label: sessionTitle(s, i + 1),
+    entries: j.entries.filter((e) => e.sessionId === s.id).length,
+  })).reverse();
+}
+
 /** A session's default name when the player has not given it one. */
 export function sessionTitle(s, index) {
   if (s.title) return s.title;
