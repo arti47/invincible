@@ -11,6 +11,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import * as Journal from "./journal.js";
 import { setLearnTab } from "./learn.js";
+import { openAttributeGuide } from "./sheet.js";
 import * as Combat from "./combat.js";
 import { STORAGE_PREFIX } from "./core.js";
 
@@ -152,6 +153,8 @@ function nextStepCard(state, mount) {
     el("p", { class: "next-step-why", text: step.why }),
     el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => step.run(state, mount) }, step.label),
+      // Step 4 is "play the scene", which is exactly where "but what do I roll?" stops people.
+      i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
       el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")));
 }
 
@@ -382,7 +385,8 @@ function whatHappenedCard(state, mount) {
       ? el("p", { class: "muted small", text: "Reference for the control above: this is what each timer reacts to." })
       : el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
     duplicated ? null : el("div", { class: "row-actions" },
-      el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it")),
+      el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it"),
+      el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?")),
     el("details", { class: "help", open: duplicated }, el("summary", { text: "Which timer fires when?" }),
       el("div", { class: "tablewrap" },
         el("table", { class: "data-table" },

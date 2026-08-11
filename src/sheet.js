@@ -304,7 +304,41 @@ function attributesCard(c, s) {
     grid,
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => openAttackDialog(c) }, "Attack"),
+      el("button", { class: "btn", onclick: () => openAttributeGuide(c) }, "Which one do I roll?"),
       el("button", { class: "btn ghost", onclick: () => openBanter(c) }, "Action banter")));
+}
+
+/**
+ * "Which attribute do I roll?" — the six, each with its live pool, what it covers, and the uses
+ * the rules actually define. Expand one to read them, then roll it without leaving the dialog.
+ * This is the answer to being stuck mid-scene, so it opens from the Sheet and from the Solo tab.
+ */
+export function openAttributeGuide(c = Store.activeCharacter()) {
+  if (!c) { showToast("No hero yet.", { variant: "warn" }); return null; }
+  const body = el("div", { class: "attr-guide" },
+    el("p", { class: "muted small", text: "Roll dice equal to the attribute. One 6 succeeds; every extra 6 buys a stunt. No 6s means it fails — but the story still has to move." }));
+
+  for (const a of D.ATTRIBUTES) {
+    const pool = Derived.attributePool(c, a.key);
+    const mod = Derived.attributeModifier(c, a.key);
+    const use = D.ATTRIBUTE_USES[a.key];
+    const detail = el("details", { class: "attr-use" },
+      el("summary", {},
+        el("span", { class: "attr-use-name", text: a.name }),
+        el("span", { class: "attr-use-pool", text: `${pool} dice` }),
+        mod ? el("span", { class: "attr-use-mod warn", text: `${mod > 0 ? "+" : ""}${mod}` }) : null),
+      el("p", { class: "attr-use-when", text: use.when }),
+      el("ul", { class: "small" }, ...use.uses.map((u) => el("li", {},
+        u.text, " ",
+        el("a", { class: "rules-link", href: `#/rules/${u.rule}` }, "rules")))),
+      el("div", { class: "row-actions" },
+        el("button", { class: "btn primary", onclick: () => { m.close(); rollAttribute(c, a.key); } }, `Roll ${a.name}`)));
+    body.append(detail);
+  }
+
+  const m = modal({ title: "Which attribute do I roll?", body, size: "wide",
+    actions: [{ label: "Close", variant: "ghost" }] });
+  return m;
 }
 
 export async function rollAttribute(c, attr, opts = {}) {

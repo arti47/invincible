@@ -1722,6 +1722,78 @@ export const LIFECYCLE = {
 
 /* ------------------------------------------------------------------ Rules library (searchable) */
 
+
+/**
+ * Where each attribute is actually rolled. Every line below is a use the rules already define and
+ * the app already implements — compiled into one index rather than invented, so "which do I roll?"
+ * has an answer that matches what the buttons do. `rule` links into the rules library.
+ */
+export const ATTRIBUTE_USES = {
+  fighting: {
+    when: "Violence within arm's reach — landing it, or stopping it.",
+    uses: [
+      { text: "Slugfest attack — a full action against anyone in your zone.", rule: "slugfest" },
+      { text: "Grapple — a full action to seize and hold someone. No weapon.", rule: "slugfest" },
+      { text: "Block — a quick action, declared before the attacker rolls. Each 6 cancels one of theirs; extra 6s counterattack.", rule: "opposed" },
+      { text: "Anything needing fighting technique rather than raw force: disarming, fencing, holding a doorway.", rule: "resolution" },
+    ],
+  },
+  agility: {
+    when: "Speed, precision and getting out of the way.",
+    uses: [
+      { text: "Shooting attack — a full action at range. Inside the minimum range costs 3 dice.", rule: "shooting" },
+      { text: "Dodge — a quick action against a shooting attack or a charge. Extra 6s move you a zone each.", rule: "opposed" },
+      { text: "Escaping an encounter before initiative is drawn (Crisis Mode).", rule: "initiative" },
+      { text: "Chases — both sides roll, modified by Maneuverability and the speed difference.", rule: "chases" },
+      { text: "Falling: each 6 negates a die of damage, and a success negates it entirely if there is anything to grab.", rule: "actions" },
+      { text: "Climbing, balancing, squeezing through, sleight of hand, anything needing fine control.", rule: "resolution" },
+    ],
+  },
+  strength: {
+    when: "Raw force, and enduring it.",
+    uses: [
+      { text: "Charge — a full plus a quick action, moving into the target. Cannot be blocked, can be dodged.", rule: "slugfest" },
+      { text: "Breaking free of a grapple — opposed STRENGTH, a quick action.", rule: "opposed" },
+      { text: "Wrecking a zone as part of a slugfest attack: each terrain has a minimum STRENGTH.", rule: "wrecking" },
+      { text: "Lifting, smashing, holding something up, forcing a door. Your rating sets the lift limit.", rule: "resolution" },
+      { text: "Moving through a storm zone, and other places that fight you.", rule: "actions" },
+      { text: "With Second Wind, rallying yourself when broken — STRENGTH at +2 dice instead of PRESENCE.", rule: "death" },
+    ],
+  },
+  reason: {
+    when: "Working it out, knowing it, or fixing it.",
+    uses: [
+      { text: "Stabilising someone who is dying — advanced medical gear, and ONE attempt only.", rule: "death" },
+      { text: "With Medic, rallying a broken ally in your zone with REASON instead of PRESENCE.", rule: "death" },
+      { text: "Recalling what you know. Knowledgeable gives +3 dice in its subject.", rule: "resolution" },
+      { text: "Repairs, hacking, science, deduction, planning — anything solved by thinking.", rule: "resolution" },
+      { text: "Challenges whose objectives call for analysis rather than force.", rule: "challenges" },
+    ],
+  },
+  intuition: {
+    when: "Noticing what is there before it notices you.",
+    uses: [
+      { text: "Surprise: a passive roll when someone attacks unseen. It cannot be pushed.", rule: "initiative" },
+      { text: "Spotting a hidden enemy — and their roll to spot you — during an encounter.", rule: "resolution" },
+      { text: "Searching an area. It takes minutes, so it advances your crisis timers.", rule: "resolution" },
+      { text: "Reading a person: are they lying, are they about to run, do they mean it.", rule: "resolution" },
+      { text: "Tracking, sensing danger, picking the odd detail out of a crowded scene.", rule: "resolution" },
+    ],
+  },
+  presence: {
+    when: "Moving people — including yourself.",
+    uses: [
+      { text: "Rally when broken: a full action, 1 Health back per 6. Impossible at critical injury 9 or worse.", rule: "death" },
+      { text: "Recovering Resolve in an action round: a full action, 1 Resolve per 6.", rule: "recovery" },
+      { text: "Action banter — a quick action, opposed PRESENCE, 1 stress per excess 6.", rule: "banter" },
+      { text: "Persuading or intimidating. Being recognised adds 2 dice.", rule: "reputation" },
+      { text: "Bartering after a failed purchase roll — one attempt.", rule: "resources" },
+      { text: "Resisting MIND CONTROL, and NULLIFICATION, both opposed PRESENCE.", rule: "powers" },
+      { text: "Powers that roll it: HEALING, GUIDANCE, SORCERY, and the Leader talent.", rule: "powers" },
+    ],
+  },
+};
+
 export const RULES_LIBRARY = [
   { id: "lifecycle", title: "Scenes and sessions", tags: ["scene", "session", "briefing"], chapter: "Ch.6",
     body: "Play runs in briefings, action scenes and social scenes, usually alternating. A session feels like one comic issue; adventures run first contact, twist and showdown." },

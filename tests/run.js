@@ -1668,6 +1668,74 @@ const run = async () => {
       && soloBuild.build.avoidPowers.join() === "ACTION PLAN,PRECOGNITION",
     JSON.stringify(soloBuild.build));
 
+  /* ------------------------------------------------- "which attribute do I roll?" */
+  const attrGuide = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const Sheet = await import("/src/sheet.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+
+    const h = Derived.blankCharacter();
+    h.id = "guide_hero"; h.identity.heroName = "Guided";
+    h.attributes = { fighting: 7, agility: 5, strength: 6, reason: 3, intuition: 4, presence: 6 };
+    h.state.crits = [{ id: "c", roll: 2, healed: false }];       // -2 to the physical three
+    Store.saveCharacter(h); Store.setActiveCharacter("guide_hero");
+
+    // the index must cover all six and only point at rules that exist
+    const ids = new Set(D.RULES_LIBRARY.map((r) => r.id));
+    const uses = D.ATTRIBUTE_USES;
+    const keys = D.ATTRIBUTES.map((a) => a.key);
+    const covered = keys.every((k) => uses[k] && uses[k].when && uses[k].uses.length >= 3);
+    const badLinks = keys.flatMap((k) => uses[k].uses).filter((u) => !ids.has(u.rule)).map((u) => u.rule);
+
+    Sheet.openAttributeGuide();
+    await new Promise((r) => setTimeout(r, 150));
+    const rows = Array.from(document.querySelectorAll(".modal .attr-use"));
+    const names = rows.map((r) => r.querySelector(".attr-use-name")?.textContent);
+    const pools = rows.map((r) => r.querySelector(".attr-use-pool")?.textContent);
+    // FIGHTING 7 with a -2 crit must read 5, not 7
+    const fighting = pools[0];
+    const modShown = !!rows[0].querySelector(".attr-use-mod");
+    rows[0].open = true;
+    await new Promise((r) => setTimeout(r, 50));
+    const bullets = rows[0].querySelectorAll("li").length;
+    const rollBtn = Array.from(rows[0].querySelectorAll("button")).some((b) => /Roll FIGHTING/.test(b.textContent));
+    const links = rows[0].querySelectorAll('a[href^="#/rules/"]').length;
+    document.querySelector(".modal .modal-actions button")?.click();
+    await new Promise((r) => setTimeout(r, 100));
+
+    // reachable from the Sheet and from Solo step 4
+    location.hash = "#/sheet";
+    await new Promise((r) => setTimeout(r, 250));
+    const onSheet = Array.from(document.querySelectorAll("#screen button")).some((b) => b.textContent.trim() === "Which one do I roll?");
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 1, alert: "x", alertParts: null, crises: [],
+      timers: [{ id: "t", name: "Roof", proximity: "soon" }], allies: [], objectives: [], encounter: null,
+      mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null,
+      resolved: 0, showAllLog: false }));
+    location.hash = "#/home"; location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 250));
+    const step = document.querySelector("#solo-next .next-step-eyebrow")?.textContent || "";
+    const onSolo = Array.from(document.querySelectorAll("#solo-next button")).some((b) => /Which attribute do I roll/.test(b.textContent));
+    localStorage.removeItem("invincible:solo");
+    return { covered, badLinks, names, fighting, modShown, bullets, rollBtn, links, onSheet, step, onSolo };
+  });
+  ok("the index covers all six attributes with real uses", attrGuide.covered);
+  ok("every use links to a rule that exists", attrGuide.badLinks.length === 0, attrGuide.badLinks.join(","));
+  ok("the guide lists the six in order",
+    JSON.stringify(attrGuide.names) === JSON.stringify(["FIGHTING", "AGILITY", "STRENGTH", "REASON", "INTUITION", "PRESENCE"]),
+    attrGuide.names.join(" | "));
+  ok("it shows the live pool, with crits and conditions already applied",
+    attrGuide.fighting === "5 dice" && attrGuide.modShown, `${attrGuide.fighting} (FIGHTING 7, -2 crit)`);
+  ok("expanding one gives its rules-cited uses and a roll button",
+    attrGuide.bullets >= 4 && attrGuide.rollBtn && attrGuide.links >= 4,
+    `${attrGuide.bullets} uses, ${attrGuide.links} links`);
+  ok("it opens from the Sheet", attrGuide.onSheet);
+  ok("it opens from Solo step 4, where playing the scene starts",
+    /Step 4 of 6/.test(attrGuide.step) && attrGuide.onSolo, attrGuide.step);
+
   /* ------------------------------------------------- attacking applies damage to the board */
   const fight = await page.evaluate(async () => {
     const Combat = await import("/src/combat.js");

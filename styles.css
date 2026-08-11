@@ -564,3 +564,16 @@ select.select option { background: var(--panel); color: var(--ink); }
 .jr-entry.jr-oracle .jr-text { font-style: italic; }
 .jr-compose { margin-top: .8rem; padding-top: .7rem; border-top: 2px dashed var(--line); }
 .jr-compose .row-actions { align-items: center; }
+
+/* ---- "which attribute do I roll?" ---- */
+.attr-guide { display: flex; flex-direction: column; gap: .45rem; }
+.attr-use { border: 3px solid var(--line); border-radius: 8px; padding: .5rem .6rem; background: var(--paper-2); }
+.attr-use > summary { display: flex; align-items: baseline; gap: .5rem; cursor: pointer; list-style: none; }
+.attr-use > summary::-webkit-details-marker { display: none; }
+.attr-use > summary::before { content: "▸"; color: var(--muted); }
+.attr-use[open] > summary::before { content: "▾"; }
+.attr-use-name { font-family: Impact, "Arial Black", sans-serif; letter-spacing: .02em; font-size: 1.05rem; }
+.attr-use-pool { margin-left: auto; font-weight: 700; font-size: .85rem; }
+.attr-use-mod { font-size: .8rem; font-weight: 700; }
+.attr-use-when { margin: .35rem 0 .2rem; font-size: .9rem; }
+.attr-use ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .25rem; }
