@@ -64,11 +64,94 @@ function renderStep(budget) {
   }
 }
 
+/**
+ * "Build one for me." A first-time player faces nine steps, sixty-nine powers and fifty-one
+ * talents before they can roll a die. This fills a complete, legal hero by rolling the book's own
+ * D3/D6 lists off a chosen archetype — the same tables the steps offer — and drops them on the
+ * last step to name it. Everything stays editable; nothing here is a shortcut around the rules.
+ */
+export function rollWholeHero(target = draft) {
+  const arche = D.ARCHETYPES[Math.floor(Math.random() * D.ARCHETYPES.length)];
+  applyArchetype(arche, target);                                  // rank-scaled attributes + powers
+
+  // Power source: the archetype publishes three, or roll the D66 table.
+  const src = Math.random() < 0.7
+    ? arche.sources[d3() - 1]
+    : (D.POWER_SOURCES.find((e) => e.roll === d66()) || D.POWER_SOURCES[0]).name;
+  target.identity.powerSources = [src];
+
+  // One hero talent (the archetype's D6 list) and one occupation talent (the occupation's D3).
+  const occ = R.findOccupation(arche.occupations[d3() - 1]) || D.OCCUPATIONS[0];
+  target.identity.occupation = occ.name;
+  target.identity.resourcesBase = occ.resources;
+  // A talent is taken once unless its own text says otherwise, and the archetype's D6 list and the
+  // occupation's D3 list overlap — so every pick goes through one guard that refuses a duplicate.
+  // Lists name the same talent two ways — "Knowledgeable (Technology)" and "Knowledgeable" — so
+  // the guard compares the base name, which is what the legality check counts.
+  const baseName = (n) => String(n).replace(/\s*\(.*\)\s*$/, "").trim();
+  target.talents = [];
+  const takeTalent = (...candidates) => {
+    for (const name of candidates) {
+      if (!name) continue;
+      if (target.talents.some((t) => baseName(t.name) === baseName(name))) continue;
+      target.talents.push({ name, rank: 1 });
+      return true;
+    }
+    return false;
+  };
+  takeTalent(arche.talents[d6() - 1], ...arche.talents);
+  takeTalent(occ.talents[d3() - 1], ...occ.talents, ...arche.talents);
+  if (target.identity.solo) takeTalent(...D.SOLO_BUILD.talentPicks, ...arche.talents);
+
+  target.drawbacks = [];
+  target.identity.keyRelationships = [{ name: "", text: occ.relationships[d3() - 1] }];
+
+  // Personality is two traits; drive and flaw are one each (D6 / D3 off the archetype).
+  const traits = [...arche.personality];
+  const first = traits.splice(d6() - 1, 1)[0];
+  const second = traits[Math.floor(Math.random() * traits.length)];
+  target.identity.personality = [first, second];
+  target.identity.drive = arche.drives[d3() - 1];
+  target.identity.flaw = arche.flaws[d3() - 1];
+  target.identity.heroName = arche.names[d3() - 1];
+
+  // Any leftover points go into the archetype's strongest suit, never past the rank maximum.
+  const rank = R.findRank(target.identity.rank);
+  let guard = 0;
+  while (creationBudget(target).remaining > 0 && guard++ < 40) {
+    const best = ATTR_KEYS
+      .filter((k) => target.attributes[k] < rank.attrMax)
+      .sort((a, b) => target.attributes[b] - target.attributes[a])[0];
+    if (!best) break;
+    target.attributes[best] += 1;
+  }
+  target.state.health = maxHealth(target);
+  target.state.resolve = maxResolve(target);
+  return { archetype: arche, occupation: occ };
+}
+
+async function quickBuild() {
+  const ok = await confirmModal(
+    "This rolls a complete, legal hero for you: an archetype, attributes, powers, a power source, talents, an occupation, personality, a drive and a flaw. You can change any of it afterwards — every step stays open.",
+    { title: "Build one for me", confirmLabel: "Roll me a hero", cancelLabel: "I'll choose" });
+  if (!ok) return;
+  const { archetype, occupation } = rollWholeHero();
+  step = STEPS.length - 1;
+  render();
+  showToast(`${archetype.name} · ${occupation.name} — everything is filled in. Name them and press Create hero.`,
+    { variant: "good", timeout: 8000 });
+}
+
 /* ---------------------------------------------------------------- step 1: rank */
 
 function stepRank() {
   const wrap = el("div", {});
-  wrap.append(el("p", { class: "lede", text: "Your rank sets your attribute points, your maximum score, how many powers you start with and your Reputation. Decide it with the group — Global Guardian is the default." }));
+  wrap.append(el("div", { class: "card tight quick-build" },
+    el("h4", { text: "Never played this before?" }),
+    el("p", { class: "muted small", text: "There are nine steps and a lot of lists. You do not have to read any of them — the app can roll a complete, legal hero from the book's own tables and let you change whatever you like afterwards." }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn primary", onclick: () => quickBuild() }, "Build one for me"))));
+  wrap.append(el("p", { class: "lede", text: "Your rank sets your attribute points, your maximum score, how many powers you start with and your Reputation. Global Guardian is the default, and the right choice if you are unsure." }));
 
   // Crisis Mode build allowance (Ch.9): a solo hero starts with 2 extra attribute points and an
   // extra free talent. It is a property of the hero, so it is chosen here, not read off a toggle.

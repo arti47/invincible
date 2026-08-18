@@ -577,3 +577,9 @@ select.select option { background: var(--panel); color: var(--ink); }
 .attr-use-mod { font-size: .8rem; font-weight: 700; }
 .attr-use-when { margin: .35rem 0 .2rem; font-size: .9rem; }
 .attr-use ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .25rem; }
+
+/* ---- glossary: the words before the rules ---- */
+.glossary { display: flex; flex-direction: column; gap: .3rem; }
+.gloss-entry { border: 2px solid var(--line); border-radius: 8px; padding: .4rem .55rem; background: var(--paper-2); }
+.gloss-entry > summary { cursor: pointer; }
+.gloss-entry p { margin: .3rem 0 0; }

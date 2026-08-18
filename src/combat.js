@@ -570,10 +570,17 @@ async function openChallengePicker(mount) {
 }
 
 async function openCustomTask(mount) {
-  const name = await promptModal("What is the challenge?", { title: "Custom challenge" });
+  const name = await promptModal("What are you up against?", { title: "Custom challenge",
+    hints: ["A challenge is anything too big for one roll — a burning building, a bomb to defuse, an investigation.",
+      "Pick one from the list above instead if you would rather not invent one."] });
   if (!name) return;
-  const rating = Number(await promptModal("Challenge rating?", { title: name, value: "6" })) || 6;
-  const limit = await promptModal("Time limit? (e.g. 3 rounds, 2 days)", { title: name, value: "3 rounds" });
+  const rating = Number(await promptModal("How big is it?", { title: name, value: "6",
+    hints: ["The rating is how many 6s the group has to roll in total to beat it. Every 6 anyone rolls takes one off.",
+      "The book's guide: simple ≈ the same number as the time limit. Serious ≈ double it. A major crisis ≈ triple or more.",
+      "If you have no idea, 6 over 3 rounds is a solid, tense default."] })) || 6;
+  const limit = await promptModal("How long have you got?", { title: name, value: "3 rounds",
+    hints: ["In your own words — '3 rounds', '2 days', 'before the tide turns'. The app tracks it; you decide when it has run out.",
+      "Fail to clear the rating in that time and the stated failure happens."] });
   const tasks = Store.getTasks();
   tasks.push({ id: uid("task"), name, rating, remaining: rating, timeLimit: limit || "—", timeSpent: 0, objectives: [], contributors: [] });
   Store.saveTasks(tasks);

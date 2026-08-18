@@ -1350,6 +1350,105 @@ const run = async () => {
   });
   ok("JSON import restores characters", importOk.n === 1 && importOk.chars === 1);
 
+  /* ---------------------------------------------------------------- idiot-proofing */
+  // Someone who has never read the rulebook must be able to get from a cold start to rolling dice.
+  section("First-timer path");
+
+  const quick = await page.evaluate(async () => {
+    const W = await import("/src/wizard.js");
+    const Dv = await import("/src/derived.js");
+    let illegal = 0; const archetypes = new Set(); let soloTalents = 0, soloBuilds = 0;
+    for (const rank of ["teen", "street", "global", "cosmic"]) {
+      for (let i = 0; i < 60; i++) {
+        const c = Dv.blankCharacter();
+        c.identity.rank = rank;
+        if (i % 5 === 0) { c.identity.solo = true; soloBuilds++; }
+        W.rollWholeHero(c);
+        const n = Dv.normalizeCharacter(c);
+        const v = Dv.validateCharacter(n);
+        const b = Dv.creationBudget(n);
+        if (v.errors.length || b.remaining !== 0) illegal++;
+        if (c.identity.solo && c.talents.length === 3) soloTalents++;
+        archetypes.add(c.identity.archetype);
+        // a quick-built hero must be playable: named, with powers and a filled identity
+        if (!c.identity.heroName || !c.powers.length || !c.identity.occupation
+          || !c.identity.drive || !c.identity.flaw || c.identity.personality.length !== 2) illegal++;
+      }
+    }
+    return { illegal, archetypes: archetypes.size, soloTalents, soloBuilds };
+  });
+  ok("\"Build one for me\" produces a legal, playable hero every time",
+    quick.illegal === 0, `${quick.illegal} bad out of 240`);
+  ok("it can roll any of the sixteen archetypes", quick.archetypes >= 12, String(quick.archetypes));
+  ok("a solo quick-build gets its third free talent", quick.soloTalents === quick.soloBuilds,
+    `${quick.soloTalents}/${quick.soloBuilds}`);
+
+  const wizardHelp = await page.evaluate(async () => {
+    location.hash = "#/create";
+    await new Promise((r) => setTimeout(r, 300));
+    const labels = Array.from(document.querySelectorAll(".wizard-body button")).map((b) => b.textContent.trim());
+    return { offered: labels.includes("Build one for me"), first: labels[0] };
+  });
+  ok("the wizard offers the quick build on its first step, before any jargon",
+    wizardHelp.offered && wizardHelp.first === "Build one for me", wizardHelp.first);
+
+  // No dialog may demand a number the player has no way of knowing.
+  const unanswerable = await page.evaluate(async () => {
+    const files = ["/src/sheet.js", "/src/solo.js", "/src/combat.js"];
+    const bad = [];
+    for (const f of files) {
+      const src = await (await fetch(f)).text();
+      // a bare promptModal asking for someone else's attribute score, with no hints and no picker
+      const re = /promptModal\(\s*(["'`])([^"'`]*\b(?:FIGHTING|AGILITY|STRENGTH|REASON|INTUITION|PRESENCE)\b[^"'`]*score\?[^"'`]*)\1\s*,\s*\{(?![^}]*hints)/g;
+      let m;
+      while ((m = re.exec(src))) bad.push(`${f}: ${m[2]}`);
+    }
+    return bad;
+  });
+  ok("nothing asks for an NPC's attribute score without a way to answer it",
+    unanswerable.length === 0, unanswerable.join(" | "));
+
+  const picker = await page.evaluate(async () => {
+    const Sheet = await import("/src/sheet.js");
+    const N = await import("/data-npcs.js");
+    const p = Sheet.askAttributeScore("presence", { who: "your target" });
+    await new Promise((r) => setTimeout(r, 150));
+    const title = document.querySelector(".modal")?.getAttribute("aria-label") || "";
+    const opts = Array.from(document.querySelectorAll(".modal .choice")).map((c) => c.textContent);
+    // taking the plainest option must yield the book's "typical person" score
+    Array.from(document.querySelectorAll(".modal .choice")).find((c) => /ordinary person/i.test(c.textContent)).click();
+    const value = await p;
+    return { title, opts, value, npcOption: opts.some((o) => /Look it up on an NPC/.test(o)),
+      profiles: N.NPC_PROFILES.filter((x) => x.attrs?.presence).length };
+  });
+  ok("it asks in words instead of demanding a number", /how good is/i.test(picker.title), picker.title);
+  ok("it offers the book's scale plus a way to read it off an NPC",
+    picker.opts.length >= 6 && picker.npcOption && picker.profiles > 10, picker.opts.length + " options");
+  ok("picking \"an ordinary person\" gives the book's 2", picker.value === 2, String(picker.value));
+
+  const gloss = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    location.hash = "#/rules";
+    await new Promise((r) => setTimeout(r, 300));
+    const entries = document.querySelectorAll("#glossary .gloss-entry").length;
+    const terms = Array.from(document.querySelectorAll("#glossary .gloss-entry summary")).map((x) => x.textContent.trim());
+    const search = document.querySelector('input[type="search"]');
+    search.value = "stress";
+    search.dispatchEvent(new Event("input"));
+    await new Promise((r) => setTimeout(r, 120));
+    const filtered = Array.from(document.querySelectorAll("#glossary .gloss-entry summary")).map((x) => x.textContent.trim());
+    search.value = ""; search.dispatchEvent(new Event("input"));
+    const ids = new Set(D.RULES_LIBRARY.map((r) => r.id));
+    return { entries, terms, filtered, badLinks: D.GLOSSARY.filter((g) => !ids.has(g.rule)).length };
+  });
+  ok("the Rules tab defines the words before the rules", gloss.entries >= 25, String(gloss.entries));
+  ok("it covers the terms that actually block a newcomer",
+    ["Stunt", "Push", "Stress", "Broken", "Zone", "Minions", "Karma"].every((t) => gloss.terms.includes(t)),
+    gloss.terms.slice(0, 8).join(", "));
+  ok("the search box filters the words too", gloss.filtered.length > 0 && gloss.filtered.length < gloss.entries,
+    gloss.filtered.join(", "));
+  ok("every definition links to the rule it summarises", gloss.badLinks === 0);
+
   /* ---------------------------------------------------------------- sequence of play */
   // Every screen's controls have to read in the order the game is actually played (§3.12, §3.17).
   section("Sequence of play");
@@ -1358,6 +1457,25 @@ const run = async () => {
   await page.goto(`${base}#/home`);
   await page.waitForFunction(() => document.body.dataset.ready === "true");
   await page.waitForTimeout(200);
+  const emptyHome = await page.evaluate(() => {
+    const labels = Array.from(document.querySelectorAll("#screen .card a, #screen .card button")).map((b) => b.textContent.trim());
+    return { tutorial: labels.indexOf("Start the tutorial"), create: labels.indexOf("Create your hero"),
+      lifecycle: labels.includes("Start session") };
+  });
+  ok("an empty roster meets the tutorial before the creation card",
+    emptyHome.tutorial >= 0 && emptyHome.tutorial < emptyHome.create, `${emptyHome.tutorial} < ${emptyHome.create}`);
+  ok("no session controls are shown before there is a hero to use them on", emptyHome.lifecycle === false);
+
+  // With a hero present, the lifecycle row itself has to read in session order.
+  await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0]));
+    Store.setActiveCharacter(c.id);
+    location.hash = "#/sheet"; location.hash = "#/home";
+  });
+  await page.waitForTimeout(250);
   const homeSeq = await page.evaluate(() => {
     const heads = Array.from(document.querySelectorAll("#screen .card")).map((c) => c.querySelector("h1,h2,h3")?.textContent || "");
     const labels = Array.from(document.querySelectorAll("#screen .card a, #screen .card button")).map((b) => b.textContent.trim());
@@ -1367,8 +1485,6 @@ const run = async () => {
       start: i("Start session"), startAction: i("Start action scene"), endAction: i("End action scene"),
       endSocial: i("End social scene"), endSession: i("End session"), endAdv: i("End adventure") };
   });
-  ok("an empty roster meets the tutorial before the creation card", homeSeq.tutorial >= 0 && homeSeq.tutorial < homeSeq.create,
-    `${homeSeq.tutorial} < ${homeSeq.create}`);
   ok("the lifecycle row is staged open → play → close out", homeSeq.stages.length === 3 && /^1 ·/.test(homeSeq.stages[0]) && /^3 ·/.test(homeSeq.stages[2]),
     homeSeq.stages.join(" | "));
   ok("a scene can be started before it can be ended", homeSeq.startAction >= 0 && homeSeq.startAction < homeSeq.endAction);

@@ -11,7 +11,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import * as Journal from "./journal.js";
 import { setLearnTab } from "./learn.js";
-import { openAttributeGuide } from "./sheet.js";
+import { openAttributeGuide, askAttributeScore } from "./sheet.js";
 import * as Combat from "./combat.js";
 import { STORAGE_PREFIX } from "./core.js";
 
@@ -1771,7 +1771,7 @@ async function spottingCheck(state, mount) {
     spotted.npcs = true;
   } else if (b.highest === 5) {               // searching: you see them, they roll to see you
     spotted.npcs = true;
-    const n = Number(await promptModal("Their INTUITION score?", { title: "They roll to spot you", value: "3" })) || 3;
+    const n = await askAttributeScore("intuition", { title: "They roll to spot you", who: "the enemy" }) || 3;
     const dice = Math.max(1, n + mode.vsIntuition);
     const faces = Array.from({ length: dice }, () => d6());
     spotted.hero = faces.some((f) => f === 6);
@@ -1846,7 +1846,8 @@ async function standoffChoice(state, mount, choice) {
       return;
     }
   }
-  const n = Number(await promptModal("Their INTUITION score?", { title: choice === "hide" ? "They search for you" : "Sneak past", value: "3" })) || 3;
+  const n = await askAttributeScore("intuition",
+    { title: choice === "hide" ? "They search for you" : "Sneak past", who: "the enemy" }) || 3;
   const dice = Math.max(1, n + mode.vsIntuition);
   const faces = Array.from({ length: dice }, () => d6());
   const found = faces.some((f) => f === 6);

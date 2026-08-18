@@ -1794,6 +1794,43 @@ export const ATTRIBUTE_USES = {
   },
 };
 
+
+/**
+ * Words the app uses that a first-time player has never met. Every definition here restates a rule
+ * already implemented elsewhere in this file — this is a way in, not a second source of truth.
+ */
+export const GLOSSARY = [
+  { term: "Attribute", def: "One of your six scores — FIGHTING, AGILITY, STRENGTH, REASON, INTUITION, PRESENCE. The score IS how many dice you roll.", rule: "resolution" },
+  { term: "Dice pool", def: "The handful of D6 you roll for an action: one die per point of the attribute, plus or minus any modifiers. It never drops below one die.", rule: "resolution" },
+  { term: "Success", def: "A 6. One 6 anywhere in the pool means you succeed. Rolling no 6s means you fail — but the story still has to move.", rule: "resolution" },
+  { term: "Stunt", def: "A bonus effect bought with a 6 beyond the first: extra damage, knocking someone back, disarming them. Each 6 past the first buys one.", rule: "stunts" },
+  { term: "Push", def: "Re-rolling a failed roll. Keep the 6s and the 1s, re-roll everything else — and every 1 showing afterwards costs you 1 stress. Once per roll.", rule: "push" },
+  { term: "Stress", def: "Damage to your Resolve. You take it from pushing, from powers, and from being rattled.", rule: "recovery" },
+  { term: "Health", def: "How much physical punishment you can take. At 0 you are broken.", rule: "damage" },
+  { term: "Resolve", def: "Your mental staying power. At 0 you are stressed out.", rule: "recovery" },
+  { term: "Broken", def: "Health 0. You cannot move, roll attributes or use powers, and you roll on the critical injury table.", rule: "damage" },
+  { term: "Stressed out", def: "Resolve 0. You act normally, but you cannot push a roll or take stress to power anything.", rule: "recovery" },
+  { term: "Critical injury", def: "The lasting wound you roll when you are broken — a bruise, a crushed leg, worse. Each carries a dice penalty and a healing time.", rule: "crits" },
+  { term: "Armor", def: "Subtracted from each incoming hit. Only one source of armor applies at a time — the best one.", rule: "damage" },
+  { term: "Zone", def: "A chunk of the scene about a hundred feet across. You are either in the same zone as something or you are not.", rule: "actions" },
+  { term: "Full action / quick action", def: "Each turn you get one full action and one quick action, in either order — or two quick actions, giving up the full one.", rule: "actions" },
+  { term: "Slugfest", def: "A punch-up: attacking someone in your own zone with FIGHTING.", rule: "slugfest" },
+  { term: "Opposed roll", def: "Both sides roll. The one acting must succeed AND beat the other's 6s; each of their 6s cancels one of yours. A tie means the acting side fails.", rule: "opposed" },
+  { term: "Passive roll", def: "A roll you make without acting — spotting an ambush, for instance. You cannot push a passive roll.", rule: "push" },
+  { term: "Initiative card", def: "A card numbered 1 to 10 drawn each round. Lowest number acts first.", rule: "initiative" },
+  { term: "Minions", def: "A group of weak enemies tracked as ONE thing. Its Health is the head count: each point of damage takes one of them down.", rule: "minions" },
+  { term: "Karma", def: "Your advancement points. You earn them at the end of a session (or from objectives in solo play) and spend them between sessions.", rule: "karma" },
+  { term: "Talent", def: "A knack your hero has — a permanent bonus or a new option. You start with two, or three in solo play.", rule: "resolution" },
+  { term: "Drawback", def: "A permanent problem you take on purpose at creation, in exchange for an extra attribute point. Two at most.", rule: "resolution" },
+  { term: "Power boost / limit", def: "A boost adds an extra trick to a power and costs a slot. A limit adds a catch and is free — it either raises the power a level or grants a boost.", rule: "powers" },
+  { term: "Rank", def: "How big a hero you are: Teen Upstart, Street Defender, Global Guardian or Cosmic Champion. It sets your points, your maximum score and how many powers you get.", rule: "resolution" },
+  { term: "Reputation", def: "How well known you are. On arriving somewhere, roll it — any 6 means you are recognised, which is worth 2 extra dice when persuading or intimidating.", rule: "reputation" },
+  { term: "Resources", def: "Your standard of living, 1 to 8. Compare it against an item's cost to see whether you can simply buy the thing.", rule: "resources" },
+  { term: "Timer (solo)", def: "A countdown that replaces the GM. Roll its dice when the fiction says time has passed; each 6 moves it one step closer to happening.", rule: "resolution" },
+  { term: "Crisis level (solo)", def: "How bad things have got, 0 to 10. It rises as events fire, and makes later rolls harsher.", rule: "resolution" },
+  { term: "Oracle (solo)", def: "A dice table you ask instead of asking a GM — yes/no questions, open questions, and what a place is like.", rule: "resolution" },
+];
+
 export const RULES_LIBRARY = [
   { id: "lifecycle", title: "Scenes and sessions", tags: ["scene", "session", "briefing"], chapter: "Ch.6",
     body: "Play runs in briefings, action scenes and social scenes, usually alternating. A session feels like one comic issue; adventures run first contact, twist and showdown." },

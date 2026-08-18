@@ -66,7 +66,8 @@ export function renderHome(mount) {
       el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, "Edit team & base")));
   }
 
-  mount.append(el("section", { class: "card" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
+  // The session lifecycle needs a hero to act on; showing it first is six buttons that cannot help.
+  if (chars.length) mount.append(el("section", { class: "card" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
 
   mount.append(el("section", { class: "card" },
     el("h3", { text: "Quick reference" }),
@@ -116,8 +117,36 @@ export function renderRules(mount, anchor) {
   search.addEventListener("input", draw);
   draw();
 
+  // Newcomers hit the words before they hit the rules, so the glossary sits above the library and
+  // answers to the same search box.
+  const glossary = el("div", { class: "glossary" });
+  const drawGlossary = () => {
+    clear(glossary);
+    const q = search.value.trim().toLowerCase();
+    const hits = q
+      ? D.GLOSSARY.filter((g) => g.term.toLowerCase().includes(q) || g.def.toLowerCase().includes(q))
+      : D.GLOSSARY;
+    if (!hits.length) { glossary.append(el("p", { class: "muted small", text: "No word matches." })); return; }
+    for (const g of hits) {
+      glossary.append(el("details", { class: "gloss-entry", open: !!q && hits.length <= 3 },
+        el("summary", {}, el("strong", { text: g.term })),
+        el("p", { class: "small", text: g.def }),
+        el("p", { class: "cite" }, el("a", { class: "rules-link", href: `#/rules/${g.rule}` }, "the full rule"))));
+    }
+  };
+  search.addEventListener("input", drawGlossary);
+  drawGlossary();
+
   mount.append(
-    el("section", { class: "card" }, el("h2", { text: "Rules library" }), search, results),
+    el("section", { class: "card" },
+      el("h2", { text: "Rules library" }),
+      el("p", { class: "muted small", text: "Search both the words and the rules. If a term in the app is unfamiliar, it is almost certainly explained below." }),
+      search),
+    el("section", { class: "card", id: "glossary" },
+      el("h3", { text: `Words you'll see (${D.GLOSSARY.length})` }),
+      el("p", { class: "muted small", text: "Plain-English definitions of everything the app calls by name." }),
+      glossary),
+    el("section", { class: "card" }, el("h3", { text: "The rules" }), results),
     referenceTables());
 }
 

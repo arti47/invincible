@@ -11,6 +11,7 @@ import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from
 import { Settings } from "./settings.js";
 import * as Journal from "./journal.js";
 import { stageCard } from "./combat.js";
+import { NPC_PROFILES } from "../data-npcs.js";
 
 /* ---------------------------------------------------------------- persistent header */
 
@@ -250,7 +251,9 @@ async function promptDamage() {
 }
 
 async function promptStress() {
-  const v = Number(await promptModal("How much stress?", { title: "Take stress", value: "1" }));
+  const v = Number(await promptModal("How much stress?", { title: "Take stress", value: "1",
+    hints: ["Stress is damage to your Resolve — fear, strain, exhaustion. It is spent to push rolls and to power some abilities.",
+      "At 0 Resolve you are stressed out: you can still act, but you cannot push a roll or take stress for a power."] }));
   if (v > 0) { const c = Store.activeCharacter(); spendStress(c, v, "manual"); showToast(`${v} stress taken.`); }
 }
 
@@ -341,6 +344,43 @@ export function openAttributeGuide(c = Store.activeCharacter()) {
   return m;
 }
 
+/**
+ * Never ask a newcomer for a number they have no way of knowing. "The target's PRESENCE score?"
+ * is unanswerable unless you own the book; this offers the book's own 1-12 scale in words, the
+ * option to read it off any Ch.6 profile, and a typed number for anyone who does know.
+ * Returns a number, or null if cancelled.
+ */
+export async function askAttributeScore(attrKey, { title = "How good are they?", who = "them" } = {}) {
+  const attr = D.ATTRIBUTES.find((a) => a.key === attrKey);
+  const label = attr ? attr.name : String(attrKey).toUpperCase();
+  const rung = (n, text) => ({ label: `${text} — ${n}`, hint: `${D.SCORE_DESCRIPTIONS[n]}. Rolls ${n} dice.`, value: n });
+  const pick = await chooseModal(`${label} — how good is ${who}?`, [
+    rung(2, "An ordinary person"),
+    rung(3, "Trained at this"),
+    rung(4, "Dangerous"),
+    rung(5, "Elite"),
+    rung(7, "Superhuman"),
+    { label: "Look it up on an NPC", hint: `Read ${label} straight off a Chapter 6 profile`, value: "__npc" },
+    { label: "I know the number", hint: "Type it in", value: "__type" },
+  ], { allowCancel: true });
+  if (pick === null || pick === undefined) return null;
+
+  if (pick === "__npc") {
+    const chosen = await chooseModal(`${label} — pick the profile`, NPC_PROFILES
+      .filter((p) => p.attrs && p.attrs[attrKey])
+      .map((p) => ({ label: p.name, hint: `${label} ${p.attrs[attrKey]}${p.minion ? " · minions" : ""}`, value: p.name })));
+    if (!chosen) return null;
+    const profile = NPC_PROFILES.find((p) => p.name === chosen);
+    return profile?.attrs?.[attrKey] || null;
+  }
+  if (pick === "__type") {
+    const n = Number(await promptModal(`${label} score?`, { title,
+      value: "3", hints: ["The scale runs 1 to 12. An untrained person is 2, and 6 or more is superhuman."] }));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return Number(pick);
+}
+
 export async function rollAttribute(c, attr, opts = {}) {
   const manual = Settings.manualDice() ? await askManualFaces() : null;
   const r = Roller.roll(c, attr, `${attr.toUpperCase()} roll`, { ...opts, manualFaces: manual });
@@ -376,8 +416,8 @@ async function openAttackDialog(c) {
         : "Declared before you roll: does the target spend a quick action to dodge? Each defender 6 cancels one of yours, and extra 6s let them move a zone each.",
       { title: defKind === "block" ? "Block?" : "Dodge?", confirmLabel: defKind === "block" ? "They block" : "They dodge", cancelLabel: "No defence" });
     if (declared) {
-      const n = Number(await promptModal(defKind === "block" ? "Defender's FIGHTING score?" : "Defender's AGILITY score?",
-        { title: "Defender", value: "3" }));
+      const n = await askAttributeScore(defKind === "block" ? "fighting" : "agility",
+        { title: "Defender", who: "the defender" });
       if (n > 0) defence = { kind: defKind, dice: n };
     }
   }
@@ -426,7 +466,7 @@ export function showAttackResult(c, r, { huge = false, defence = null } = {}) {
 }
 
 async function openBanter(c) {
-  const p = Number(await promptModal("The target's PRESENCE score?", { title: "Action banter", value: "3" }));
+  const p = await askAttributeScore("presence", { title: "Action banter", who: "your target" });
   if (!p) return;
   const res = Roller.banter(c, p);
   if (!res.ok) { showToast(res.reason, { variant: "warn" }); return; }
