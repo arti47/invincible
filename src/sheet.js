@@ -726,6 +726,57 @@ export function openRecovery(c) {
 
 /* ---------------------------------------------------------------- karma */
 
+/**
+ * Buying a base upgrade after creation (§3.8): 10 karma, 20 if nobody on the team meets the
+ * upgrade's Resources or occupation prerequisite. Prerequisites that are OTHER upgrades can never
+ * be bought around, so those are refused outright rather than sold at double.
+ */
+async function buyBaseUpgrade(redraw) {
+  const team = Store.getTeam();
+  if (!team) return;
+  const owned = (team.base.upgrades || []);
+  const options = D.BASE_UPGRADES.map((u) => {
+    const have = owned.filter((x) => x.name === u.name).length;
+    const cost = Store.baseUpgradeCost(u.name);
+    const blocked = !Store.upgradePrereqSatisfied(u.name);
+    const maxed = have >= (u.repeat || 1);
+    return {
+      label: u.name + (have ? ` ×${have}` : ""),
+      hint: blocked ? `Needs ${u.prereq} first` : maxed ? "Already at its limit"
+        : `${cost} karma${cost > D.KARMA.costs.baseUpgrade ? " — nobody meets the prerequisite" : ""} · ${u.desc}`,
+      value: (blocked || maxed) ? null : u.name,
+    };
+  }).filter((o) => o.value);
+  if (!options.length) { showToast("Nothing left to buy for this base.", { variant: "warn" }); return; }
+
+  const pick = await chooseModal("Which upgrade?", options);
+  if (!pick) return;
+  const cost = Store.baseUpgradeCost(pick);
+
+  // The team may pool karma, so any hero with enough can pay for it.
+  const payers = Store.listCharacters().filter((x) => x.state.karma >= cost && x.state.session.spendUnlocked);
+  if (!payers.length) {
+    showToast(`Nobody can pay ${cost} karma right now — spending is only open between sessions.`, { variant: "warn", timeout: 6000 });
+    return;
+  }
+  const payerId = payers.length === 1 ? payers[0].id : await chooseModal("Who pays? The team may pool karma.",
+    payers.map((x) => ({ label: x.identity.heroName || x.identity.realName || "Hero", hint: `${x.state.karma} karma`, value: x.id })));
+  if (!payerId) return;
+
+  let msg = null;
+  Store.updateCharacter((ch) => {
+    const res = Store.karmaSpend(ch, { kind: "baseUpgrade", label: `Base upgrade: ${pick}`, cost });
+    if (!res.ok) msg = res.reason;
+  }, { id: payerId });
+  if (msg) { showToast(msg, { variant: "warn", timeout: 6000 }); return; }
+
+  team.base.upgrades = [...(team.base.upgrades || []), { name: pick, at: Date.now() }];
+  Store.saveTeam(team);
+  Journal.record({ kind: "state", text: `Base upgrade bought: ${pick} (${cost} karma)` });
+  showToast(`${pick} added to the base. Installing it takes at least a day of work.`, { variant: "good", timeout: 6000 });
+  if (redraw) redraw();
+}
+
 export function openKarma(c) {
   const body = el("div", { class: "karma-panel" });
   const draw = () => {
@@ -742,6 +793,11 @@ export function openKarma(c) {
         spendButton("New power (needs an in-game explanation)", D.KARMA.costs.newPower, "power"),
         spendButton("New talent", D.KARMA.costs.talent, "talent"),
         spendButton("Remove a drawback", D.KARMA.costs.removeDrawback, "drawback")),
+      el("h4", { class: "section", text: "Team base" }),
+      Store.getTeam()
+        ? el("div", { class: "chiprow column" }, el("button", { class: "chip wide", onclick: () => buyBaseUpgrade(draw) },
+          `Base upgrade — ${D.KARMA.costs.baseUpgrade} karma (${D.KARMA.costs.baseUpgradeNoPrereq} without a prerequisite)`))
+        : el("p", { class: "muted small", text: "No team yet. Create one on the Home screen to buy base upgrades." }),
       el("p", { class: "muted small", text: `Training discount applied: ${Math.round(Store.trainingDiscount() * 100)}%` }),
       el("h4", { class: "section", text: "Advancement log" }),
       el("ul", { class: "muted small" }, ...(ch.advancementLog || []).slice(-10).reverse().map((a) => el("li", { text: `${new Date(a.at).toLocaleDateString()} — ${a.label} (${a.cost} karma)` }))),

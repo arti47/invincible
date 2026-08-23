@@ -776,8 +776,18 @@ export function openTeamWizard(onDone) {
       grid.append(el("button", { class: `card selectable tight ${have ? "selected" : ""}`, onclick: () => {
         team.base.upgrades = team.base.upgrades || [];
         const i = team.base.upgrades.findIndex((x) => x.name === u.name);
+        const allowance = rank.baseUpgrades;
+        const taken = team.base.upgrades.length;
         if (i >= 0 && have >= (u.repeat || 1)) team.base.upgrades = team.base.upgrades.filter((x) => x.name !== u.name);
-        else if (have < (u.repeat || 1)) team.base.upgrades.push({ name: u.name, at: Date.now() });
+        else if (have < (u.repeat || 1)) {
+          // Starting upgrades are capped by rank; more are bought later with karma (§3.8).
+          if (taken >= allowance) {
+            showToast(`${rank.name} teams start with ${allowance} upgrade${allowance === 1 ? "" : "s"}. Buy more later with karma, from the sheet.`,
+              { variant: "warn", timeout: 6000 });
+            return;
+          }
+          team.base.upgrades.push({ name: u.name, at: Date.now() });
+        }
         else team.base.upgrades = team.base.upgrades.filter((x) => x.name !== u.name);
         render2();
       } },

@@ -10,6 +10,7 @@ import { Settings, TOGGLES, applyTheme } from "./settings.js";
 import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
+import { NPC_RECIPE, NPC_HANDLING, CREATURE_NOTE } from "../data-npcs.js";
 import * as Sync from "./sync.js";
 import * as Journal from "./journal.js";
 
@@ -147,6 +148,7 @@ export function renderRules(mount, anchor) {
       el("p", { class: "muted small", text: "Plain-English definitions of everything the app calls by name." }),
       glossary),
     el("section", { class: "card" }, el("h3", { text: "The rules" }), results),
+    orphanedRules(),
     referenceTables());
 }
 
@@ -177,6 +179,44 @@ function referenceTables() {
   return card;
 }
 
+/**
+ * Rules text that was extracted but had no route to the player: hazards, falling, weapon features,
+ * vehicle handling, the time ladder crit healing uses, and the NPC-building recipe a solo player
+ * needs because they are their own GM. Rendered from the data verbatim rather than re-summarised.
+ */
+function orphanedRules() {
+  const card = el("section", { class: "card", id: "more-rules" }, el("h3", { text: "More rules" }),
+    el("p", { class: "muted small", text: "Corners of the rules the other screens do not need often enough to show inline." }));
+
+  card.append(detailsTable("Hazards", [["Hazard", "Rule"]].concat(
+    Object.entries(D.HAZARDS).map(([k, v]) => [titleise(k), v]))));
+
+  card.append(detailsTable("Falling", [["From", "Damage"]].concat([
+    ["Elevated", D.FALLING.elevated], ["Sky high", D.FALLING.sky], ["In orbit", D.FALLING.orbit],
+    ["Avoiding it", D.FALLING.roll]])));
+
+  card.append(detailsTable("Weapon features", [["Feature", "What it does"]].concat(
+    Object.entries(D.WEAPON_FEATURES).map(([k, v]) => [titleise(k), v]))));
+
+  card.append(el("details", {}, el("summary", { text: "Vehicles in play" }),
+    el("ul", { class: "small" }, ...D.VEHICLE_RULES.map((t) => el("li", { text: t })))));
+
+  card.append(detailsTable("Healing times", [["Category"]].concat(D.TIME_CATEGORIES.map((t) => [t]))));
+
+  card.append(el("details", {}, el("summary", { text: "Base upgrades — buying them later" }),
+    el("ul", { class: "small" }, ...D.BASE_UPGRADE_RULES.map((t) => el("li", { text: t })))));
+
+  card.append(el("details", {}, el("summary", { text: "Building an NPC (you are the GM in solo play)" }),
+    el("ol", { class: "small" }, ...NPC_RECIPE.map((r) => el("li", {},
+      el("strong", { text: `${r.step}: ` }), r.desc))),
+    el("h4", { class: "section", text: "Running them" }),
+    el("ul", { class: "small" }, ...NPC_HANDLING.map((t) => el("li", { text: t })))));
+
+  return card;
+}
+
+const titleise = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
+
 function detailsTable(title, rows) {
   const [head, ...body] = rows;
   return el("details", {}, el("summary", { text: title }),
@@ -203,6 +243,8 @@ export function renderCompendium(mount) {
     }
     for (const [group, items] of Object.entries(groups)) {
       list.append(el("h4", { class: "section", text: `${group} (${items.length})` }));
+      // Ch.6 prints one caveat over the animal list; it belongs with the animals, not in a data file.
+      if (group === "Creatures") list.append(el("p", { class: "muted small", text: CREATURE_NOTE }));
       for (const n of items) {
         list.append(el("button", { class: "npc-row", onclick: () => showNPC(n) },
           el("div", {}, el("strong", { text: n.name }), el("p", { class: "muted small", text: n.desc || n.descriptor || "" })),
@@ -220,33 +262,6 @@ export function renderCompendium(mount) {
 
 /* ---------------------------------------------------------------- roll log */
 
-export function renderRollLog(mount) {
-  clear(mount);
-  const log = Store.rollLog();
-  const list = el("div", { class: "roll-log", "aria-live": "polite" });
-  if (!log.length) list.append(el("p", { class: "muted", text: "No rolls yet." }));
-  for (const r of log) {
-    list.append(el("div", { class: "log-row" },
-      el("div", { class: "log-head" },
-        el("strong", { text: r.label }),
-        el("span", { class: "muted small", text: new Date(r.ts).toLocaleTimeString() })),
-      el("div", { class: "dice-row small" }, ...(r.dice || []).map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))),
-      el("p", { class: "muted small", text: [
-        r.characterName, r.attribute ? r.attribute.toUpperCase() : null, `pool ${r.pool}`,
-        (r.mods || []).map((m) => `${m.label} ${m.value > 0 ? "+" : ""}${m.value}`).join(", ") || null,
-        r.pushed ? `pushed ×${r.pushed}` : null,
-        r.stressTaken ? `${r.stressTaken} stress` : null,
-        r.outcome,
-      ].filter(Boolean).join(" · ") })));
-  }
-  mount.append(el("section", { class: "card" },
-    el("h2", { text: "Roll log" }),
-    el("p", { class: "muted small", text: "Every roll is recorded with its pool, modifiers, faces and outcome — enough to re-derive it. Capped at the last 100." }),
-    el("button", { class: "btn ghost", onclick: async () => {
-      if (await confirmModal("Clear the roll log?", { title: "Clear log" })) { Store.clearRollLog(); renderRollLog(mount); }
-    } }, "Clear log"),
-    list));
-}
 
 /* ---------------------------------------------------------------- journal screen */
 

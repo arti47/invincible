@@ -1350,6 +1350,145 @@ const run = async () => {
   });
   ok("JSON import restores characters", importOk.n === 1 && importOk.chars === 1);
 
+  /* ---------------------------------------------------------------- reachability */
+  // Anything the app knows must have a route to the player. Data with no screen is data nobody has.
+  section("Reachability");
+
+  // Every exported table must have a route to the player. Two kinds of symbol legitimately do
+  // not: internal metadata with no player-facing content, and rules whose content the app shows
+  // through its own paraphrase in RULES_LIBRARY (each maps to the entry id given here, which is
+  // asserted to exist). Anything else added without a screen fails this check.
+  const REACH_EXEMPT = {
+    "data.js::GAME": "meta:title and dice-face constants",
+    "data.js::ARCHETYPE_SOURCE_GAP": "meta:gap counter, now 0",
+    "data.js::VEHICLE_DATA_FLAGS": "meta:extraction flags, now empty",
+    "data.js::TALENT_INDEX": "meta:name lookup behind the talent finders",
+    "data.js::ACTIONS": "rule:actions",
+    "data.js::ACTION_BANTER": "rule:banter",
+    "data.js::CHALLENGE_RULES": "rule:challenges",
+    "data.js::CHASE_RULES": "rule:chases",
+    "data.js::DAMAGE_RULES": "rule:damage",
+    "data.js::DICE_RULES": "rule:resolution",
+    "data.js::GENERIC_STUNTS": "rule:stunts",
+    "data.js::HUGE_CREATURE_RULES": "rule:huge",
+    "data.js::INITIATIVE": "rule:initiative",
+    "data.js::MINION_RULES": "rule:minions",
+    "data.js::PURCHASE_RULES": "rule:resources",
+    "data.js::REPUTATION": "rule:reputation",
+    "data.js::WRECKING_RULES": "rule:wrecking",
+  };
+
+  const reach = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const N = await import("/data-npcs.js");
+    const srcs = {};
+    for (const f of ["screens", "sheet", "solo", "combat", "wizard", "gm", "learn", "rules", "roller", "derived", "store", "journal", "router", "power-automation"]) {
+      srcs[f] = await (await fetch(`/src/${f}.js`)).text();
+    }
+    const all = Object.values(srcs).join("\n");
+    const orphans = [];
+    for (const [file, mod] of [["data.js", D], ["data-npcs.js", N]]) {
+      for (const key of Object.keys(mod)) {
+        if (!/^[A-Z][A-Z_0-9]*$/.test(key)) continue;
+        const used = new RegExp(`\\b(?:D|S|N)?\\.?${key}\\b`).test(all);
+        if (!used) orphans.push(`${file}::${key}`);
+      }
+    }
+    return { orphans, ruleIds: D.RULES_LIBRARY.map((r) => r.id) };
+  });
+  const stranded = reach.orphans.filter((k) => !REACH_EXEMPT[k]);
+  ok("no extracted table is stranded with no screen to show it",
+    stranded.length === 0, stranded.join(", "));
+  const badExempt = Object.entries(REACH_EXEMPT)
+    .filter(([, why]) => why.startsWith("rule:") && !reach.ruleIds.includes(why.slice(5)))
+    .map(([k]) => k);
+  ok("every rules-covered exemption names a rules-library entry that exists",
+    badExempt.length === 0, badExempt.join(", "));
+  const staleExempt = Object.keys(REACH_EXEMPT).filter((k) => !reach.orphans.includes(k));
+  ok("the exempt list carries no stale entries",
+    staleExempt.length === 0, staleExempt.join(", "));
+
+  const routes = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true); Settings.set("gmScreen", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    await new Promise((r) => setTimeout(r, 200));
+    const nav = Array.from(document.querySelectorAll("#bottom-nav .nav-item")).map((a) => a.getAttribute("data-path"));
+    const out = {};
+    for (const r of ["home", "sheet", "combat", "rules", "compendium", "solo", "gm", "learn", "journal", "log", "settings", "create"]) {
+      location.hash = `#/${r}`;
+      await new Promise((x) => setTimeout(x, 220));
+      out[r] = document.querySelectorAll("#screen *").length;
+    }
+    return { nav, out };
+  });
+  ok("every route renders a real screen",
+    Object.values(routes.out).every((n) => n > 3), JSON.stringify(routes.out));
+  ok("the nav reaches everything that is not opened from a card",
+    ["home", "sheet", "combat", "rules", "compendium", "solo", "gm", "journal", "settings"].every((r) => routes.nav.includes(r)),
+    routes.nav.join(", "));
+
+  const moreRules = await page.evaluate(async () => {
+    location.hash = "#/rules";
+    await new Promise((r) => setTimeout(r, 300));
+    const card = document.querySelector("#more-rules");
+    const titles = card ? Array.from(card.querySelectorAll("summary")).map((x) => x.textContent.trim()) : [];
+    return { titles, text: card?.textContent || "" };
+  });
+  ok("the rules the app never showed now have a home",
+    ["Hazards", "Falling", "Weapon features", "Vehicles in play", "Healing times"].every((t) => moreRules.titles.includes(t)),
+    moreRules.titles.join(" | "));
+  ok("a solo player can read how to build an NPC",
+    moreRules.titles.some((t) => /Building an NPC/.test(t)) && /Attributes/.test(moreRules.text));
+
+  // Base upgrades: the rules make these a karma purchase, and nothing could buy one.
+  const upgrades = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const D = await import("/data.js");
+    const W = await import("/src/wizard.js");
+    const Dv = await import("/src/derived.js");
+    localStorage.removeItem("invincible:team");
+    const hero = Dv.blankCharacter();
+    hero.id = "up_hero"; hero.identity.heroName = "Banker"; hero.identity.rank = "global";
+    W.rollWholeHero(hero);
+    hero.state.karma = 40;
+    hero.state.session.spendUnlocked = true;
+    Store.saveCharacter(hero); Store.setActiveCharacter("up_hero");
+    const team = Store.blankTeam();
+    team.name = "The Test"; team.rank = "global"; team.base.upgrades = [];
+    Store.saveTeam(team);
+
+    const plain = Store.baseUpgradeCost("Comm System");
+    const gated = D.BASE_UPGRADES.find((u) => u.prereq && D.BASE_UPGRADES.some((o) => o.name === u.prereq));
+    const blocked = gated ? Store.upgradePrereqSatisfied(gated.name) : null;
+
+    // the karma dialog must offer it
+    const Sheet = await import("/src/sheet.js");
+    Sheet.openKarma(Store.activeCharacter());
+    await new Promise((r) => setTimeout(r, 200));
+    const offered = Array.from(document.querySelectorAll(".modal .chip"))
+      .some((b) => /Base upgrade/.test(b.textContent));
+    document.querySelector(".modal .modal-actions button")?.click();
+    return { plain, costs: D.KARMA.costs.baseUpgrade, noPrereq: D.KARMA.costs.baseUpgradeNoPrereq,
+      gated: gated?.name || null, blocked, offered };
+  });
+  ok("a base upgrade has a karma price the store can quote",
+    upgrades.plain === upgrades.costs || upgrades.plain === upgrades.noPrereq, String(upgrades.plain));
+  ok("an upgrade gated behind another upgrade is refused, not sold at double",
+    upgrades.gated === null || upgrades.blocked === false, `${upgrades.gated}: ${upgrades.blocked}`);
+  ok("karma can actually buy a base upgrade", upgrades.offered);
+
+  const cap = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const src = await (await fetch("/src/wizard.js")).text();
+    const i = src.indexOf("function upgradeGrid()");
+    const body = src.slice(i, src.indexOf("\n  }\n", i));
+    return { enforced: /taken >= allowance/.test(body),
+      ranks: D.RANKS.map((r) => `${r.key}:${r.baseUpgrades}`).join(" ") };
+  });
+  ok("starting upgrades are capped by rank instead of being unlimited and free",
+    cap.enforced, cap.ranks);
+
   /* ---------------------------------------------------------------- idiot-proofing */
   // Someone who has never read the rulebook must be able to get from a cold start to rolling dice.
   section("First-timer path");
