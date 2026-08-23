@@ -2,7 +2,7 @@
 // plus JSON export/import and the one-step undo stack used by lifecycle bundles.
 
 import { STORAGE_PREFIX, uid, deepClone, clamp } from "./core.js";
-import { normalizeCharacter, blankCharacter, maxHealth, maxResolve } from "./derived.js";
+import { normalizeCharacter, blankCharacter, maxHealth, maxResolve, resources } from "./derived.js";
 import * as R from "./rules.js";
 import * as Journal from "./journal.js";
 import { D } from "./rules.js";
@@ -140,19 +140,16 @@ export function baseUpgradeCost(upgradeName, characters = listCharacters()) {
   const up = D.BASE_UPGRADES.find((u) => u.name === upgradeName);
   if (!up) return D.KARMA.costs.baseUpgrade;
   if (!up.prereq) return D.KARMA.costs.baseUpgrade;
-  const team = getTeam();
   const isUpgradePrereq = D.BASE_UPGRADES.some((u) => u.name === up.prereq);
   if (isUpgradePrereq) return D.KARMA.costs.baseUpgrade; // never buyable around; validity checked separately
   const resMatch = /Resources\s+(\d)/.exec(up.prereq);
   const needed = resMatch ? Number(resMatch[1]) : null;
   const occupations = up.prereq.replace(/Resources\s+\d,?\s*/i, "").split(/,| or /).map((s) => s.trim()).filter(Boolean);
   const met = characters.some((c) => {
-    const res = R.D ? undefined : undefined;
-    const rating = c.identity?.resourcesBase ?? (R.findOccupation(c.identity?.occupation)?.resources || 0);
-    if (needed && rating >= needed) return true;
+    // The live rating, so Windfall and Hard Times count (SS3.5) — not the occupation's printed base.
+    if (needed && resources(c) >= needed) return true;
     return occupations.some((o) => o && c.identity?.occupation === o);
   });
-  void team;
   return met ? D.KARMA.costs.baseUpgrade : D.KARMA.costs.baseUpgradeNoPrereq;
 }
 

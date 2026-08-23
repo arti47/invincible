@@ -8,6 +8,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
+import * as Sync from "./sync.js";
 
 export function renderGM(mount) {
   clear(mount);
@@ -46,6 +47,24 @@ function partyPanel() {
       el("div", {}, el("strong", { text: team.name || "The team" }),
         el("p", { class: "muted small", text: `${team.base?.location || "No base"} · ${(team.base?.upgrades || []).length} upgrade(s)` }))));
   }
+
+  // In a campaign the party is bigger than this device. Members sync in live; local-only mode
+  // never calls back, so the block simply never appears.
+  const remote = el("div", { class: "remote-party" });
+  card.append(remote);
+  const localNames = new Set(chars.map((c) => (c.identity.heroName || "").toLowerCase()));
+  Sync.subscribeParty((members) => {
+    clear(remote);
+    const others = Object.values(members || {})
+      .filter((m) => m && m.displayName && !localNames.has(String(m.displayName).toLowerCase()));
+    if (!others.length) return;
+    remote.append(el("h4", { class: "section", text: `Also in this campaign (${others.length})` }));
+    for (const m of others) {
+      remote.append(el("div", { class: "party-row" },
+        el("div", {}, el("strong", { text: m.displayName }),
+          el("p", { class: "muted small", text: m.role === "gm" ? "GM" : "Player" }))));
+    }
+  });
   return card;
 }
 

@@ -1381,13 +1381,16 @@ const run = async () => {
   const reach = await page.evaluate(async () => {
     const D = await import("/data.js");
     const N = await import("/data-npcs.js");
+    const M = await import("/data-monsters.js");
+    const P2 = await import("/data-pregens.js");
+    const SD = await import("/data-solo.js");
     const srcs = {};
     for (const f of ["screens", "sheet", "solo", "combat", "wizard", "gm", "learn", "rules", "roller", "derived", "store", "journal", "router", "power-automation"]) {
       srcs[f] = await (await fetch(`/src/${f}.js`)).text();
     }
     const all = Object.values(srcs).join("\n");
     const orphans = [];
-    for (const [file, mod] of [["data.js", D], ["data-npcs.js", N]]) {
+    for (const [file, mod] of [["data.js", D], ["data-npcs.js", N], ["data-monsters.js", M], ["data-pregens.js", P2], ["data-solo.js", SD]]) {
       for (const key of Object.keys(mod)) {
         if (!/^[A-Z][A-Z_0-9]*$/.test(key)) continue;
         const used = new RegExp(`\\b(?:D|S|N)?\\.?${key}\\b`).test(all);
@@ -1407,6 +1410,31 @@ const run = async () => {
   const staleExempt = Object.keys(REACH_EXEMPT).filter((k) => !reach.orphans.includes(k));
   ok("the exempt list carries no stale entries",
     staleExempt.length === 0, staleExempt.join(", "));
+
+  const notes = await page.evaluate(async () => {
+    const M = await import("/data-monsters.js");
+    location.hash = "#/compendium";
+    await new Promise((r) => setTimeout(r, 300));
+    return { adversary: document.querySelector("#screen").textContent.includes(M.ADVERSARY_NOTE.slice(0, 40)) };
+  });
+  ok("the compendium carries the Ch.8 stat-block caveat", notes.adversary);
+
+  const avoidShown = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    location.hash = "#/solo";
+    await new Promise((r) => setTimeout(r, 300));
+    // Force the standoff phase with the hero unspotted, which is where the three options live.
+    const raw = JSON.parse(localStorage.getItem("invincible:solo") || "{}");
+    raw.encounter = { phase: "standoff", spotted: { hero: false }, surprised: false, status: "Encountered", rung: 6 };
+    localStorage.setItem("invincible:solo", JSON.stringify(raw));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 150));
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 350));
+    const t = document.querySelector("#screen").textContent;
+    return { sneak: /Sneak past: roll INTUITION/.test(t), hide: /Hide: decide whether/.test(t) };
+  });
+  ok("the three encounter-avoidance options explain what each costs",
+    avoidShown.sneak && avoidShown.hide, JSON.stringify(avoidShown));
 
   const routes = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
@@ -1478,16 +1506,107 @@ const run = async () => {
     upgrades.gated === null || upgrades.blocked === false, `${upgrades.gated}: ${upgrades.blocked}`);
   ok("karma can actually buy a base upgrade", upgrades.offered);
 
+  // The team wizard's upgrade grid, driven through the real DOM rather than matched in source.
   const cap = await page.evaluate(async () => {
     const D = await import("/data.js");
-    const src = await (await fetch("/src/wizard.js")).text();
-    const i = src.indexOf("function upgradeGrid()");
-    const body = src.slice(i, src.indexOf("\n  }\n", i));
-    return { enforced: /taken >= allowance/.test(body),
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const team = Store.blankTeam();
+    team.name = "Cap Test"; team.rank = "global"; team.base.upgrades = [];
+    Store.saveTeam(team);
+    W.openTeamWizard(() => {});
+    await new Promise((r) => setTimeout(r, 200));
+    const cards = () => Array.from(document.querySelectorAll(".modal .source-grid > button"));
+    const cardFor = (name) => cards().find((b) => b.querySelector("strong").textContent.startsWith(name));
+    const held = () => (Store.getTeam().base.upgrades || []).length;
+
+    // Prerequisite upgrades are locked out until the upgrade they need is held.
+    const lockedBefore = cardFor("Vehicle Defense").disabled;
+    cardFor("Team Vehicle").click();
+    await new Promise((r) => setTimeout(r, 60));
+    const lockedAfter = cardFor("Vehicle Defense").disabled;
+
+    // Rank allowance: Global is 2, so a third free pick must be refused.
+    cardFor("Vehicle Defense").click();
+    await new Promise((r) => setTimeout(r, 60));
+    const atCap = cards().filter((b) => b.classList.contains("selected")).length;
+    cardFor("Concealment").click();
+    await new Promise((r) => setTimeout(r, 60));
+    const overCap = cards().filter((b) => b.classList.contains("selected")).length;
+
+    // Removing a prerequisite while a dependent is held is refused.
+    cardFor("Team Vehicle").click();
+    await new Promise((r) => setTimeout(r, 60));
+    const vehicleKept = !!cardFor("Team Vehicle").classList.contains("selected");
+
+    // A repeatable at its cap decrements by one rather than dumping the whole stack.
+    const draft = document.querySelector(".modal");
+    const before = cards().filter((b) => b.classList.contains("selected")).length;
+    cardFor("Vehicle Defense").click(); // Vehicle Defense repeats twice; this is the second
+    await new Promise((r) => setTimeout(r, 60));
+    const stacked = cardFor("Vehicle Defense").querySelector("strong").textContent;
+    document.querySelector(".modal .modal-actions button")?.click();
+    void draft; void held; void before;
+    return { lockedBefore, lockedAfter, atCap, overCap, vehicleKept, stacked,
+      allowance: D.RANKS.find((r) => r.key === "global").baseUpgrades,
       ranks: D.RANKS.map((r) => `${r.key}:${r.baseUpgrades}`).join(" ") };
   });
   ok("starting upgrades are capped by rank instead of being unlimited and free",
-    cap.enforced, cap.ranks);
+    cap.atCap === cap.allowance && cap.overCap === cap.allowance, `${cap.atCap} then ${cap.overCap} of ${cap.allowance} — ${cap.ranks}`);
+  ok("an upgrade whose prerequisite is another upgrade is locked until that one is held",
+    cap.lockedBefore === true && cap.lockedAfter === false);
+  ok("a prerequisite cannot be removed while something depends on it", cap.vehicleKept);
+
+  const teamGone = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const t = Store.blankTeam(); t.name = "Doomed"; Store.saveTeam(t);
+    W.openTeamWizard(() => {});
+    await new Promise((r) => setTimeout(r, 200));
+    const btn = Array.from(document.querySelectorAll(".modal button"))
+      .find((b) => /Disband this team/.test(b.textContent));
+    if (!btn) return { offered: false };
+    btn.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const confirm = Array.from(document.querySelectorAll(".modal button")).find((b) => b.textContent.trim() === "Disband");
+    confirm?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    return { offered: true, team: Store.getTeam() };
+  });
+  ok("a team can be disbanded, not only created and edited", teamGone.offered && teamGone.team === null);
+
+  const teamLink = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const t = Store.blankTeam(); t.name = "Linked"; Store.saveTeam(t);
+    location.hash = "#/home";
+    await new Promise((r) => setTimeout(r, 300));
+    return Array.from(document.querySelectorAll("#screen button")).some((b) => /Buy an upgrade/.test(b.textContent));
+  });
+  ok("the team card routes to the base-upgrade purchase", teamLink);
+
+  const resourceRating = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const D = await import("/data.js");
+    const Derived = await import("/src/derived.js");
+    // Comm System needs Resources 5; a hero one short of it, then lifted over by Windfall.
+    const up = D.BASE_UPGRADES.find((u) => u.name === "Comm System");
+    Store.createCharacter({ id: "res_hero" });
+    const c = Store.listCharacters().find((x) => x.id === "res_hero");
+    c.identity.heroName = "Rich"; c.identity.resourcesBase = 4;
+    Store.saveCharacter(c);
+    const poor = Store.baseUpgradeCost(up.name, [Store.listCharacters().find((x) => x.id === "res_hero")]);
+    const c2 = Store.listCharacters().find((x) => x.id === "res_hero");
+    c2.talents = [{ name: "Windfall", rank: 1 }];
+    Store.saveCharacter(c2);
+    const rich = Store.baseUpgradeCost(up.name, [Store.listCharacters().find((x) => x.id === "res_hero")]);
+    const rating = Derived.resources(Store.listCharacters().find((x) => x.id === "res_hero"));
+    Store.deleteCharacter("res_hero");
+    return { poor, rich, rating, full: D.KARMA.costs.baseUpgradeNoPrereq, cheap: D.KARMA.costs.baseUpgrade };
+  });
+  ok("Windfall counts toward an upgrade's Resources prerequisite",
+    resourceRating.poor === resourceRating.full && resourceRating.rich === resourceRating.cheap,
+    `4 -> ${resourceRating.poor}, Windfall ${resourceRating.rating} -> ${resourceRating.rich}`);
 
   /* ---------------------------------------------------------------- idiot-proofing */
   // Someone who has never read the rulebook must be able to get from a cold start to rolling dice.

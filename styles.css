@@ -150,7 +150,7 @@ a { color: var(--accent-2); }
 .btn.warn { background: var(--warn); color: #14131a; }
 .btn.ghost { background: transparent; box-shadow: none; }
 .btn.tiny { min-height: 32px; padding: .2rem .5rem; font-size: .8rem; box-shadow: 2px 2px 0 var(--line); border-width: 2px; }
-.btn[disabled] { opacity: .45; cursor: not-allowed; }
+button[disabled], .btn[disabled] { opacity: .45; cursor: not-allowed; }
 
 .icon-btn {
   min-width: var(--tap); min-height: var(--tap); border: 2px solid var(--line); border-radius: 8px;

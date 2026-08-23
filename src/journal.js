@@ -94,15 +94,6 @@ export function deleteSession(id, { keepEntries = false } = {}) {
   return { session: s, entries: mine.length, kept: keepEntries };
 }
 
-/** Clear a session's entries but keep the session itself, ready to be written into again. */
-export function clearSessionEntries(id) {
-  const j = read();
-  const before = j.entries.length;
-  j.entries = j.entries.filter((e) => e.sessionId !== id);
-  write(j);
-  return before - j.entries.length;
-}
-
 /**
  * Resume a closed session: new entries file under it again. Only one session is ever open, so
  * whichever was current is closed first.

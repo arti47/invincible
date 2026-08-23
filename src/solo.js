@@ -1606,6 +1606,7 @@ function encounterCard(state, mount) {
   }
 
   const row = el("div", { class: "row-actions steps" });
+  let avoidance = null;
 
   if (phase === "moving") {
     row.append(el("button", { class: "btn primary", onclick: () => encounterCheck(state, mount) }, "Move / linger — check"));
@@ -1628,6 +1629,8 @@ function encounterCard(state, mount) {
         row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "hide") }, "Hide"));
         row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "backOut") }, "Back out"));
         row.append(el("button", { class: "btn ghost", onclick: () => standoffChoice(state, mount, "sneak") }, "Sneak past"));
+        // What each of the three avoidance options actually costs you (Ch.9), beside the buttons.
+        avoidance = el("ul", { class: "muted small" }, ...S.AVOIDING_ENCOUNTERS.map((t) => el("li", { text: t })));
       } else {
         row.append(el("button", { class: "btn", onclick: () => escapeEncounter(state, mount) }, "Escape (AGILITY)"));
         row.append(el("button", { class: "btn danger", onclick: () => drawForEncounter(state, mount) }, "Draw initiative"));
@@ -1643,6 +1646,7 @@ function encounterCard(state, mount) {
   }
 
   card.append(row);
+  if (avoidance) card.append(avoidance);
   card.append(el("div", { class: "row-actions minor" },
     el("button", { class: "btn tiny ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
     el("button", { class: "btn tiny ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Stop the encounter timer")));
@@ -2119,7 +2123,6 @@ function referenceCard(state, mount) {
   return card;
 }
 
-export function soloBuildNotes() { return S.SOLO_SETUP.build; }
 
 /**
  * Called by the End social scene lifecycle bundle so a social scene played through the normal

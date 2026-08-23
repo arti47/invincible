@@ -766,34 +766,68 @@ export function openTeamWizard(onDone) {
       el("p", { class: "muted small", text: "Recommended for a new team: Concealment, Team Vehicle, Training Facilities." }),
       upgradeGrid(),
       el("h4", { class: "section", text: "Session zero questions" }),
-      el("ul", { class: "muted" }, ...D.TEAM_QUESTIONS.sessionZero.map((q) => el("li", { text: q }))));
+      el("ul", { class: "muted" }, ...D.TEAM_QUESTIONS.sessionZero.map((q) => el("li", { text: q }))),
+      disbandBlock());
   };
+
+  // A team could be created and edited but never removed, so a wrong one was permanent.
+  function disbandBlock() {
+    if (!Store.getTeam()) return null;
+    return el("div", {},
+      el("h4", { class: "section", text: "Disband" }),
+      el("p", { class: "muted small", text: "Removes the team, its base and its upgrades. Heroes, karma and the journal are untouched." }),
+      el("button", { class: "btn tiny danger", onclick: async () => {
+        if (!await confirmModal(`Disband ${team.name || "the team"}? The base and its upgrades go with it.`,
+          { title: "Disband team", variant: "danger", confirmLabel: "Disband" })) return;
+        Store.deleteTeam();
+        showToast("Team disbanded.", { variant: "warn" });
+        if (onDone) onDone(null);
+        m.close(null);
+      } }, "Disband this team"));
+  }
+
+  /** Upgrades whose prerequisite is another upgrade can never be bought around (Ch.7). */
+  const upgradePrereq = (u) => (D.BASE_UPGRADES.some((x) => x.name === u.prereq) ? u.prereq : null);
+  const heldUpgrade = (name) => (team.base.upgrades || []).some((x) => x.name === name);
+  const dependents = (name) => D.BASE_UPGRADES.filter((u) => upgradePrereq(u) === name && heldUpgrade(u.name)).map((u) => u.name);
 
   function upgradeGrid() {
     const grid = el("div", { class: "source-grid" });
     for (const u of D.BASE_UPGRADES) {
       const have = (team.base.upgrades || []).filter((x) => x.name === u.name).length;
-      grid.append(el("button", { class: `card selectable tight ${have ? "selected" : ""}`, onclick: () => {
-        team.base.upgrades = team.base.upgrades || [];
-        const i = team.base.upgrades.findIndex((x) => x.name === u.name);
-        const allowance = rank.baseUpgrades;
-        const taken = team.base.upgrades.length;
-        if (i >= 0 && have >= (u.repeat || 1)) team.base.upgrades = team.base.upgrades.filter((x) => x.name !== u.name);
-        else if (have < (u.repeat || 1)) {
-          // Starting upgrades are capped by rank; more are bought later with karma (§3.8).
-          if (taken >= allowance) {
-            showToast(`${rank.name} teams start with ${allowance} upgrade${allowance === 1 ? "" : "s"}. Buy more later with karma, from the sheet.`,
-              { variant: "warn", timeout: 6000 });
-            return;
+      const needs = upgradePrereq(u);
+      const locked = !!needs && !heldUpgrade(needs);
+      grid.append(el("button", {
+        class: `card selectable tight ${have ? "selected" : ""}`,
+        disabled: locked && !have,
+        title: locked && !have ? `Needs ${needs} first` : "",
+        onclick: () => {
+          team.base.upgrades = team.base.upgrades || [];
+          const allowance = rank.baseUpgrades;
+          const taken = team.base.upgrades.length;
+          if (have >= (u.repeat || 1)) {
+            // At the cap a tap removes one, never the whole stack — that lost picks silently.
+            const blocked = dependents(u.name);
+            if (have === 1 && blocked.length) {
+              showToast(`${blocked.join(" and ")} needs ${u.name}. Remove that first.`, { variant: "warn", timeout: 6000 });
+              return;
+            }
+            team.base.upgrades.splice(team.base.upgrades.map((x) => x.name).lastIndexOf(u.name), 1);
+          } else {
+            // Starting upgrades are capped by rank; more are bought later with karma (§3.8).
+            if (taken >= allowance) {
+              showToast(`${rank.name} teams start with ${allowance} upgrade${allowance === 1 ? "" : "s"}. Buy more later with karma, from the sheet.`,
+                { variant: "warn", timeout: 6000 });
+              return;
+            }
+            team.base.upgrades.push({ name: u.name, at: Date.now() });
           }
-          team.base.upgrades.push({ name: u.name, at: Date.now() });
-        }
-        else team.base.upgrades = team.base.upgrades.filter((x) => x.name !== u.name);
-        render2();
-      } },
+          render2();
+        },
+      },
         el("strong", { text: u.name + (have > 1 ? ` ×${have}` : "") }),
         el("p", { class: "muted small", text: u.desc }),
-        u.prereq ? el("p", { class: "stat-line", text: `Prerequisite: ${u.prereq}` }) : null));
+        u.prereq ? el("p", { class: "stat-line", text: `Prerequisite: ${u.prereq}${locked && !have ? " — not met" : ""}` }) : null));
     }
     return grid;
   }

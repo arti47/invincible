@@ -731,7 +731,7 @@ export function openRecovery(c) {
  * upgrade's Resources or occupation prerequisite. Prerequisites that are OTHER upgrades can never
  * be bought around, so those are refused outright rather than sold at double.
  */
-async function buyBaseUpgrade(redraw) {
+export async function buyBaseUpgrade(redraw) {
   const team = Store.getTeam();
   if (!team) return;
   const owned = (team.base.upgrades || []);

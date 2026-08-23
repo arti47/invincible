@@ -10,7 +10,10 @@ import { Settings, TOGGLES, applyTheme } from "./settings.js";
 import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
+import { buyBaseUpgrade } from "./sheet.js";
 import { NPC_RECIPE, NPC_HANDLING, CREATURE_NOTE } from "../data-npcs.js";
+import { ADVERSARY_NOTE } from "../data-monsters.js";
+import { PREGEN_NOTE } from "../data-pregens.js";
 import * as Sync from "./sync.js";
 import * as Journal from "./journal.js";
 
@@ -64,7 +67,11 @@ export function renderHome(mount) {
       el("h3", { text: team.name || "Your team" }),
       team.purpose ? el("p", { text: team.purpose }) : null,
       el("p", { class: "muted small", text: `${team.base?.location || "No base yet"} — ${(team.base?.upgrades || []).map((u) => u.name).join(", ") || "no upgrades"}` }),
-      el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, "Edit team & base")));
+      el("div", { class: "row-actions" },
+        el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, "Edit team & base"),
+        // The purchase lives in the karma dialog; someone looking at the base should still find it.
+        el("button", { class: "btn ghost", onclick: () => buyBaseUpgrade(() => renderHome(mount)) },
+          `Buy an upgrade — ${D.KARMA.costs.baseUpgrade} karma`))));
   }
 
   // The session lifecycle needs a hero to act on; showing it first is six buttons that cannot help.
@@ -84,7 +91,7 @@ async function openPregens() {
   const list = el("div", { class: "npc-list" });
   const m = modal({ title: "Published heroes", size: "wide",
     body: el("div", {},
-      el("p", { class: "muted small", text: "Published stat blocks, playable as-is. Their Health and Resolve are the printed values rather than a point-built total." }),
+      el("p", { class: "muted small", text: PREGEN_NOTE }),
       list),
     actions: [{ label: "Close", variant: "ghost" }] });
   for (const p of pregens) {
@@ -245,6 +252,7 @@ export function renderCompendium(mount) {
       list.append(el("h4", { class: "section", text: `${group} (${items.length})` }));
       // Ch.6 prints one caveat over the animal list; it belongs with the animals, not in a data file.
       if (group === "Creatures") list.append(el("p", { class: "muted small", text: CREATURE_NOTE }));
+      if (group === "Adversaries") list.append(el("p", { class: "muted small", text: ADVERSARY_NOTE }));
       for (const n of items) {
         list.append(el("button", { class: "npc-row", onclick: () => showNPC(n) },
           el("div", {}, el("strong", { text: n.name }), el("p", { class: "muted small", text: n.desc || n.descriptor || "" })),
