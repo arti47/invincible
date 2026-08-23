@@ -80,8 +80,25 @@ export function spendDefence(target) {
 }
 
 /** Whose turn it is: lowest card first, skipping anyone who has already acted (§3.17). */
+/**
+ * The mechanical flags CONDITIONS carries (§3.9) — losesTurn, noPhysicalActions, outOfAction,
+ * noPush, recurringDamage. They were extracted at Phase 0 and read by nothing, so a stunned
+ * combatant still took their turn and an immobilised one still threw punches.
+ */
+export function conditionFlags(conditions = {}) {
+  const out = { losesTurn: null, noPhysicalActions: null, outOfAction: null, noPush: null, recurringDamage: null };
+  for (const [key, on] of Object.entries(conditions)) {
+    if (!on) continue;
+    const def = R.findCondition(key);
+    if (!def?.effect) continue;
+    for (const flag of Object.keys(out)) if (def.effect[flag] && !out[flag]) out[flag] = def.name;
+  }
+  return out;
+}
+
 export function currentTurn(combat) {
-  return combat.combatants.find((c) => !c.acted && c.health > 0) || null;
+  // A combatant who loses their turn is skipped, exactly as if they had acted.
+  return combat.combatants.find((c) => !c.acted && c.health > 0 && !conditionFlags(c.conditions).losesTurn) || null;
 }
 
 export function combatantFromCharacter(c) {
@@ -107,7 +124,37 @@ export function combatantFromProfile(p, { count = 1 } = {}) {
     altitude: "ground", zone: 1, minionCount: isMinion ? count : 0, huge: !!p.huge,
     card: null, acted: false, actions: { full: true, quick: true },
     profile: p.name, talents: p.talents || [], powers: p.powers || [], drawbacks: p.drawbacks || [],
+    // The book prints a second block for profiles with an alternate form, and a separate
+    // emanation damage where EMANATION replaces the Slugfest bonus (§3.5). Both were dropped
+    // here, so a Werewolf could never be in human form and Furnace could never emanate.
+    slugfestEmanation: p.slugfestEmanation ?? null,
+    alt: (p.altAttrs || p.altHealth != null || p.altSlugfest != null || p.altResolve != null)
+      ? { attrs: p.altAttrs || null, health: p.altHealth ?? null, resolve: p.altResolve ?? null, slugfest: p.altSlugfest ?? null }
+      : null,
+    altActive: false,
   };
+}
+
+/**
+ * Swap a combatant between its printed forms. Only what the book prints is applied; anything it
+ * does not print for the alternate form keeps the base value.
+ */
+export function toggleCombatantForm(cbt) {
+  if (!cbt.alt) return cbt;
+  const base = cbt.baseForm || { attrs: cbt.attrs, maxHealth: cbt.maxHealth, maxResolve: cbt.maxResolve, slugfest: cbt.slugfest };
+  if (cbt.altActive) {
+    cbt.attrs = base.attrs; cbt.maxHealth = base.maxHealth; cbt.maxResolve = base.maxResolve; cbt.slugfest = base.slugfest;
+  } else {
+    cbt.baseForm = base;
+    if (cbt.alt.attrs) cbt.attrs = cbt.alt.attrs;
+    if (cbt.alt.health != null) cbt.maxHealth = cbt.alt.health;
+    if (cbt.alt.resolve != null) cbt.maxResolve = cbt.alt.resolve;
+    if (cbt.alt.slugfest != null) cbt.slugfest = cbt.alt.slugfest;
+  }
+  cbt.altActive = !cbt.altActive;
+  cbt.health = Math.min(cbt.health, cbt.maxHealth);
+  cbt.resolve = Math.min(cbt.resolve, cbt.maxResolve);
+  return cbt;
 }
 
 function guessArmor(p) {
@@ -205,9 +252,27 @@ async function openAttack(attacker, combat, mount) {
 
   const heroChar = attacker.refId ? Store.getCharacter(attacker.refId) : null;
   const weapon = heroChar ? await pickWeapon(heroChar) : null;
+
+  // Two printed modifiers the engine has always supported and nothing ever asked for: shooting
+  // inside a weapon's minimum range is −3 dice, and an unaware or restrained target cannot block
+  // and gives +2. A target losing its turn or unable to move is exactly that case, so it is
+  // offered rather than asked blind.
+  const flags = conditionFlags(target.conditions);
+  const helpless = !!(flags.losesTurn || flags.noPhysicalActions);
+  let situ = { unaware: false, underMinimumRange: false };
+  if (kind === "shooting" || helpless) {
+    const opts = [];
+    if (helpless) opts.push({ label: `${target.name} is ${(flags.losesTurn || flags.noPhysicalActions).toLowerCase()} — unaware or restrained`, hint: "+2 dice, and they cannot block", value: "unaware" });
+    if (kind === "shooting") opts.push({ label: "Closer than the weapon's minimum range", hint: "−3 dice", value: "min" });
+    opts.push({ label: "Neither — a straight shot", value: "none" });
+    const pick = await chooseModal("Anything modifying this attack?", opts);
+    if (pick === "unaware") situ.unaware = true;
+    if (pick === "min") situ.underMinimumRange = true;
+  }
+
   const roll = heroChar
-    ? Roller.makeAttack(heroChar, kind, { weapon, huge: target.huge, targetName: target.name })
-    : npcAttack(attacker, kind, target);
+    ? Roller.makeAttack(heroChar, kind, { weapon, huge: target.huge, targetName: target.name, ...situ })
+    : npcAttack(attacker, kind, target, situ);
 
   // The action is spent as soon as the dice hit the table, hit or miss.
   const upNext = spendAttackTurn(combat, attacker, kind);
@@ -232,9 +297,10 @@ async function pickWeapon(hero) {
 }
 
 /** An NPC attacking: the same arithmetic, rolled off the profile's attributes. */
-function npcAttack(attacker, kind, target) {
+function npcAttack(attacker, kind, target, situ = {}) {
   const attr = Roller.ATTACK_KINDS[kind].attr;
-  const dice = Math.max(1, attacker.attrs?.[attr] || 1);
+  const mod = (situ.unaware ? 2 : 0) + (situ.underMinimumRange ? -3 : 0);
+  const dice = Math.max(1, (attacker.attrs?.[attr] || 1) + mod);
   const r = Roller.rollRaw(dice, `${attacker.name} — ${Roller.ATTACK_KINDS[kind].label} → ${target.name}`, { pushable: false });
   r.meta = { kind, damage: attacker.slugfest || 1, damageSource: "Slugfest Damage",
     stunts: Roller.stuntsFor(kind, { huge: target.huge }) };
@@ -367,7 +433,7 @@ export function renderCombat(mount) {
     el("div", { class: "row-actions" },
       el("button", { class: "btn ghost", onclick: () => openAddCombatant(mount) }, "Add combatant"),
       el("button", { class: "btn ghost", onclick: () => openWreck(combat, mount) }, "Wreck a zone"),
-      el("button", { class: roundDone ? "btn primary" : "btn", onclick: () => { combat.round += 1; save(drawInitiative(combat)); renderCombat(mount); } }, "Next round"),
+      el("button", { class: roundDone ? "btn primary" : "btn", onclick: () => advanceRound(combat, mount) }, "Next round"),
       el("button", { class: "btn danger", onclick: async () => {
         if (await confirmModal("End the action scene and run the end-of-scene recovery?", { title: "End action scene", confirmLabel: "End scene" })) {
           Store.clearCombat(); openLifecycle("action"); renderCombat(mount);
@@ -392,6 +458,10 @@ export function renderCombat(mount) {
 export function attackBlockedReason(combat, cb) {
   if (cb.health <= 0) return "Broken — cannot move, roll attributes or use powers.";
   if (cb.acted) return `${cb.name} has already acted this round.`;
+  const flags = conditionFlags(cb.conditions);
+  if (flags.outOfAction) return `${flags.outOfAction} — cannot move, roll attributes or use powers.`;
+  if (flags.losesTurn) return `${flags.losesTurn} — misses this turn and cannot interrupt.`;
+  if (flags.noPhysicalActions) return `${flags.noPhysicalActions} — no actions needing physical movement, slugfest and shooting included.`;
   const up = currentTurn(combat);
   if (up && up.id !== cb.id) return `It is ${up.name}'s turn (card #${up.card || "—"}). Use Hold off to change the order.`;
   if (!up) return "Everyone has acted — draw the next round.";
@@ -413,7 +483,10 @@ function combatantCard(cb, combat, mount, isUp = false) {
       el("span", { text: `Resolve ${cb.resolve}/${cb.maxResolve}` }),
       cb.armor ? el("span", { text: `Armor ${cb.armor}` }) : null,
       el("span", { text: `Slugfest ${cb.slugfest}` }),
+      cb.slugfestEmanation ? el("span", { text: `Emanation ${cb.slugfestEmanation}` }) : null,
+      cb.altActive ? el("span", { class: "chip warn", text: "Alternate form" }) : null,
       el("span", { text: cb.altitude })),
+    activeConditionChips(cb),
     // A turn in order: pass your place, move, resolve what hits you, then mark the turn spent.
     el("div", { class: "cbt-actions" },
       el("button", {
@@ -426,6 +499,14 @@ function combatantCard(cb, combat, mount, isUp = false) {
         onclick: () => holdOff(cb, combat, mount),
       }, "Hold off"),
       el("button", { class: "btn tiny ghost", onclick: () => cycleAltitude(cb, combat, mount) }, "Altitude"),
+      // Only three stunts ever wrote to a combatant's conditions and nothing could read or clear
+      // them, so an enemy set on fire or afflicted by a power had nowhere to live on the board.
+      el("button", { class: "btn tiny ghost", onclick: () => openCombatantConditions(cb, combat, mount) }, "Conditions"),
+      cb.alt ? el("button", {
+        class: "btn tiny ghost",
+        title: "Switch to the profile's other printed stat block.",
+        onclick: () => { toggleCombatantForm(cb); save(combat); renderCombat(mount); },
+      }, cb.altActive ? "Base form" : "Change form") : null,
       // Damage arrives out of turn, so this one stays live whatever the initiative says.
       el("button", { class: "btn tiny ghost", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
       el("button", { class: "btn tiny", onclick: () => { cb.acted = !cb.acted; save(combat); renderCombat(mount); } }, cb.acted ? "Un-act" : "Acted"),
@@ -504,6 +585,68 @@ async function openAddCombatant(mount) {
   if (combat.round > 1 || combat.combatants.some((c) => c.acted)) dealCard(combat, added);
   else drawInitiative(combat);
   save(combat);
+  renderCombat(mount);
+}
+
+/**
+ * Advance the round. Two things the rules say happen here and nothing did: a combatant who was
+ * losing their turn has now lost it (§3.9 — "ends after you miss the turn"), and anyone on fire
+ * takes a fire attack at the start of each round (Intensity dice, 2 damage per 6).
+ */
+function activeConditionChips(cb) {
+  const on = Object.keys(cb.conditions || {}).filter((k) => cb.conditions[k]);
+  if (!on.length) return null;
+  return el("div", { class: "cbt-conditions" }, ...on.map((k) => {
+    const def = R.findCondition(k);
+    return el("span", { class: "chip warn tiny", title: def?.desc || "", text: def?.name || k });
+  }));
+}
+
+async function openCombatantConditions(cb, combat, mount) {
+  const body = el("div", {});
+  body.append(el("p", { class: "muted small", text: "Temporary states from powers, stunts and hazards. Anything that costs a turn or blocks movement is enforced on this combatant's turn." }));
+  const grid = el("div", { class: "chiprow" });
+  const draw = () => {
+    clear(grid);
+    for (const cond of D.CONDITIONS) {
+      if (cond.key === "broken" || cond.key === "stressedOut") continue; // both follow from the tracks
+      const on = !!cb.conditions?.[cond.key];
+      grid.append(el("button", { class: `chip selectable ${on ? "selected warn" : ""}`, title: cond.desc, onclick: () => {
+        cb.conditions = { ...cb.conditions, [cond.key]: !on };
+        save(combat); draw();
+      } }, cond.name));
+    }
+  };
+  draw();
+  body.append(grid);
+  await modal({ title: `${cb.name} — conditions`, body, size: "wide", actions: [{ label: "Done", variant: "primary" }] }).promise;
+  renderCombat(mount);
+}
+
+async function advanceRound(combat, mount) {
+  const burning = combat.combatants.filter((c) => c.health > 0 && conditionFlags(c.conditions).recurringDamage);
+  for (const cb of burning) {
+    const intensity = Number(await promptModal(`${cb.name} is on fire — what is the Intensity?`, {
+      title: "Fire at the start of the round", value: String(cb.fireIntensity || 3),
+      hints: ["Roll Intensity dice; every 6 deals 2 damage. Armor does not stop fire."],
+    }));
+    if (!intensity) continue;
+    cb.fireIntensity = intensity;
+    const dice = Array.from({ length: intensity }, () => d6());
+    const sixes = dice.filter((x) => x === 6).length;
+    const dmg = sixes * 2;
+    cb.health = Math.max(0, cb.health - dmg);
+    Journal.record({ kind: "state", text: `${cb.name} burns: ${dice.join(" ")} — ${sixes} six${sixes === 1 ? "" : "es"}, ${dmg} damage.` });
+    showToast(`${cb.name} takes ${dmg} fire damage (${sixes} of ${intensity} dice).`, { variant: dmg ? "danger" : "", timeout: 6000 });
+  }
+  // A missed turn is spent once the round turns over.
+  for (const cb of combat.combatants) {
+    for (const [key, on] of Object.entries(cb.conditions || {})) {
+      if (on && R.findCondition(key)?.effect?.losesTurn) cb.conditions[key] = false;
+    }
+  }
+  combat.round += 1;
+  save(drawInitiative(combat));
   renderCombat(mount);
 }
 
@@ -771,6 +914,9 @@ async function openSessionEnd(c) {
   body.append(el("h4", { class: "section", text: "Reputation" }));
   const repUp = el("input", { type: "checkbox" });
   body.append(el("label", { class: "check" }, repUp, " A great or terrible deed became publicly known (+1 Reputation)"));
+  // The book gives examples of what counts; without them the question is a judgement call in a void.
+  body.append(el("details", { class: "hint" }, el("summary", { text: "What counts as a great or terrible deed?" }),
+    el("ul", { class: "muted small" }, ...D.REPUTATION.greatDeedExamples.map((t) => el("li", { text: t })))));
   const repDown = el("input", { type: "checkbox" });
   body.append(el("label", { class: "check" }, repDown, " A few months have passed with no increase (−1 Reputation)"));
   body.append(total);

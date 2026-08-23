@@ -213,6 +213,15 @@ function orphanedRules() {
   card.append(el("details", {}, el("summary", { text: "Base upgrades — buying them later" }),
     el("ul", { class: "small" }, ...D.BASE_UPGRADE_RULES.map((t) => el("li", { text: t })))));
 
+  // What a session is made of. The lifecycle bundles act on these; the shapes themselves were
+  // never shown, so nothing told a new player what a briefing or an act is.
+  card.append(el("details", {}, el("summary", { text: "The shape of a session" }),
+    el("ul", { class: "small" }, ...D.LIFECYCLE.sceneTypes.map((t) => el("li", {},
+      el("strong", { text: `${t.name}: ` }), t.desc))),
+    el("p", { class: "muted small", text: D.LIFECYCLE.flow }),
+    el("h4", { class: "section", text: "An adventure in three acts" }),
+    el("ul", { class: "small" }, ...D.LIFECYCLE.actStructure.map((t) => el("li", { text: t })))));
+
   card.append(el("details", {}, el("summary", { text: "Building an NPC (you are the GM in solo play)" }),
     el("ol", { class: "small" }, ...NPC_RECIPE.map((r) => el("li", {},
       el("strong", { text: `${r.step}: ` }), r.desc))),

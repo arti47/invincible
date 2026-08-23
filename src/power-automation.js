@@ -47,6 +47,36 @@ export function powerActions(character, entry) {
   return actions;
 }
 
+/**
+ * The mechanical fields a power carries beyond damage and range. They were extracted at Phase 0
+ * and read by nothing, so the dialog never said that a power hits the whole zone, inflicts a
+ * condition, halves armor or has a weight rating — the player had to know from the book.
+ */
+function mechanicsLine(def, level) {
+  const at = (key) => R.powerValue(def, key, level);
+  const bits = [];
+  if (def.areaEffect) bits.push("Hits everyone in the zone — each target dodges separately");
+  if (def.halvesArmor) bits.push("Halves the target's Armor");
+  if (def.damageAsStress) bits.push("Damage is dealt as stress, not Health");
+  if (def.condition) bits.push(`Inflicts: ${R.findCondition(def.condition)?.name || def.condition}`);
+  if (def.breakFreeDice) bits.push(`Break free at ${at("breakFreeDice")} dice`);
+  if (def.grappleDice) bits.push(`Grapple with ${at("grappleDice")} dice`);
+  if (def.bonusDice) bits.push(`+${def.bonusDice} dice`);
+  if (def.resistDice) bits.push(`Resist with ${at("resistDice")} dice`);
+  if (def.stressArmor) bits.push(`Stress Armor ${at("stressArmor")}`);
+  if (def.weightRating) bits.push(`Weight rating ${at("weightRating")} (${D.LIFT_TABLE[at("weightRating")] || "—"})`);
+  if (def.maxBarriers) bits.push(`Up to ${at("maxBarriers")} barriers`);
+  if (def.intensityBoost) bits.push(`Fire Intensity ${at("intensityBoost")}`);
+  if (def.sizeShift) bits.push(`Size shift ±${at("sizeShift")}`);
+  if (def.itemBonus) bits.push(`Item bonus +${at("itemBonus")}`);
+  if (def.chargeBonus) bits.push(`+${def.chargeBonus} to charge attacks`);
+  if (def.touchDamage) bits.push(`Touch damage ${def.touchDamage}`);
+  if (def.healPerTurn) bits.push(`Heals ${def.healPerTurn} Health per turn`);
+  if (def.critTimeReduction) bits.push(`Critical injuries heal ${def.critTimeReduction} time categories faster`);
+  if (!bits.length) return null;
+  return el("ul", { class: "power-mechanics small" }, ...bits.map((t) => el("li", { text: t })));
+}
+
 function levelText(def, level) {
   if (!def.levels) return def.summary;
   return `${def.summary}\n\n${D.POWER_LEVELS[level]}: ${def.levels[Math.min(level, def.levels.length - 1)]}`;
@@ -64,6 +94,7 @@ export async function usePower(character, entry, { onResolved } = {}) {
     el("p", { text: levelText(def, level) }),
     (entry.boosts || []).length ? el("p", { class: "chiprow" }, ...(entry.boosts || []).map((b) => el("span", { class: "chip", text: `Boost: ${b}` }))) : null,
     (entry.limits || []).length ? el("p", { class: "chiprow" }, ...(entry.limits || []).map((l) => el("span", { class: "chip warn", text: `Limit: ${l}` }))) : null,
+    mechanicsLine(def, level),
     el("div", { class: "action-list" }),
     el("p", { class: "cite" },
       el("a", { href: "#/rules/powers", class: "rules-link" }, "Rules: Using powers")));

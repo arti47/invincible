@@ -32,12 +32,30 @@ function talentStatBonus(character, stat) {
 
 /* ---------------------------------------------------------------- core formulas (Ch.2) */
 
+/**
+ * Published stat blocks run on their printed numbers, not a re-derived point buy (§3.19), and
+ * print a second set for the alternate form. Derivation is right for every shipped block in the
+ * base form, but not in the alternate one: the reduced scores halve STRENGTH while a power like
+ * STRIKE is gone with the rest of the powers, so a re-derivation reads high.
+ */
+function published(character, key) {
+  const p = character.publishedMax;
+  if (!p) return null;
+  const alt = character.state?.altForm?.active;
+  const v = alt ? p.alt?.[key] : p[key];
+  return typeof v === "number" ? v : null;
+}
+
 export function maxHealth(character) {
+  const pub = published(character, "health");
+  if (pub !== null) return Math.max(1, pub);
   const a = effectiveAttributes(character);
   return Math.max(1, ceilHalf(a.fighting + a.agility + a.strength) + talentStatBonus(character, "maxHealth"));
 }
 
 export function maxResolve(character) {
+  const pub = published(character, "resolve");
+  if (pub !== null) return Math.max(1, pub);
   const a = effectiveAttributes(character);
   return Math.max(1, ceilHalf(a.reason + a.intuition + a.presence) + talentStatBonus(character, "maxResolve"));
 }
@@ -47,6 +65,8 @@ export function maxResolve(character) {
  * SIZE ALTERATION — those three never combine (audit A7).
  */
 export function slugfestDamage(character) {
+  const pub = published(character, "slugfest");
+  if (pub !== null) return Math.max(1, pub);
   const a = effectiveAttributes(character);
   const base = ceilHalf(a.strength);
   let bonus = 0;
@@ -192,6 +212,12 @@ export function canPush(character, { passive = false, defending = false, already
   if (passive) return { ok: false, reason: "Passive rolls cannot be pushed." };
   if (defending) return { ok: false, reason: "The defender in an opposed roll cannot push." };
   if (resolve <= 0) return { ok: false, reason: "You are stressed out — recover at least 1 Resolve before pushing." };
+  // Any condition carrying the noPush flag, not only the Resolve-0 case that implies it.
+  for (const [key, on] of Object.entries(character.state?.conditions || {})) {
+    if (on && R.findCondition(key)?.effect?.noPush) {
+      return { ok: false, reason: `${R.findCondition(key).name} — you cannot push rolls.` };
+    }
+  }
   const doublePush = (character.talents || []).some((t) => {
     const def = R.findTalent(t.name);
     return def?.effect?.type === "doublePush" && def.effect.attr === attr;

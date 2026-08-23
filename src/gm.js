@@ -182,6 +182,21 @@ function adversaryPanel() {
   return card;
 }
 
+function altBlock(n) {
+  const has = n.altAttrs || n.altHealth !== undefined || n.altResolve !== undefined || n.altSlugfest !== undefined;
+  if (!has) return null;
+  const line = [
+    n.altHealth !== undefined ? `Health ${n.altHealth}` : null,
+    n.altResolve !== undefined ? `Resolve ${n.altResolve}` : null,
+    n.altSlugfest !== undefined ? `Slugfest ${n.altSlugfest}` : null,
+  ].filter(Boolean).join(" · ");
+  return el("div", { class: "alt-block" },
+    el("h4", { class: "section", text: "Alternate form — reduced scores" }),
+    n.altAttrs ? el("p", { class: "stat-line", text: D.ATTRIBUTES.map((a) => `${a.short} ${n.altAttrs[a.key]}`).join(" · ") }) : null,
+    line ? el("p", { class: "stat-line", text: line }) : null,
+    el("p", { class: "muted small", text: "In this form the powers listed below do not apply." }));
+}
+
 export function showNPC(n) {
   const attrLine = n.attrs ? D.ATTRIBUTES.map((a) => `${a.short} ${n.attrs[a.key]}`).join(" · ") : "";
   modal({ title: n.name, size: "wide",
@@ -193,9 +208,14 @@ export function showNPC(n) {
         n.health !== undefined ? `Health ${n.health}` : null,
         n.resolve !== undefined ? `Resolve ${n.resolve}` : null,
         n.slugfest !== undefined ? `Slugfest ${n.slugfest}` : null,
+        // EMANATION replaces the Slugfest bonus rather than adding to it (§3.5), so the book
+        // prints it as a second damage value.
+        n.slugfestEmanation !== undefined ? `Emanation damage ${n.slugfestEmanation}` : null,
         n.minion ? "Minions — group Health equals their number" : null,
         n.huge ? "Huge creature" : null,
       ].filter(Boolean).join(" · ") }),
+      // Profiles with an alternate form print a second block; showing only one hid half the entry.
+      altBlock(n),
       n.drive ? el("p", {}, el("strong", { text: "Drive: " }), n.drive) : null,
       n.flaw ? el("p", {}, el("strong", { text: "Flaw: " }), n.flaw) : null,
       n.powerSource ? el("p", {}, el("strong", { text: "Power source: " }), n.powerSource) : null,

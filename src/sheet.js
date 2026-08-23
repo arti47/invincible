@@ -11,6 +11,7 @@ import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from
 import { Settings } from "./settings.js";
 import * as Journal from "./journal.js";
 import { stageCard } from "./combat.js";
+import { askTalentSubject } from "./wizard.js";
 import { NPC_PROFILES } from "../data-npcs.js";
 
 /* ---------------------------------------------------------------- persistent header */
@@ -511,8 +512,19 @@ function talentsCard(c) {
   const list = el("div", { class: "chiprow" });
   for (const t of c.talents || []) {
     const def = R.findTalent(t.name);
-    list.append(el("button", { class: "chip selectable", title: def?.desc || "", onclick: () => useTalent(c, t.name) },
-      t.name + (t.rank > 1 ? ` ×${t.rank}` : "")));
+    // A subject-bearing talent is meaningless unnamed, and old saves predate the wizard asking.
+    const subject = t.subject || R.talentSubject(t.name);
+    const label = (subject ? `${R.findTalent(t.name)?.name || t.name} (${subject})` : t.name) + (t.rank > 1 ? ` ×${t.rank}` : "");
+    list.append(el("button", { class: "chip selectable", title: def?.desc || "", onclick: () => useTalent(c, t.name) }, label));
+    if (def?.needsSubject && !subject) {
+      list.append(el("button", { class: "chip warn", title: "This talent only works inside a chosen subject.",
+        onclick: async () => {
+          const pick = await askTalentSubject(def.name);
+          if (!pick) return;
+          Store.updateCharacter((ch) => { const x = ch.talents.find((y) => y.name === t.name); if (x) x.subject = pick; });
+          showToast(`${def.name}: ${pick}`, { variant: "good" });
+        } }, "Choose a subject"));
+    }
   }
   if (!(c.talents || []).length) list.append(el("span", { class: "muted", text: "No talents." }));
   return el("section", { class: "card" }, el("h3", { text: "Talents" }),

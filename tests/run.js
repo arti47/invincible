@@ -1374,7 +1374,6 @@ const run = async () => {
     "data.js::INITIATIVE": "rule:initiative",
     "data.js::MINION_RULES": "rule:minions",
     "data.js::PURCHASE_RULES": "rule:resources",
-    "data.js::REPUTATION": "rule:reputation",
     "data.js::WRECKING_RULES": "rule:wrecking",
   };
 
@@ -1435,6 +1434,144 @@ const run = async () => {
   });
   ok("the three encounter-avoidance options explain what each costs",
     avoidShown.sneak && avoidShown.hide, JSON.stringify(avoidShown));
+
+  // Fields inside reached tables are their own reachability class: the table has a screen, but a
+  // mechanical flag on it drives nothing. These were all extracted at Phase 0 and read by nothing.
+  const flags = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const Derived = await import("/src/derived.js");
+    const Store = await import("/src/store.js");
+    const combat = { round: 1, combatants: [], wreckedZones: [] };
+    const mk = (name, conds) => ({ id: name, name, card: 1, acted: false, health: 5, maxHealth: 5,
+      resolve: 3, maxResolve: 3, armor: 0, slugfest: 2, attrs: { fighting: 5, agility: 4, strength: 4, reason: 2, intuition: 2, presence: 2 },
+      conditions: conds, altitude: "ground", minionCount: 0 });
+    combat.combatants = [mk("Stunned", { stunned: true }), mk("Held", { immobilised: true }), mk("Free", {})];
+    const skipped = Combat.currentTurn(combat)?.name;
+    const stunReason = Combat.attackBlockedReason(combat, combat.combatants[0]);
+    const heldReason = Combat.attackBlockedReason(combat, combat.combatants[1]);
+    const fireFlag = Combat.conditionFlags({ onFire: true }).recurringDamage;
+
+    // noPush must come off the condition, not only from Resolve reaching 0.
+    const c = Store.createCharacter({ id: "np_hero" });
+    const ch = Store.listCharacters().find((x) => x.id === "np_hero");
+    ch.state.resolve = 5; ch.state.conditions = { stressedOut: true };
+    Store.saveCharacter(ch);
+    const push = Derived.canPush(Store.listCharacters().find((x) => x.id === "np_hero"), {});
+    Store.deleteCharacter("np_hero");
+    void c;
+    return { skipped, stunReason, heldReason, fireFlag, push };
+  });
+  // Stunned loses the turn outright; immobilised keeps it (it can still break free) but cannot
+  // make an attack needing physical movement — so the next one up is the immobilised one.
+  ok("a combatant who loses their turn is skipped in the initiative order", flags.skipped === "Held", flags.skipped);
+  ok("stunned and immobilised block attacking, with the reason named",
+    /Stunned/.test(flags.stunReason || "") && /Immobilis/i.test(flags.heldReason || ""),
+    `${flags.stunReason} | ${flags.heldReason}`);
+  ok("on fire is recognised as recurring damage", flags.fireFlag === "On fire");
+  ok("a noPush condition blocks pushing even with Resolve left",
+    flags.push.ok === false && /cannot push/i.test(flags.push.reason), JSON.stringify(flags.push));
+
+  const pubStats = await page.evaluate(async () => {
+    const W = await import("/src/wizard.js");
+    const Dv = await import("/src/derived.js");
+    const P = await import("/data-pregens.js");
+    const bad = [];
+    for (const p of P.PREGENS) {
+      const c = W.pregenToCharacter(p);
+      if (Dv.maxHealth(c) !== p.health || Dv.maxResolve(c) !== p.resolve || Dv.slugfestDamage(c) !== p.slugfest) {
+        bad.push(`${p.name} base`);
+      }
+      if (!p.altAttrs) continue;
+      c.state.altForm = { active: true, mode: "highestThree", source: "x" };
+      if (p.altHealth != null && Dv.maxHealth(c) !== p.altHealth) bad.push(`${p.name} altH`);
+      if (p.altResolve != null && Dv.maxResolve(c) !== p.altResolve) bad.push(`${p.name} altR`);
+      if (p.altSlugfest != null && Dv.slugfestDamage(c) !== p.altSlugfest) bad.push(`${p.name} altS`);
+    }
+    return { n: P.PREGENS.length, bad };
+  });
+  ok("published stat blocks use their printed values in both forms",
+    pubStats.bad.length === 0, pubStats.bad.join(", "));
+
+  const forms = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const N = await import("/data-npcs.js");
+    const wolf = N.NPC_PROFILES.find((p) => p.name === "Werewolf");
+    const cbt = Combat.combatantFromProfile(wolf);
+    const base = { health: cbt.maxHealth, slug: cbt.slugfest };
+    Combat.toggleCombatantForm(cbt);
+    const alt = { health: cbt.maxHealth, slug: cbt.slugfest, active: cbt.altActive };
+    Combat.toggleCombatantForm(cbt);
+    return { base, alt, back: { health: cbt.maxHealth, slug: cbt.slugfest, active: cbt.altActive },
+      printed: { health: wolf.altHealth, slug: wolf.altSlugfest } };
+  });
+  ok("a profile with two printed forms can switch between them on the board",
+    forms.alt.health === forms.printed.health && forms.alt.slug === forms.printed.slug
+    && forms.alt.active === true && forms.back.health === forms.base.health && forms.back.active === false,
+    JSON.stringify(forms));
+
+  const subject = await page.evaluate(async () => {
+    const W = await import("/src/wizard.js");
+    const D = await import("/data.js");
+    const Dv = await import("/src/derived.js");
+    let missing = 0, total = 0;
+    for (let i = 0; i < 200; i++) {
+      const draft = Dv.blankCharacter();
+      W.rollWholeHero(draft);
+      for (const t of draft.talents || []) {
+        const def = D.TALENTS.find((x) => x.name === String(t.name).replace(/\s*\(.*\)\s*$/, "").trim());
+        if (!def?.needsSubject) continue;
+        total++;
+        if (!t.subject && !/\(/.test(t.name)) missing++;
+      }
+    }
+    return { total, missing, subjects: D.KNOWLEDGEABLE_SUBJECTS.length };
+  });
+  ok("a talent that needs a subject always gets one", subject.missing === 0,
+    `${subject.missing} of ${subject.total} without a subject`);
+
+  const teamVehicle = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const t = Store.blankTeam();
+    t.name = "Wheels"; t.rank = "global";
+    t.base.upgrades = [{ name: "Team Vehicle", at: Date.now() }];
+    Store.saveTeam(t);
+    W.openTeamWizard(() => {});
+    await new Promise((r) => setTimeout(r, 250));
+    const text = document.querySelector(".modal").textContent;
+    const rank = D.RANKS.find((r) => r.key === "global");
+    const chip = Array.from(document.querySelectorAll(".modal .chip"))
+      .find((b) => b.textContent.trim() === rank.vehicles[0]);
+    chip?.click();
+    await new Promise((r) => setTimeout(r, 120));
+    const saved = { ...Store.getTeam() };
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    return { offered: /Team vehicle/.test(text), listed: rank.vehicles.every((v) => text.includes(v)),
+      picked: chip ? rank.vehicles[0] : null };
+  });
+  ok("the team vehicle in the schema can finally be chosen",
+    teamVehicle.offered && teamVehicle.listed && !!teamVehicle.picked, JSON.stringify(teamVehicle));
+
+  const powerMech = await page.evaluate(async () => {
+    const D = await import("/data.js");
+    const PA = await import("/src/power-automation.js");
+    const Store = await import("/src/store.js");
+    Store.createCharacter({ id: "pm_hero" });
+    const c = Store.listCharacters().find((x) => x.id === "pm_hero");
+    // SNARE carries a condition and a break-free penalty; both were invisible in the dialog.
+    const snare = D.POWERS.find((p) => p.condition === "immobilised" && p.breakFreeDice);
+    c.powers = [{ name: snare.name, level: 0, boosts: [], limits: [] }];
+    Store.saveCharacter(c);
+    PA.usePower(Store.listCharacters().find((x) => x.id === "pm_hero"), c.powers[0]);
+    await new Promise((r) => setTimeout(r, 200));
+    const text = document.querySelector(".modal")?.textContent || "";
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    Store.deleteCharacter("pm_hero");
+    return { name: snare.name, inflicts: /Inflicts/.test(text), breakFree: /Break free/.test(text) };
+  });
+  ok("a power's mechanical fields are stated, not only its prose",
+    powerMech.inflicts && powerMech.breakFree, JSON.stringify(powerMech));
 
   const routes = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
@@ -1769,8 +1906,8 @@ const run = async () => {
   ok("round controls run set up → act → advance → finish",
     JSON.stringify(combatSeq.head) === JSON.stringify(["Add combatant", "Wreck a zone", "Next round", "End scene"]),
     combatSeq.head.join(" | "));
-  ok("a combatant's controls run attack → hold off → move → take damage → mark acted",
-    JSON.stringify(combatSeq.turn) === JSON.stringify(["Attack", "Hold off", "Altitude", "Damage", "Acted", "Remove"]),
+  ok("a combatant's controls run attack → hold off → set state → take damage → mark acted",
+    JSON.stringify(combatSeq.turn) === JSON.stringify(["Attack", "Hold off", "Altitude", "Conditions", "Damage", "Acted", "Remove"]),
     combatSeq.turn.join(" | "));
 
   // Turn order is the sequence of play: lowest card acts first, and reinforcements must not

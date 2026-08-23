@@ -1,7 +1,7 @@
 // wizard.js — character creation (14 steps, Ch.2), the team wizard (Ch.7) and pregen instantiation.
 
 import { el, clear, d3, d6, d66, clamp, uid, deepClone } from "./core.js";
-import { modal, showToast, confirmModal, chooseModal, announce, selectField } from "./ui.js";
+import { modal, showToast, confirmModal, chooseModal, promptModal, announce, selectField } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -94,7 +94,10 @@ export function rollWholeHero(target = draft) {
     for (const name of candidates) {
       if (!name) continue;
       if (target.talents.some((t) => baseName(t.name) === baseName(name))) continue;
-      target.talents.push({ name, rank: 1 });
+      // A subject-bearing talent needs one; the quick build rolls the book's D6 list for it.
+      const def = R.findTalent(baseName(name));
+      const subject = R.talentSubject(name) || (def?.needsSubject ? D.KNOWLEDGEABLE_SUBJECTS[d6() - 1].name : null);
+      target.talents.push(subject ? { name: def?.name || baseName(name), subject, rank: 1 } : { name, rank: 1 });
       return true;
     }
     return false;
@@ -172,7 +175,9 @@ function stepRank() {
     },
       el("h3", { text: rank.name }),
       el("p", { text: rank.desc }),
-      el("p", { class: "stat-line", text: `${rank.points} attribute points · max ${rank.attrMax} · ${rank.powers} powers · Reputation ${rank.reputation} · ${rank.baseUpgrades} base upgrade${rank.baseUpgrades === 1 ? "" : "s"}` })));
+      el("p", { class: "stat-line", text: `${rank.points} attribute points · max ${rank.attrMax} · ${rank.powers} powers · Reputation ${rank.reputation} · ${rank.baseUpgrades} base upgrade${rank.baseUpgrades === 1 ? "" : "s"}` }),
+      // What a rank actually plays like: the trouble it faces, and the vehicles it may run (T-31).
+      el("p", { class: "muted small", text: `Typically faces: ${(rank.situations || []).join(", ")}.` })));
   }
   return wrap;
 }
@@ -510,7 +515,7 @@ function showAllDrawbacks(wrap) {
   wrap.append(grid);
 }
 
-function toggleTalent(name) {
+async function toggleTalent(name) {
   draft.talents = draft.talents || [];
   const def = R.findTalent(name);
   const existing = draft.talents.filter((t) => R.findTalent(t.name)?.name === (def?.name || name));
@@ -518,12 +523,32 @@ function toggleTalent(name) {
   if (existing.length && existing.length >= max) {
     draft.talents = draft.talents.filter((t) => R.findTalent(t.name)?.name !== (def?.name || name));
   } else {
-    draft.talents.push({ name, rank: 1 });
+    // Knowledgeable is worthless without its subject — the +3 dice only apply inside it (§3.6).
+    // The subject was never asked for, so the character's `subject` field was always empty.
+    let subject = R.talentSubject(name);
+    if (def?.needsSubject && !subject) {
+      subject = await askTalentSubject(def.name);
+      if (subject === null) return;
+    }
+    draft.talents.push(subject ? { name: def?.name || name, subject, rank: 1 } : { name, rank: 1 });
   }
   render();
 }
 
-function toggleDrawback(d) {
+/** The book's own D6 subject list, with the roll offered (§3.6, T-13). */
+export async function askTalentSubject(talentName) {
+  const pick = await chooseModal(`${talentName} — which subject?`, [
+    ...D.KNOWLEDGEABLE_SUBJECTS.map((s) => ({ label: s.name, hint: s.desc, value: s.name })),
+    { label: "Roll for it (D6)", hint: "Let the die choose", value: "__roll" },
+  ]);
+  if (!pick) return null;
+  if (pick !== "__roll") return pick;
+  const rolled = D.KNOWLEDGEABLE_SUBJECTS[d6() - 1];
+  showToast(`Rolled: ${rolled.name}`);
+  return rolled.name;
+}
+
+async function toggleDrawback(d) {
   draft.drawbacks = draft.drawbacks || [];
   const i = draft.drawbacks.findIndex((x) => x.name === d.name);
   if (i >= 0) draft.drawbacks.splice(i, 1);
@@ -532,7 +557,16 @@ function toggleDrawback(d) {
       showToast(`You cannot start with more than ${D.CREATION_TRADES.maxDrawbacks} drawbacks.`, { variant: "warn" });
       return;
     }
-    draft.drawbacks.push({ name: d.name, detail: "" });
+    // Several drawbacks are defined with the GM and mean nothing unspecified (Alternate Form's
+    // source, Cursed's circumstances, Phobic's phobia); the wizard never asked.
+    let detail = "";
+    if (d.needsDetail) {
+      const v = await promptModal("Define the specifics with your GM — what exactly is it?",
+        { title: d.name, hints: [d.desc] });
+      if (v === null) return;
+      detail = v;
+    }
+    draft.drawbacks.push({ name: d.name, detail });
   }
   render();
 }
@@ -726,6 +760,10 @@ export function pregenToCharacter(p) {
   });
   c.drawbacks = (p.drawbacks || []).map((d) => ({ name: String(d).split(":")[0].trim(), detail: String(d) }));
   c.publishedMax = { health: p.health, resolve: p.resolve, slugfest: p.slugfest };
+  // The book prints a second block for the alternate form; only what it prints is carried.
+  if (p.altHealth != null || p.altResolve != null || p.altSlugfest != null) {
+    c.publishedMax.alt = { health: p.altHealth, resolve: p.altResolve, slugfest: p.altSlugfest };
+  }
   c.state.health = p.health;
   c.state.resolve = p.resolve;
   c.notes = p.special ? p.special.join("\n\n") : "";
@@ -765,6 +803,7 @@ export function openTeamWizard(onDone) {
       el("h4", { class: "section", text: `Starting upgrades — ${rank.baseUpgrades} at ${rank.name} rank (${(team.base.upgrades || []).length} chosen)` }),
       el("p", { class: "muted small", text: "Recommended for a new team: Concealment, Team Vehicle, Training Facilities." }),
       upgradeGrid(),
+      vehicleSection(),
       el("h4", { class: "section", text: "Session zero questions" }),
       el("ul", { class: "muted" }, ...D.TEAM_QUESTIONS.sessionZero.map((q) => el("li", { text: q }))),
       disbandBlock());
@@ -784,6 +823,45 @@ export function openTeamWizard(onDone) {
         if (onDone) onDone(null);
         m.close(null);
       } }, "Disband this team"));
+  }
+
+  /**
+   * The team vehicle. `team.vehicle` has been in the schema since Phase 0 and had no UI, so the
+   * Team Vehicle upgrade could be bought and the vehicle itself never chosen. Rank gates the list
+   * (T-31) and the stats come from the Ch.4 vehicle table.
+   */
+  function vehicleSection() {
+    const hasUpgrade = (team.base.upgrades || []).some((u) => u.name === "Team Vehicle");
+    const wrap = el("div", {}, el("h4", { class: "section", text: "Team vehicle" }));
+    if (!hasUpgrade) {
+      wrap.append(el("p", { class: "muted small", text: "Take the Team Vehicle base upgrade to give the team a vehicle." }));
+      return wrap;
+    }
+    const allowed = rank.vehicles || [];
+    wrap.append(el("p", { class: "muted small", text: `${rank.name} teams may run: ${allowed.join(", ")}.` }));
+    wrap.append(el("div", { class: "chiprow" }, ...allowed.map((v) => {
+      const stat = D.VEHICLES.find((x) => x.name === v);
+      return el("button", {
+        class: `chip selectable ${team.vehicle?.type === v ? "selected" : ""}`,
+        title: stat ? `Passengers ${stat.passengers} · Speed ${stat.speed} · Durability ${stat.durability} · Armor ${stat.armor}` : "",
+        onclick: () => {
+          team.vehicle = team.vehicle?.type === v ? null : { type: v, name: team.vehicle?.name || "", mods: [] };
+          render2();
+        },
+      }, v);
+    })));
+    if (team.vehicle) {
+      const stat = D.VEHICLES.find((x) => x.name === team.vehicle.type);
+      if (stat) {
+        wrap.append(el("p", { class: "stat-line", text: `Passengers ${stat.passengers} · Maneuverability ${stat.maneuver ?? "—"} · Speed ${stat.speed} · Durability ${stat.durability} · Armor ${stat.armor}` }));
+      }
+      wrap.append(field("Vehicle name", team.vehicle.name, (v) => { team.vehicle.name = v; }));
+      // The vehicle upgrades already bought are the vehicle's modifications.
+      const mods = (team.base.upgrades || []).filter((u) => /^Vehicle /.test(u.name)).map((u) => u.name);
+      team.vehicle.mods = mods;
+      wrap.append(el("p", { class: "muted small", text: mods.length ? `Modifications: ${mods.join(", ")}` : "No vehicle upgrades bought yet." }));
+    }
+    return wrap;
   }
 
   /** Upgrades whose prerequisite is another upgrade can never be bought around (Ch.7). */
