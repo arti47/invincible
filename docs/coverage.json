@@ -5,14 +5,16 @@
     "edition": "Core rules, first printing. No expansions.",
     "formSupplied": "Eight markdown chapter extracts (Ch.1&2, 3, 4, 5, 6, 7, 8, 9) plus page images for a handful of tables, supplied in conversation during the build sessions.",
     "availableToThisRepo": false,
-    "availabilityNote": "The extracts were never committed - they are the user's own book and are out of scope for this repository (section 11). Every entry below is therefore SEEDED from CLAUDE.md's extraction ledger and System Profile, which were written while the extracts were in hand. See caveats."
+    "availabilityNote": "The extracts were never committed - they are the user's own book and are out of scope for this repository (section 11). Entries below were seeded from CLAUDE.md's extraction ledger and System Profile, written while the extracts were in hand, and the project owner has attested that the extraction (data*.js and src/) is reliable. See caveats for exactly what that attestation does and does not establish."
   },
   "caveats": [
     "WHAT THIS PROVES: that a named code artefact exists for each listed requirement. Nothing more.",
     "WHAT IT DOES NOT PROVE: that the implementation is CORRECT. A constant can exist and hold wrong values; a function can exist and compute the wrong thing. Where correctness matters, the marker points at a behavioural test in tests/run.js instead of at the implementation - see every A-* entry.",
-    "PROVENANCE: entries marked provenance 'project-ledger' were seeded from CLAUDE.md, not read off the source document in this session. That buys REGRESSION detection (an implemented feature losing its implementation) but NOT OMISSION detection (a rule in the book that nobody ever noticed). Omission detection needs the extracts re-supplied and each entry promoted to provenance 'source'.",
+    "PROVENANCE HAS THREE LEVELS. 'project-ledger': seeded from CLAUDE.md alone. 'owner-attested': the project owner, who holds the book, has vouched that the extraction is reliable. 'source': someone read the cited chapter against this entry in a recorded session. Only the third supports omission detection.",
+    "WHAT THE OWNER'S ATTESTATION ESTABLISHES: that the extracted numbers and rules are CORRECT. What it cannot establish: that they are COMPLETE. An unextracted rule leaves no artefact anywhere in this repository, so no degree of confidence in data*.js can reveal one. Correctness and completeness are different properties and only the first is attested.",
     "A seeded entry must never be silently promoted to provenance 'source'. Promotion requires reading the cited chapter.",
-    "COUNTS ARE NOT A SCORE: the denominator is the ledger's view of the book, not the book. A 100% figure here would mean 'everything we wrote down is implemented', which is a weaker claim than it looks."
+    "COUNTS ARE NOT A SCORE: the denominator is the ledger's view of the book, not the book. A 100% figure here would mean 'everything we wrote down is implemented', which is a weaker claim than it looks.",
+    "The `count` field on a table entry is checked against the live module, so CLAUDE.md's stated figures and the data cannot drift apart unnoticed. All 22 stated counts agreed when this was introduced."
   ],
   "statusMeanings": {
     "implemented": "A marker exists and the requirement is believed fully met.",
@@ -27,7 +29,8 @@
       "summary": "Six attributes and the 1-12 score descriptions",
       "marker": "data.js#ATTRIBUTES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 6
     },
     {
       "id": "T-01b",
@@ -35,7 +38,7 @@
       "summary": "Score descriptions Poor(1) to Invincible(12)",
       "marker": "data.js#SCORE_DESCRIPTIONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-02",
@@ -43,7 +46,8 @@
       "summary": "Rank table: attribute points, start max, powers, Reputation",
       "marker": "data.js#RANKS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 4
     },
     {
       "id": "T-03",
@@ -51,7 +55,7 @@
       "summary": "Creation trades: powers<->attributes, talents, drawbacks, extra sources",
       "marker": "data.js#CREATION_TRADES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-04",
@@ -59,7 +63,7 @@
       "summary": "Derived formulas for Health, Resolve and Slugfest Damage",
       "marker": "src/derived.js#maxHealth",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-05",
@@ -67,7 +71,7 @@
       "summary": "STRENGTH lift limit / weight-rating table",
       "marker": "data.js#LIFT_TABLE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-06",
@@ -75,7 +79,7 @@
       "summary": "Standard of living, Resources 1-8",
       "marker": "data.js#STANDARD_OF_LIVING",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-07",
@@ -83,7 +87,7 @@
       "summary": "Karma: 10 earn questions, 6 bad-karma questions, spend costs, training discounts",
       "marker": "data.js#KARMA",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-08",
@@ -91,7 +95,7 @@
       "summary": "Reputation: recognition roll, growth, decay",
       "marker": "data.js#REPUTATION",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-09",
@@ -99,7 +103,8 @@
       "summary": "The eight roles",
       "marker": "data.js#ROLES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 8
     },
     {
       "id": "T-10",
@@ -107,7 +112,8 @@
       "summary": "22 occupations with talents, Resources, key relationships, social hooks",
       "marker": "data.js#OCCUPATIONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 22
     },
     {
       "id": "T-11",
@@ -115,7 +121,8 @@
       "summary": "Power-source D66 table (36 entries)",
       "marker": "data.js#POWER_SOURCES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 36
     },
     {
       "id": "T-12",
@@ -123,7 +130,8 @@
       "summary": "69 powers: type, effect, levels, boosts, limits",
       "marker": "data.js#POWERS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 69
     },
     {
       "id": "T-13",
@@ -131,7 +139,8 @@
       "summary": "51 talents",
       "marker": "data.js#TALENTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 51
     },
     {
       "id": "T-13b",
@@ -139,7 +148,8 @@
       "summary": "Knowledgeable subjects D6 table",
       "marker": "data.js#KNOWLEDGEABLE_SUBJECTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 6
     },
     {
       "id": "T-14",
@@ -147,7 +157,8 @@
       "summary": "16 archetypes",
       "marker": "data.js#ARCHETYPES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 16
     },
     {
       "id": "T-15",
@@ -155,7 +166,8 @@
       "summary": "15 drawbacks",
       "marker": "data.js#DRAWBACKS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 15
     },
     {
       "id": "T-16",
@@ -163,7 +175,7 @@
       "summary": "Dice conventions: D3 / 2D6 / D66, push, help, opposed",
       "marker": "data.js#DICE_RULES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-17",
@@ -171,7 +183,7 @@
       "summary": "Combat actions, movement, altitude, falling",
       "marker": "data.js#ACTIONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-17b",
@@ -179,7 +191,7 @@
       "summary": "Altitudes: ground, elevated, sky high, in orbit",
       "marker": "data.js#ALTITUDES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-17c",
@@ -187,7 +199,7 @@
       "summary": "Falling damage by altitude",
       "marker": "data.js#FALLING",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-18",
@@ -195,7 +207,7 @@
       "summary": "Slugfest stunt list",
       "marker": "data.js#SLUGFEST_STUNTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-18b",
@@ -203,7 +215,7 @@
       "summary": "Shooting stunt list",
       "marker": "data.js#SHOOTING_STUNTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-19",
@@ -211,7 +223,7 @@
       "summary": "Zone terrain / wrecking table",
       "marker": "data.js#ZONE_TERRAIN",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-20",
@@ -219,7 +231,8 @@
       "summary": "17 weapons",
       "marker": "data.js#WEAPONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 17
     },
     {
       "id": "T-20b",
@@ -227,7 +240,7 @@
       "summary": "Weapon features",
       "marker": "data.js#WEAPON_FEATURES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-21",
@@ -235,7 +248,8 @@
       "summary": "3 body armors",
       "marker": "data.js#BODY_ARMOR",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 3
     },
     {
       "id": "T-22",
@@ -243,7 +257,8 @@
       "summary": "Critical injury table",
       "marker": "data.js#CRITICAL_INJURIES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 12
     },
     {
       "id": "T-23",
@@ -251,7 +266,7 @@
       "summary": "Recovery table: Health and Resolve by time span",
       "marker": "data.js#RECOVERY",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-24",
@@ -259,7 +274,7 @@
       "summary": "Minion rules",
       "marker": "data.js#MINION_RULES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-25",
@@ -267,7 +282,8 @@
       "summary": "8 challenges with ratings, time limits and objectives",
       "marker": "data.js#CHALLENGES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 8
     },
     {
       "id": "T-26",
@@ -275,7 +291,7 @@
       "summary": "Hazards: disease, explosions, fire Intensity, vacuum",
       "marker": "data.js#HAZARDS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-27",
@@ -283,7 +299,8 @@
       "summary": "21 vehicles",
       "marker": "data.js#VEHICLES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 21
     },
     {
       "id": "T-27b",
@@ -291,7 +308,8 @@
       "summary": "9 vehicle weapons",
       "marker": "data.js#VEHICLE_WEAPONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 9
     },
     {
       "id": "T-27c",
@@ -299,7 +317,7 @@
       "summary": "Vehicle component damage D6",
       "marker": "data.js#COMPONENT_DAMAGE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-28",
@@ -307,7 +325,7 @@
       "summary": "General gear",
       "marker": "data.js#GENERAL_GEAR",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-28b",
@@ -315,7 +333,7 @@
       "summary": "Price ladder",
       "marker": "data.js#PRICE_LADDER",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-28c",
@@ -323,7 +341,7 @@
       "summary": "Purchase and loan rules",
       "marker": "data.js#PURCHASE_RULES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-29",
@@ -331,7 +349,7 @@
       "summary": "Chase rules",
       "marker": "data.js#CHASE_RULES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-29b",
@@ -339,7 +357,7 @@
       "summary": "Chase obstacles D66",
       "marker": "data.js#CHASE_OBSTACLES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-30",
@@ -347,7 +365,8 @@
       "summary": "Team ranks, base locations, starting upgrades",
       "marker": "data.js#BASE_UPGRADES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 17
     },
     {
       "id": "T-31",
@@ -355,7 +374,7 @@
       "summary": "Base events D66",
       "marker": "data.js#BASE_EVENTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-32",
@@ -363,7 +382,7 @@
       "summary": "Random threat generators: crime, rewards, complications, catalyst, incidents, locations",
       "marker": "data.js#GM_TABLES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-34",
@@ -371,7 +390,7 @@
       "summary": "Social hooks D66",
       "marker": "data.js#OCCUPATIONS",
       "status": "partial",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Rows 25-41 are absent from the printed table itself (ruling R10), so the data is complete relative to the source but the table has a gap. Hooks live on each occupation rather than in a standalone export."
     },
     {
@@ -380,7 +399,7 @@
       "summary": "Conditions and temporary states",
       "marker": "data.js#CONDITIONS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-36",
@@ -388,7 +407,7 @@
       "summary": "Rules-library quick reference entries",
       "marker": "data.js#RULES_LIBRARY",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-37",
@@ -396,7 +415,7 @@
       "summary": "Scene / session lifecycle bundles",
       "marker": "data.js#LIFECYCLE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-40",
@@ -404,7 +423,8 @@
       "summary": "31 stock NPC profiles including minion flags",
       "marker": "data-npcs.js#NPC_PROFILES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 31
     },
     {
       "id": "T-41",
@@ -412,7 +432,8 @@
       "summary": "18 creatures",
       "marker": "data-npcs.js#CREATURES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 18
     },
     {
       "id": "T-42",
@@ -420,7 +441,7 @@
       "summary": "NPC creation recipe and handling rules",
       "marker": "data-npcs.js#NPC_RECIPE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-50",
@@ -428,7 +449,8 @@
       "summary": "33 adversary and supporting stat blocks",
       "marker": "data-monsters.js#ADVERSARIES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 33
     },
     {
       "id": "T-60",
@@ -436,7 +458,8 @@
       "summary": "28 hero stat blocks, playable as pregens",
       "marker": "data-pregens.js#PREGENS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested",
+      "count": 28
     },
     {
       "id": "T-70",
@@ -444,7 +467,7 @@
       "summary": "Crisis Mode setup, crisis levels, structure",
       "marker": "data-solo.js#SOLO_SETUP",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-70b",
@@ -452,7 +475,7 @@
       "summary": "Crisis level 0-10 and its phases",
       "marker": "data-solo.js#CRISIS_LEVEL",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-71",
@@ -460,7 +483,7 @@
       "summary": "Event check 2D6",
       "marker": "data-solo.js#EVENT_CHECK",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-71b",
@@ -468,7 +491,7 @@
       "summary": "Binary response engine",
       "marker": "data-solo.js#BINARY_ENGINE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-71c",
@@ -476,7 +499,7 @@
       "summary": "Complex response engine D66",
       "marker": "data-solo.js#COMPLEX_ENGINE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-72",
@@ -484,7 +507,7 @@
       "summary": "Location engines: City, Region, Space, Atmosphere, Facility",
       "marker": "data-solo.js#LOCATION_ENGINES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-73",
@@ -492,7 +515,7 @@
       "summary": "Bonus-6 effects table",
       "marker": "data-solo.js#BONUS_SIX_EFFECTS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-74",
@@ -500,7 +523,7 @@
       "summary": "Crisis timer",
       "marker": "data-solo.js#CRISIS_TIMER",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-74b",
@@ -508,7 +531,7 @@
       "summary": "Ally timer",
       "marker": "data-solo.js#ALLY_TIMER",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-74c",
@@ -516,7 +539,7 @@
       "summary": "Objective timer",
       "marker": "data-solo.js#OBJECTIVE_TIMER",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-74d",
@@ -524,7 +547,7 @@
       "summary": "Encounter timer",
       "marker": "data-solo.js#ENCOUNTER_TIMER",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-75",
@@ -532,7 +555,7 @@
       "summary": "Enemy behaviour and threat tables",
       "marker": "data-solo.js#ENEMY_BEHAVIOUR",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-75b",
@@ -540,7 +563,7 @@
       "summary": "Escape modifiers",
       "marker": "data-solo.js#ESCAPE_MODIFIERS",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-75c",
@@ -548,7 +571,7 @@
       "summary": "Movement modes: alert, cautious, rushed",
       "marker": "data-solo.js#MOVEMENT_MODES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-76",
@@ -556,7 +579,7 @@
       "summary": "Crisis Event Engine: D66 focus x36, 3 detail bands",
       "marker": "data-solo.js#CRISIS_EVENT_ENGINE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "T-77",
@@ -564,7 +587,7 @@
       "summary": "Opportunity Event Engine D66",
       "marker": "data-solo.js#OPPORTUNITY_ENGINE",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-resolution",
@@ -572,7 +595,7 @@
       "summary": "Dice pool of D6 sized by attribute; each 6 is a success",
       "marker": "src/roller.js#rollPool",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-push",
@@ -580,7 +603,7 @@
       "summary": "Push re-rolls every die not showing 6 or 1; each 1 afterwards costs 1 stress",
       "marker": "src/roller.js#pushRoll",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-push-legal",
@@ -588,7 +611,7 @@
       "summary": "Push is illegal at 0 Resolve, on passive rolls and for the opposed defender",
       "marker": "src/derived.js#canPush",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-opposed",
@@ -596,7 +619,7 @@
       "summary": "Opposed roll: active party must succeed and roll more 6s; each adversary 6 cancels one",
       "marker": "src/roller.js#resolveOpposed",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-block",
@@ -604,7 +627,7 @@
       "summary": "Block: quick action FIGHTING declared before the attack; surplus 6s counterattack",
       "marker": "src/roller.js#resolveBlock",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-dodge",
@@ -612,7 +635,7 @@
       "summary": "Dodge: quick action AGILITY vs shooting; excess 6s move one zone each",
       "marker": "src/roller.js#resolveDodge",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-help",
@@ -620,7 +643,7 @@
       "summary": "Help: up to 3 allies at +1 die each",
       "marker": "src/roller.js#buildPool",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-initiative",
@@ -628,7 +651,7 @@
       "summary": "One card 1-10 per combatant per round, lowest acts first",
       "marker": "src/combat.js#drawInitiative",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-turn",
@@ -636,7 +659,7 @@
       "summary": "Turn order: the lowest unspent card acts now",
       "marker": "src/combat.js#currentTurn",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-holdoff",
@@ -644,7 +667,7 @@
       "summary": "Hold off: swap cards with someone later in the order",
       "marker": "src/combat.js#dealCard",
       "status": "partial",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "dealCard covers a joiner taking an unused card. Hold off itself is holdOff() in combat.js, which is not exported; the marker points at the exported neighbour."
     },
     {
@@ -653,7 +676,7 @@
       "summary": "Slugfest, shooting, charge and grapple attacks",
       "marker": "src/roller.js#makeAttack",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-stunts",
@@ -661,7 +684,7 @@
       "summary": "One stunt per extra 6, each once per target",
       "marker": "src/roller.js#stuntsFor",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-stunt-damage",
@@ -669,7 +692,7 @@
       "summary": "Knockback / Bang Heads / Slam use base STRENGTH, not Slugfest Damage",
       "marker": "src/roller.js#stuntDamage",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-wreck",
@@ -677,7 +700,7 @@
       "summary": "Wrecking a zone: terrain minimum STRENGTH and attack bonus, once per zone per scene",
       "marker": "data.js#ZONE_TERRAIN",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-damage",
@@ -685,7 +708,7 @@
       "summary": "Armor subtracts from each damage instance; Health 0 is broken",
       "marker": "src/roller.js#applyDamage",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-crit",
@@ -693,7 +716,7 @@
       "summary": "Critical injury roll D6 plus excess damage, with the multi-crit bump",
       "marker": "src/roller.js#rollCriticalInjury",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-rally",
@@ -701,7 +724,7 @@
       "summary": "Rally: full action PRESENCE roll, 1 Health per 6, impossible at crit 9+",
       "marker": "src/roller.js#rally",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-stabilise",
@@ -709,7 +732,7 @@
       "summary": "Stabilise crits 10/11 with a REASON roll, one attempt only",
       "marker": "src/roller.js#stabilise",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-banter",
@@ -717,7 +740,7 @@
       "summary": "Action banter: quick action, opposed PRESENCE, 1 stress per excess 6",
       "marker": "src/roller.js#banter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-purchase",
@@ -725,7 +748,7 @@
       "summary": "Resources vs Cost purchase ladder with barter and loans",
       "marker": "src/roller.js#purchase",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-barter",
@@ -733,7 +756,7 @@
       "summary": "One PRESENCE barter attempt after a failed purchase roll",
       "marker": "src/roller.js#barter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-reputation-roll",
@@ -741,7 +764,7 @@
       "summary": "Recognition roll on arriving at a scene; cannot be pushed",
       "marker": "src/roller.js#rollReputation",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-challenge",
@@ -749,7 +772,7 @@
       "summary": "Challenge rating reduced by 1 per 6 within a time limit",
       "marker": "src/roller.js#challengeContribution",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-fire",
@@ -757,7 +780,7 @@
       "summary": "Fire attack: Intensity dice, 2 damage per 6",
       "marker": "src/roller.js#fireAttack",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-explosion",
@@ -765,7 +788,7 @@
       "summary": "Explosion damage",
       "marker": "src/roller.js#explosion",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-minion-damage",
@@ -773,7 +796,7 @@
       "summary": "Minion group Health equals their number; 1 damage removes 1 minion",
       "marker": "src/combat.js#applyAttackDamage",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-huge",
@@ -781,7 +804,7 @@
       "summary": "Huge creatures are immune to several stunts and cannot be grappled",
       "marker": "data.js#HUGE_CREATURE_RULES",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-conditions",
@@ -789,7 +812,7 @@
       "summary": "Condition penalties applied automatically to affected rolls",
       "marker": "src/derived.js#conditionPenalty",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-condition-flags",
@@ -797,7 +820,7 @@
       "summary": "Conditions that cost a turn, block movement or forbid pushing are enforced",
       "marker": "src/combat.js#conditionFlags",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-crit-penalty",
@@ -805,7 +828,7 @@
       "summary": "Crit penalties to the same attributes do not stack",
       "marker": "src/derived.js#critPenalty",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-altform",
@@ -813,7 +836,7 @@
       "summary": "Alternate form / Super Suit / Item Dependent publish reduced scores",
       "marker": "src/derived.js#effectiveAttributes",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-creation-budget",
@@ -821,7 +844,7 @@
       "summary": "Point-spend budget by rank, adjusted by trades",
       "marker": "src/derived.js#creationBudget",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-creation-legal",
@@ -829,7 +852,7 @@
       "summary": "Creation legality: points spent exactly, rank maxima, power count, drawback cap",
       "marker": "src/derived.js#validateCharacter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-allowance",
@@ -837,7 +860,7 @@
       "summary": "Solo build: +2 attribute points and +1 free talent",
       "marker": "src/derived.js#soloAllowance",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-lifecycle",
@@ -845,7 +868,7 @@
       "summary": "Scene / session / adventure boundary bundles with undo",
       "marker": "src/combat.js#applyBundle",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-session-stage",
@@ -853,7 +876,7 @@
       "summary": "The app knows which beat of the session is live",
       "marker": "src/combat.js#sessionStage",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-loop",
@@ -861,7 +884,7 @@
       "summary": "The six-step Crisis Mode loop",
       "marker": "src/solo.js#currentStep",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-event",
@@ -869,7 +892,7 @@
       "summary": "Event check 2D6 driving crisis events and opportunities",
       "marker": "src/solo.js#rollEventCheck",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-crisis-event",
@@ -877,7 +900,7 @@
       "summary": "Crisis Event Engine roll",
       "marker": "src/solo.js#rollCrisisEvent",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-opportunity",
@@ -885,7 +908,7 @@
       "summary": "Opportunity Event Engine roll",
       "marker": "src/solo.js#rollOpportunity",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-timer",
@@ -893,7 +916,7 @@
       "summary": "Crisis timer check with pace modifiers",
       "marker": "src/solo.js#rollTimer",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-objective",
@@ -901,7 +924,7 @@
       "summary": "Objective timer: 1s cancel 6s, net-negative steps back",
       "marker": "src/solo.js#rollObjective",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-ally",
@@ -909,7 +932,7 @@
       "summary": "Ally timer: each 6 is 2 damage in a fight, each 1 drops a step",
       "marker": "src/solo.js#rollAlly",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-encounter",
@@ -917,7 +940,7 @@
       "summary": "Encounter timer check with movement mode",
       "marker": "src/solo.js#rollEncounter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-sequence",
@@ -925,7 +948,7 @@
       "summary": "The 12-step encounter check sequence is driven, not printed",
       "marker": "src/solo.js#sequenceIndex",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-solo-proximity",
@@ -933,7 +956,7 @@
       "summary": "A new crisis timer's rung from 2D6 against the crisis phase column",
       "marker": "src/solo.js#rollStartProximity",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-pregen",
@@ -941,7 +964,7 @@
       "summary": "Published hero stat blocks are instantiable and use printed values",
       "marker": "src/wizard.js#pregenToCharacter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-team",
@@ -949,7 +972,7 @@
       "summary": "Team, base, base upgrades and team vehicle",
       "marker": "src/wizard.js#openTeamWizard",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-base-upgrade-cost",
@@ -957,7 +980,7 @@
       "summary": "Base upgrade costs 10 karma, 20 without a prerequisite",
       "marker": "src/store.js#baseUpgradeCost",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-karma-spend",
@@ -965,7 +988,7 @@
       "summary": "Karma is spent only between sessions, in a safe location",
       "marker": "src/store.js#karmaSpend",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "B-migration",
@@ -973,7 +996,7 @@
       "summary": "Every schema addition back-fills defaults on old saves",
       "marker": "src/derived.js#normalizeCharacter",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "X-ch5",
@@ -981,7 +1004,7 @@
       "summary": "Invincible Universe setting material",
       "marker": "-",
       "status": "deliberately-omitted",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Ruling R3 in CLAUDE.md: setting content, out of scope for a mechanics play aid (see also section 11, IP)."
     },
     {
@@ -990,7 +1013,7 @@
       "summary": "Story arcs and city descriptions",
       "marker": "-",
       "status": "deliberately-omitted",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Ruling R3: adventure content. Chapter 7's mechanical generators ARE implemented - see T-32, T-33."
     },
     {
@@ -999,7 +1022,7 @@
       "summary": "Character biographies and plot history",
       "marker": "-",
       "status": "deliberately-omitted",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Ruling R2: stat blocks only, no setting prose. See T-50 and T-60 for the mechanics."
     },
     {
@@ -1008,7 +1031,7 @@
       "summary": "Carried-weight tracking",
       "marker": "-",
       "status": "deliberately-omitted",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Ruling R6: the book states players do not track carried weight, so there is nothing to implement."
     },
     {
@@ -1017,7 +1040,7 @@
       "summary": "Metro Mayhem pre-generated characters",
       "marker": "-",
       "status": "unknown",
-      "provenance": "project-ledger",
+      "provenance": "owner-attested",
       "note": "Recorded source gap: the starter-set pregens were never supplied in the chapter extracts, so it is unknown what they contain."
     },
     {
@@ -1026,7 +1049,7 @@
       "summary": "A pool never drops below 1 die",
       "marker": "tests/run.js::A1 pool never drops below 1 die",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A2",
@@ -1034,7 +1057,7 @@
       "summary": "Push keeps 6s and 1s and re-rolls the rest",
       "marker": "tests/run.js::A2 push keeps 6s and 1s and re-rolls the rest",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A2b",
@@ -1042,7 +1065,7 @@
       "summary": "Each 1 showing after a push costs 1 stress",
       "marker": "tests/run.js::A2 push charges 1 stress per 1 showing afterwards",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A3",
@@ -1050,7 +1073,7 @@
       "summary": "Push is illegal at 0 Resolve",
       "marker": "tests/run.js::A3 cannot push at 0 Resolve",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A3b",
@@ -1058,7 +1081,7 @@
       "summary": "Passive rolls cannot be pushed",
       "marker": "tests/run.js::A3 cannot push a passive roll",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A3c",
@@ -1066,7 +1089,7 @@
       "summary": "The opposed defender cannot push",
       "marker": "tests/run.js::A3 the defender cannot push",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A4",
@@ -1074,7 +1097,7 @@
       "summary": "Opposed: a tie fails the active party",
       "marker": "tests/run.js::A4 opposed tie fails for the active party",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A6",
@@ -1082,7 +1105,7 @@
       "summary": "Knockback damage uses half base STRENGTH, not Slugfest Damage",
       "marker": "tests/run.js::A6 Knockback damage uses half base STRENGTH",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A8",
@@ -1090,7 +1113,7 @@
       "summary": "Breaking rolls a crit with the excess damage",
       "marker": "tests/run.js::A8 breaking rolls a crit with the excess damage",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A8b",
@@ -1098,7 +1121,7 @@
       "summary": "Damage while broken causes another crit with the full damage",
       "marker": "tests/run.js::A8 damage while broken causes another crit",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A9",
@@ -1106,7 +1129,7 @@
       "summary": "A crit at or below your worst is bumped one step worse",
       "marker": "tests/run.js::A9 a crit at or below your worst is bumped one step worse",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A10",
@@ -1114,7 +1137,7 @@
       "summary": "Crit penalties to the same attributes take the worst, not the sum",
       "marker": "tests/run.js::A10 crit penalties take the worst, not the sum",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A11",
@@ -1122,7 +1145,7 @@
       "summary": "Rally is blocked at crit 9 or worse",
       "marker": "tests/run.js::A11 rally is blocked at crit 9+",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A13",
@@ -1130,7 +1153,7 @@
       "summary": "Resources above Cost buys automatically",
       "marker": "tests/run.js::A13 Resources above Cost buys automatically",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A13b",
@@ -1138,7 +1161,7 @@
       "summary": "Restricted items need Streetwise regardless of Resources",
       "marker": "tests/run.js::A13 restricted items need Streetwise",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A18",
@@ -1146,7 +1169,7 @@
       "summary": "Minion group Health equals their number; 1 damage removes 1 minion",
       "marker": "tests/run.js::damage to a minion group drops one per point",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A19",
@@ -1154,7 +1177,7 @@
       "summary": "Huge creatures are immune to Knockback, Stun and Deadly Hit",
       "marker": "tests/run.js::A19 huge creatures drop Knockback/Stun/Deadly Hit",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A21",
@@ -1162,7 +1185,7 @@
       "summary": "Reputation recognition rolls cannot be pushed",
       "marker": "tests/run.js::A21 Reputation rolls cannot be pushed",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A24",
@@ -1170,7 +1193,7 @@
       "summary": "Solo objective arithmetic: advance, regress, hold",
       "marker": "tests/run.js::A24 objective arithmetic (advance / regress / hold)",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     },
     {
       "id": "A25",
@@ -1178,7 +1201,7 @@
       "summary": "Solo ally successes convert to 2 damage each in a fight",
       "marker": "tests/run.js::A25 ally successes convert to 2 damage each",
       "status": "implemented",
-      "provenance": "project-ledger"
+      "provenance": "owner-attested"
     }
   ]
 }

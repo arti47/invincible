@@ -64,7 +64,7 @@ const run = async () => {
   // other. Order matters: run last, a crash in the browser section skips them silently — which
   // is exactly when you most want to know what drifted.
   runReachability(ok, section);
-  runCoverage(ok, section);
+  await runCoverage(ok, section);
 
   const browser = await chromium.launch({ executablePath: BROWSER, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });

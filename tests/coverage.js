@@ -37,7 +37,23 @@ function markerResolves(marker) {
   return re.test(src) ? { ok: true } : { ok: false, why: `${file} exports no ${symbol}` };
 }
 
-export function runCoverage(ok, section) {
+/** Live length of an exported table, so a stated count cannot drift from the data. */
+async function tableLength(marker) {
+  const [file, symbol] = marker.split("#");
+  if (!symbol || !/^data.*\.js$/.test(file)) return null;
+  const mod = await import(path.join(ROOT, file));
+  const v = mod[symbol];
+  if (Array.isArray(v)) return v.length;
+  // A few tables wrap their rows (CRISIS_EVENT_ENGINE.entries); take the one array they hold.
+  if (v && typeof v === "object") {
+    const arrays = Object.values(v).filter(Array.isArray);
+    if (arrays.length === 1) return arrays[0].length;
+    if (v.entries && Array.isArray(v.entries)) return v.entries.length;
+  }
+  return null;
+}
+
+export async function runCoverage(ok, section) {
   section("Source coverage");
 
   if (!fs.existsSync(COVERAGE)) {
@@ -92,6 +108,17 @@ export function runCoverage(ok, section) {
   ok("nothing marked deliberately-omitted secretly has an implementation",
     contradictory.length === 0, contradictory.join(", "));
 
+  // Stated counts vs the live data. CLAUDE.md's figures and data*.js must not drift apart:
+  // the owner attests the extraction is correct, so a count changing is a regression, not news.
+  const wrongCount = [];
+  for (const x of entries) {
+    if (typeof x.count !== "number") continue;
+    const actual = await tableLength(x.marker);
+    if (actual === null) { wrongCount.push(`${x.id}: ${x.marker} is not a countable table`); continue; }
+    if (actual !== x.count) wrongCount.push(`${x.id}: says ${x.count}, ${x.marker} has ${actual}`);
+  }
+  ok("every stated table count matches the data", wrongCount.length === 0, wrongCount.join(" | "));
+
   // Coverage is a re-derived number, never a sentence in prose someone forgot to update.
   const byStatus = entries.reduce((o, x) => { o[x.status] = (o[x.status] || 0) + 1; return o; }, {});
   const byProv = entries.reduce((o, x) => { o[x.provenance || "unset"] = (o[x.provenance || "unset"] || 0) + 1; return o; }, {});
@@ -104,8 +131,16 @@ export function runCoverage(ok, section) {
 
   // Guard the honesty of the seeding path itself. If entries start claiming to come from the
   // source, the extracts must be available to have read them.
+  // "source" means someone read the chapter. It is the only level that supports omission
+  // detection, so it may not be claimed while the extracts are absent. "owner-attested" is the
+  // owner vouching for correctness — a real and weaker claim, and always permitted.
   const claimSource = entries.filter((x) => x.provenance === "source").length;
   ok("no entry claims to be source-verified while the source is unavailable",
     doc.sourceDocument?.availableToThisRepo === true || claimSource === 0,
     `${claimSource} entries claim provenance "source"`);
+
+  const badProv = entries
+    .filter((x) => !["project-ledger", "owner-attested", "source"].includes(x.provenance))
+    .map((x) => `${x.id}=${x.provenance}`);
+  ok("every provenance is one of the three defined levels", badProv.length === 0, badProv.join(", "));
 }
