@@ -6,6 +6,8 @@
 import { chromium } from "playwright-core";
 import http from "node:http";
 import fs from "node:fs";
+import { runCoverage } from "./coverage.js";
+import { runReachability } from "./reachability.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +59,13 @@ function serve() {
 
 const run = async () => {
   const server = await serve();
+  // Static specs run FIRST and need no browser. Reachability walks code -> user; coverage walks
+  // the source document -> code. They fail on opposite mistakes and neither substitutes for the
+  // other. Order matters: run last, a crash in the browser section skips them silently — which
+  // is exactly when you most want to know what drifted.
+  runReachability(ok, section);
+  runCoverage(ok, section);
+
   const browser = await chromium.launch({ executablePath: BROWSER, args: ["--no-sandbox"] });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();

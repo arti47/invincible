@@ -36,7 +36,6 @@ export const ceilHalf = (n) => Math.ceil(n / 2);
 export const uid = (p = "id") => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 export const titleCase = (s) => String(s).replace(/\b\w/g, (c) => c.toUpperCase());
 export const deepClone = (o) => (typeof structuredClone === "function" ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
-export const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
 export function debounce(fn, ms = 250) {
   let t;

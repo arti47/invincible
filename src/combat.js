@@ -632,12 +632,11 @@ async function advanceRound(combat, mount) {
     }));
     if (!intensity) continue;
     cb.fireIntensity = intensity;
-    const dice = Array.from({ length: intensity }, () => d6());
-    const sixes = dice.filter((x) => x === 6).length;
-    const dmg = sixes * 2;
+    // The engine already owns this roll; combat must not re-implement the arithmetic.
+    const { roll, damage: dmg } = Roller.fireAttack(intensity);
     cb.health = Math.max(0, cb.health - dmg);
-    Journal.record({ kind: "state", text: `${cb.name} burns: ${dice.join(" ")} — ${sixes} six${sixes === 1 ? "" : "es"}, ${dmg} damage.` });
-    showToast(`${cb.name} takes ${dmg} fire damage (${sixes} of ${intensity} dice).`, { variant: dmg ? "danger" : "", timeout: 6000 });
+    Journal.record({ kind: "state", text: `${cb.name} burns: ${roll.dice.join(" ")} — ${roll.sixes} six${roll.sixes === 1 ? "" : "es"}, ${dmg} damage.` });
+    showToast(`${cb.name} takes ${dmg} fire damage (${roll.sixes} of ${intensity} dice).`, { variant: dmg ? "danger" : "", timeout: 6000 });
   }
   // A missed turn is spent once the round turns over.
   for (const cb of combat.combatants) {

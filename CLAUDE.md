@@ -462,7 +462,8 @@ buttons; `aria-current` nav. Phone-first, **zero horizontal overflow at 360px**.
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` |
 | `database.rules.json` | RTDB rules (player/GM roles, team write rules) |
 | `manifest.json`, `service-worker.js`, `icon.svg`, `icon-192.png`, `icon-512.png`, `icon-180.png`, `icon-maskable-512.png` | PWA. The PNGs are generated from `icon.svg` and committed: launchers do not reliably rasterise SVG icons. |
-| `tests/`, `package.json`, `package-lock.json` | Headless regression harness (`npm test`), dev-only; the lockfile pins `playwright-core` so the suite is reproducible |
+| `tests/`, `package.json`, `package-lock.json` | Headless regression harness (`npm test`), dev-only; the lockfile pins `playwright-core` so the suite is reproducible. `tests/run.js` is the browser suite; `tests/reachability.js` and `tests/coverage.js` are static specs that need no browser and run **first** |
+| `docs/coverage.json`, `docs/COVERAGE.md` | Source-document → code coverage map and the guide to extending it (§12) |
 | `docs/solo-guide.pdf`, `docs/solo-guide.html` | Generated 23-page Solo Play Guide (A4, mono). Rebuild with `npm run guide` |
 | `docs/build-guide.mjs`, `docs/guide-content.mjs` | Guide build script (seeded, drives the real solo engines) + its prose and layout |
 | `README.md` | Setup, Firebase steps, personal-use licensing note |
@@ -690,7 +691,80 @@ Mechanics and numbers only; all effect/flavour text is paraphrased, never copied
 adventure, art or logo content (rulings R2, R3). This is a **personal play aid** built from the
 user's own book — see README for the licensing note.
 
-## 12. Changelog
+## 12. The two audit specs
+
+Two committed specs run before the browser suite. They walk in **opposite directions** and
+neither substitutes for the other:
+
+| spec | direction | catches | file |
+|---|---|---|---|
+| Reachability | code → user | shipped surface nobody can reach | `tests/reachability.js` |
+| Coverage | source doc → code | a documented rule never implemented | `tests/coverage.js` |
+
+A reachability suite stays green on an app missing half its rulebook, because an unimplemented
+feature leaves no artefact to detect. A coverage suite stays green on an app whose every feature
+is unreachable. Both, or neither is worth much.
+
+**They run first, before the browser launches.** Ordered last they were skipped silently whenever
+the app failed to boot — which is exactly when you most want to know what drifted. Proven: renaming
+`roller.resolveBlock` aborted the browser section before the static specs ever ran.
+
+### 12.1 Reachability — the eight classes
+
+Orphan functions · orphan content · broken navigation targets · inert controls (a handler naming a
+function that does not exist) · missing shipped files · shipped modules absent from the offline
+app shell · dead-end guards (a refusal naming a destination it cannot reach) · silent refusals.
+Every check **names its offenders**, so a red build is a work list.
+
+**Exemptions live inline in the spec with their reason**, so a later reader can tell an accepted
+exception from a regression: generic `core.js`/`rules.js` helper sets kept complete; Firebase
+surface that only runs with `FIREBASE_ENABLED`; `Store.createCharacter` and `wizard.applyArchetypeTo`
+exported for the harness; `Journal.clearAll` (no UI on purpose — the player's destructive controls
+are per-session, and Settings' mission wipe deliberately spares the journal); and the rules objects
+the app shows through a `RULES_LIBRARY` paraphrase.
+
+### 12.2 False-positive traps (each cost a real investigation — do not re-litigate)
+
+1. Runtime-assigned identifiers (`el.id = x`) never appear as literals; grepping markup misses them.
+2. Names built by concatenation or template look orphaned to a literal search.
+3. CSS classes in compound selectors (`.chip.warn`) look unstyled to a bare `.warn` grep, and
+   JS-only classes legitimately have no CSS — so the suite does **not** assert class coverage.
+4. Elements inside an inactive route report zero size and no offset parent.
+5. "Can this modal be closed" must match only **visible** controls.
+6. Re-exports are not usages.
+7. **A helper used only by the harness looks orphaned to a src-only scan.** That is a true finding
+   about *user* reachability, but the answer is an exemption naming the reason, not deletion —
+   deleting `Journal.clearAll` broke the very suite that reported it.
+8. **A data file may export both the parts and an aggregate over them** (`TUTORIAL_INDEX` gathers
+   the three tutorials), so the orphan-content corpus must include the data files themselves.
+
+### 12.3 Coverage — and its honesty problem
+
+`docs/coverage.json` holds 144 requirements: 137 implemented, 2 partial, 4 deliberately omitted,
+1 unknown. Markers are `file#exportedSymbol` or `file::test name`; the 20 `A-*` entries point at
+**behavioural tests** rather than implementations, because a constant can exist holding wrong
+values — the spec proves a *mapping*, never correctness.
+
+**The chapter extracts are not in this repository** (they are the user's own book, §11), so every
+entry is `provenance: "project-ledger"` — seeded from §9's extraction ledger and §3's System
+Profile, not read off the book in this session. That buys **regression** detection and **not**
+**omission** detection, and the spec fails if an entry claims `provenance: "source"` while the
+extracts are unavailable, so the distinction cannot rot. `docs/COVERAGE.md` is the promotion
+procedure. Counts printed by `npm test` mean "everything we wrote down is implemented" — a weaker
+claim than a coverage percentage looks.
+
+### 12.4 Both specs are proven to fail
+
+A spec that only ever passes reads like assurance and is worth nothing, so each check was driven
+red with an injected defect and green again after restoring: an unreferenced export, an orphan
+table, `#/nowhere`, `onclick: () => noSuchHandler()`, a manifest entry with no file, a module
+dropped from the app shell, a renamed marker, a stripped citation, a stripped marker, a `partial`
+with no note, an omission secretly carrying a live marker, and a false `provenance: "source"`
+claim. The runner exits non-zero, so it works as a pre-commit hook or CI gate.
+
+---
+
+## 13. Changelog
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
@@ -713,6 +787,7 @@ user's own book — see README for the licensing note.
 | 2026-07-31 | Fixed a boot-blocking syntax error in `wizard.js` (unbalanced parentheses in `render()` — the `host.append(` call was closed one paren short). | Root cause: the wizard nav tree closed the element chain but not the append call, so the module never parsed and the app never reached `data-ready`. | Headless boot now reaches `data-ready`; a wizard-UI walkthrough was added to the harness so a broken wizard fails the suite. | v1 |
 | 2026-07-31 | Regression harness final state: **120 checks, 0 failures**, zero console errors across every tab at 360px and 390px. | §10.4/§10.5. | `npm test` | v1 |
 | 2026-07-31 | Committed `package-lock.json` (dev-only) and listed it in the §5 file table. No app file changed. | A fresh clone had no lockfile, so `npm test` resolved `playwright-core` unpinned; pinning it keeps the suite reproducible. | `npm install` then `npm test` — 120 passed, 0 failed. | — (no shipped file changed) |
+| 2026-08-04 | **Two committed audit specs, each proven to fail.** The three reachability passes were conversations; their result was fixes, not a guard, so nothing stopped the next dead end. Both directions are now specs that run before the browser (§12). **`tests/reachability.js`** — eight classes (orphan functions, orphan content, broken nav targets, inert controls, missing shipped files, modules absent from the app shell, dead-end guards, silent refusals), each naming its offenders, with exemptions inline carrying their reason. **`tests/coverage.js`** + **`docs/coverage.json`** — the inverse: 144 requirements mapped from the source rulebook onto named markers, because a reachability suite stays green on an app missing half its rulebook. The 20 `A-*` entries point at **behavioural tests** rather than implementations, since the spec proves a mapping and never correctness. **The honesty problem is enforced, not just written down:** the chapter extracts are not in this repo (§11), so every entry is `provenance: "project-ledger"` — seeded from §9's ledger, which buys regression detection and *not* omission detection — and the spec fails if an entry claims `provenance: "source"` while the extracts are unavailable. Four real findings on the way: **`roller.fireAttack` was reimplemented inline** in the fire-damage code added earlier today (the engine already owned that roll); `core.sum` was dead and is gone; `Journal.clearAll` and `Store.createCharacter` are harness-only and are now exempt *with the reason* rather than deleted — deleting `clearAll` broke the very suite that reported it; and the static specs were **ordered last, so a broken app boot skipped them silently**, which is exactly when drift matters most. | Requested: audit source-document coverage, and commit the reachability audit as a test. | `npm test` — 457 passed, 0 failed. Every check driven red then green: an unreferenced export, an orphan table, `#/nowhere`, `onclick: () => noSuchHandler()`, a manifest entry with no file, a module dropped from the shell, a renamed marker (named `B-block` by id), a stripped citation, a stripped marker, a `partial` with no note, an omission secretly carrying a live marker, and a false source claim. Two detector bugs found by that exercise and fixed: a data file's parts reached through a same-file aggregate (`TUTORIAL_INDEX`) read as orphans, and harness-only helpers read as orphans. | v50 |
 | 2026-08-04 | **Third reachability pass — the fields inside reached tables.** The first two passes swept whole tables and whole exports; both would pass an app where every table has a screen and every mechanical flag on it drives nothing. This pass walked the live data objects and checked each *property* against every `src/` module. Eleven fixes. (1) **Five `CONDITIONS.effect` flags were read by nothing**, so §3.9's "auto-applied" claim was false: a **stunned** combatant still took their turn, an **immobilised** one still threw punches, **on fire** never burned, and `noPush` was honoured only via the Resolve-0 case that implies it. `combat.conditionFlags()` now reads them — `currentTurn` skips a lost turn, `attackBlockedReason` names the blocking condition, `advanceRound` rolls the start-of-round fire attack (Intensity dice, 2 damage per 6) and spends the missed turn, and `canPush` consults the condition itself. (2) **Combatants had a `conditions` object with no UI** — three stunts wrote to it and nothing could read or clear it, so an enemy set on fire by a power had nowhere to live. Each card now shows its active conditions and opens the full picker. (3) **Four pregens dealt double the printed Slugfest Damage in human form**: `publishedMax` was written at Phase 1 and read by nothing, so alternate-form stats were re-derived — halving STRENGTH while keeping a STRIKE bonus the form does not have. Published blocks now use their printed numbers in both forms (§3.19); all 28 verified against the book in both. (4) **`altHealth`/`altResolve`/`altSlugfest`/`slugfestEmanation` were extracted and never shown** — a Werewolf's human form and Furnace's emanation damage existed only in the data file. `showNPC` prints the second block, `combatantFromProfile` carries it, and a **Change form** control switches a combatant between its printed forms. (5) **`team.vehicle` has been in the schema since Phase 0 with no UI at all** — the Team Vehicle upgrade could be bought and the vehicle never chosen. The team wizard now offers the rank's own list (T-31) with its Ch.4 stats, names it, and records the vehicle upgrades held as its modifications. (6) **Knowledgeable was taken without its subject**, so the +3 dice had no scope and `talents[].subject` was never populated; the wizard asks (the book's D6 list, roll offered), the quick build rolls it, the sheet shows it and offers it on old saves. `rules.talentSubject` — written for this and never called — is now the reader. (7) **Drawbacks needing a detail were never asked for one** at creation (`needsDetail` unread). (8) **`underMinimumRange` (−3) and `unaware` (+2) were implemented in `makeAttack` and passed by no caller**; the board attack dialog now offers both, and reads "unaware" off the target's own conditions rather than asking blind. (9) **Eighteen `POWERS` mechanical fields** (area effect, inflicted condition, halves armor, break-free dice, weight rating, stress armor …) were in the data and stated nowhere; the power dialog now lists them. (10) `RANKS.situations` on the rank cards and `REPUTATION.greatDeedExamples` behind the end-of-session Reputation question. (11) `LIFECYCLE.sceneTypes`/`flow`/`actStructure` — what a briefing, an action scene and a three-act adventure actually are — in the rules library. | Requested: audit the whole app for missing elements with no route to the user. | `npm test` — 438 passed, 0 failed; 9 new checks: a lost turn is skipped and the reason named, on fire is recognised, a noPush condition blocks pushing with Resolve left, all 28 published blocks match the book in both forms, a two-form profile switches and switches back, 200 quick builds never leave a subject-bearing talent unnamed, the team vehicle is offered and picked, and a power's condition and break-free penalty appear in its dialog. The rank-cap check that matched source text was already replaced last pass; the combatant-control order check was updated for the new Conditions button rather than deleted. | v49 |
 | 2026-08-04 | **Second reachability pass — dead ends found by sweeping exports instead of tables.** The first pass swept data files; this one swept `src/` for exported behaviour nothing calls, plus the three data files the first sweep missed (`data-monsters.js`, `data-pregens.js`, `data-solo.js`). Seven fixes. (1) **A team could be created and edited but never removed** — `Store.deleteTeam` was written at Phase 5 and called from nowhere, so a wrong team was permanent. The team wizard now has a **Disband** section; heroes, karma and the journal are untouched. (2) **`Sync.subscribeParty` was never called**, so in a campaign the GM's Party panel showed only heroes saved on this device. It now renders the synced members below the local roster, keyed off the campaign; local-only mode never fires the callback, so nothing appears. (3) **Upgrade prerequisites were unenforced at creation** — a Global team could take Vehicle Defense with no Team Vehicle, which Ch.7 says can never be bought around. Cards whose prerequisite is another upgrade are now disabled until it is held, and removing a prerequisite while a dependent is held is refused. (4) **A repeatable upgrade at its cap dumped the whole stack** on the next tap; it now decrements by one. (5) **`baseUpgradeCost` read the occupation's printed Resources**, so Windfall and Hard Times did not count toward a Resources prerequisite — it now reads the live `Derived.resources`, and carried a dead `const res = R.D ? undefined : undefined;` line that is gone. (6) **The three encounter-avoidance options had buttons but no rules** — Ch.9's `AVOIDING_ENCOUNTERS` (what Hide, Back out and Sneak past each cost you) renders beside them. (7) The Ch.8 stat-block caveat renders on the compendium's Adversaries group, and the pregen dialog's hand-copied note is replaced by `PREGEN_NOTE` itself, so the text has one source. Also: a route from the Home team card to the base-upgrade purchase (the buy point is in the karma dialog, which nobody looking at their base would find), `button[disabled]` styled globally rather than only `.btn[disabled]`, and two genuinely dead exports removed (`Journal.clearSessionEntries`, superseded by `deleteSession({keepEntries})`; `solo.soloBuildNotes`). | Requested: fix everything. | `npm test` — 429 passed, 0 failed; 7 new checks, and the source-text match on the rank cap was replaced by driving the real grid: prerequisites lock and unlock, the cap holds at the rank allowance, a prerequisite with a dependent survives the tap, a team disbands, the Home card reaches the purchase, Windfall lifts a hero over a Resources prerequisite, and both notes render. The standing stranded-table sweep now covers all five data files. | v48 |
 | 2026-08-04 | **Reachability audit — everything the app knows now has a route to it.** Swept every exported table in `data.js` / `data-npcs.js` against every `src/` module and found content with no screen at all. (1) **Base upgrades could not be bought.** §3.8's karma purchase had `Store.baseUpgradeCost` and `Store.upgradePrereqSatisfied` written at Phase 4 and called from nowhere — 17 extracted upgrades with no way to acquire one after creation. `sheet.buyBaseUpgrade()` now sits in a **Team base** section of the karma dialog: it lists only upgrades whose prerequisite is met and whose repeat limit is unspent, quotes the real price (10, or 20 when nobody meets the Resources/occupation prerequisite), and lets any hero with unlocked spending pay — the karma is poolable, so the payer is chosen. (2) **Starting upgrades were unlimited and free.** The team wizard's grid let you tick all 17; it now enforces `rank.baseUpgrades` (Teen 0 · Street 1 · Global 2 · Cosmic 3) and says to buy the rest with karma. (3) **Six extracted rules tables had no reader**: HAZARDS (disease, explosions, fire Intensity, vacuum), FALLING, WEAPON_FEATURES, VEHICLE_RULES, TIME_CATEGORIES and BASE_UPGRADE_RULES. They render verbatim from the data at the foot of the rules library. (4) **The Ch.6 NPC build recipe and handling rules** (T-42, extracted at Phase 0) were reachable from nothing — they now render there too, which matters most for a solo player inventing an opponent. (5) The Ch.6 caveat over the animal list renders with the animals in the compendium instead of sitting unused in `data-npcs.js`. (6) Removed a dead `renderRollLog` — the `log` route has rendered the journal's dice view since v41. | Requested: audit the whole app for elements with no route to the user. | `npm test` — 422 passed, 0 failed; 11 new checks: every route renders a real screen, the nav reaches every non-card screen, the six rules and the NPC recipe have a home, an upgrade's price and prerequisite gate are quoted correctly, karma actually buys one, rank caps the free starting picks, and a standing sweep asserting no exported table is stranded — with an explicit exempt list naming, per symbol, either the `RULES_LIBRARY` entry that paraphrases it (each id asserted to exist) or its status as internal metadata, so a future table added without a route fails the suite. | v47 |

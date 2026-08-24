@@ -40,6 +40,7 @@ function write(j) {
 
 export function load() { return read(); }
 export function save(j) { return write(j); }
+/** Wipe the whole journal. No UI path — used by the regression harness to reset between checks. */
 export function clearAll() { write(blank()); }
 
 /* ---------------------------------------------------------------- sessions */
