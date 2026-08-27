@@ -8,6 +8,7 @@ import http from "node:http";
 import fs from "node:fs";
 import { runCoverage } from "./coverage.js";
 import { runReachability } from "./reachability.js";
+import { runProbe } from "./probe.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -3140,6 +3141,10 @@ const run = async () => {
     const html = await page.locator("#screen").innerHTML();
     ok(`gated tab ${tab} renders`, html.length > 200, `${html.length} chars`);
   }
+
+  // The probe drives the real app: it clicks every visible control on every route, so it runs
+  // after the assertions above and restores the store around every click.
+  await runProbe(ok, section, page, base);
 
   ok("no console errors for the whole run", consoleErrors.length === 0, consoleErrors.slice(0, 5).join(" | "));
 

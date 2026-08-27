@@ -68,6 +68,7 @@ export function renderLearn(mount) {
   } else {
     mount.append(el("section", { class: "card" },
       el("h3", { text: "Ready to play" }),
+      el("p", { class: "small", text: "That is everything you need to start. Build a hero and the app applies the rules for you; the rules library is there when you want the detail." }),
       el("div", { class: "row-actions" },
         el("a", { class: "btn primary", href: "#/create" }, "Create your hero"),
         el("a", { class: "btn", href: "#/rules" }, "Rules library"))));

@@ -234,7 +234,14 @@ function vitalStepper(label, value, max, kind) {
         if (kind === "health") applyDamageFlow(1, { ignoreArmor: true });
         else Store.setVital(kind, value - 1);
       } }, "−"),
-      el("button", { class: "vital-value", "aria-live": "polite", onclick: () => openVitalEditor(kind) }, `${value}/${max}`),
+      // "9/9" alone reads as "nine slash nine, button" and says neither which track it is nor
+      // that tapping opens an editor.
+      el("button", {
+        class: "vital-value", "aria-live": "polite",
+        "aria-label": `${label} ${value} of ${max} — set ${label}`,
+        title: `Set ${label}`,
+        onclick: () => openVitalEditor(kind),
+      }, `${value}/${max}`),
       el("button", { class: "icon-btn", "aria-label": `Regain 1 ${label}`, onclick: () => Store.setVital(kind, value + 1) }, "+")));
 }
 
@@ -691,7 +698,9 @@ function notesCard(c) {
   const ta = el("textarea", { class: "input", rows: 5, placeholder: "Notes, contacts, leads…" });
   ta.value = c.notes || "";
   ta.addEventListener("change", () => Store.updateCharacter((ch) => { ch.notes = ta.value; }));
-  return el("section", { class: "card" }, el("h3", { text: "Notes" }), ta);
+  return el("section", { class: "card" }, el("h3", { text: "Notes" }),
+    el("p", { class: "muted small", text: "Anything you want to remember about this hero — contacts, leads, promises made. Saved as you type, and included in the JSON backup." }),
+    ta);
 }
 
 /* ---------------------------------------------------------------- rest & recovery */
