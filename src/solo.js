@@ -50,6 +50,63 @@ function undoSolo(mount) {
 }
 
 /** Which of the six loop steps the player is on. Guidance only — nothing is ever blocked. */
+/**
+ * The front door for solo play, rendered on Home so there is ONE thread through a session.
+ *
+ * The problem this solves: Home showed the group lifecycle stage card ("Start session" ->
+ * "Start action scene") to a solo player, while the actual solo spine lived on a separate tab.
+ * Two parallel engines with nothing saying which one is the game, and neither opening by telling
+ * you what tonight is about. This card is the answer to all three of "how do I start, keep
+ * going, and finish" — and it reads the same state the Solo tab does, so they never disagree.
+ */
+export function soloStageCard() {
+  const state = load();
+  const running = !!state.alert || (state.timers || []).length > 0;
+  const phase = phaseFor(state.crisisLevel);
+  const card = el("section", { class: "card next-step", id: "solo-stage" });
+
+  if (!running) {
+    // Cold, or between sessions. Say what carried over, then offer the one control that starts play.
+    const last = lastClosing(state);
+    card.append(
+      el("p", { class: "next-step-eyebrow", text: "Now" }),
+      el("h2", { text: last ? "Ready for the next session" : "Ready to play" }),
+      last
+        ? el("p", { class: "next-step-why", text: `Last time: ${last}` })
+        : el("p", { class: "next-step-why", text: "Crisis Mode is your GM. Starting a session rolls the emergency your hero answers, and the app drives the rest." }),
+      state.crisisLevel > 0
+        ? el("p", { class: "muted small", text: `The world is still at crisis level ${state.crisisLevel} — ${phase.name}. That carries into tonight.` })
+        : null,
+      el("div", { class: "row-actions" },
+        el("a", { class: "btn primary big", href: "#/solo" }, "Start tonight's session"),
+        el("button", { class: "btn ghost", onclick: () => { setLearnTab("walkthrough"); location.hash = "#/learn"; } },
+          "Show me a whole session first")));
+    return card;
+  }
+
+  // Mid-session, or returning days later. Say where you are and what is owed.
+  const step = currentStep(state);
+  const next = NEXT_STEP[step];
+  const live = (state.timers || []).length;
+  const bits = [];
+  if (state.alertParts?.headline || state.alert) bits.push(state.alertParts?.headline || state.alert);
+  card.append(
+    el("p", { class: "next-step-eyebrow", text: `In play — step ${step + 1} of 6` }),
+    el("h2", { text: next ? next.label : "Continue" }),
+    bits.length ? el("p", { class: "lede", text: bits[0] }) : null,
+    el("p", { class: "next-step-why", text: next ? next.why : "Pick up where you left off." }),
+    el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running.` }),
+    el("div", { class: "row-actions" },
+      el("a", { class: "btn primary big", href: "#/solo" }, "Continue the session")));
+  return card;
+}
+
+/** The closing line of the last session, so returning after a week has a foothold. */
+function lastClosing(state) {
+  const entry = (state.log || []).slice().reverse().find((e) => /^Session closed:/.test(e.text || ""));
+  return entry ? String(entry.text).replace(/^Session closed:\s*/, "") : null;
+}
+
 export function currentStep(state) {
   // Step 5 outranks step 1: resolving a crisis clears the alert, and the social scene comes first.
   if (state.awaitingSocial) return 4;      // 5. play a social scene
@@ -102,6 +159,34 @@ const NEXT_STEP = [
  * Loop step 6. Solo karma comes from objective timers rather than the session questions (§3.20),
  * so going home is where it is actually claimed — and it needed a control of its own.
  */
+/**
+ * End the sitting without finishing the crisis. Everything in flight is deliberately KEPT — the
+ * timers, the crisis level, the alert — because the point is to resume, not to reset. Contrast
+ * headHome(), which is the in-fiction "we are done, go rest" and does clear the board.
+ */
+async function stopForTonight(state, mount) {
+  const live = (state.timers || []).length;
+  const go = await modal({
+    title: "Stop for tonight",
+    body: el("div", {},
+      el("p", { class: "lede", text: "Leave the crisis exactly where it is and pick it up next time." }),
+      el("p", { class: "muted small", text: `${live} timer${live === 1 ? "" : "s"} still running, crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name}). Nothing is rolled or reset — your hero does not rest, because the emergency is not over.` }),
+      el("p", { class: "muted small", text: "If the crisis IS over and your hero can go home and recover, use Head home instead — that is the one that rests you and pays objective karma." })),
+    actions: [
+      { label: "Keep playing", value: false, variant: "ghost" },
+      { label: "Stop here", value: true, variant: "primary" },
+    ],
+  }).promise;
+  if (!go) return;
+  const headline = state.alertParts?.headline || state.alert || "a crisis in progress";
+  logEvent(state, `Session closed: paused mid-crisis at level ${state.crisisLevel}. Still out there: ${headline}.`);
+  Journal.record({ kind: "lifecycle", text: `Session paused mid-crisis — ${headline}, crisis level ${state.crisisLevel}.` });
+  Journal.endSession();
+  save(state);
+  showToast("Session closed. Home will pick up from here next time.", { variant: "good", timeout: 6000 });
+  renderSolo(mount);
+}
+
 async function headHome(state, mount) {
   const c = Store.activeCharacter();
   const reached = (state.objectives || []).filter((o) => o.status === "reached");
@@ -123,15 +208,46 @@ async function headHome(state, mount) {
     }, { id: c.id });
   }
   if (owed) Store.updateCharacter((ch) => { ch.state.karma += owed; });
+
+  // What is left standing is the hook for next time. Gather it BEFORE clearing, or the session
+  // closes with no memory and coming back next week starts from a blank screen.
+  const resolvedCount = state.resolved || 0;
+  const left = (state.crises || []).map((x) => x.parts?.headline || x.text).filter(Boolean);
+  const openObjectives = (state.objectives || []).filter((o) => o.status !== "reached")
+    .map((o) => o.name).filter(Boolean);
+  const recap = [
+    resolvedCount ? `${resolvedCount} crisis${resolvedCount === 1 ? "" : "es"} resolved` : "nothing resolved",
+    reached.length ? `${reached.length} objective${reached.length === 1 ? "" : "s"} reached (+${owed} karma)` : null,
+    `crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name})`,
+  ].filter(Boolean).join(" · ");
+  const hook = [
+    left.length ? `Still out there: ${left.join("; ")}.` : null,
+    openObjectives.length ? `Unfinished: ${openObjectives.join("; ")}.` : null,
+    state.crisisLevel >= 4 ? "The next alert starts from that raised crisis level, so it will bite harder." : null,
+  ].filter(Boolean).join(" ");
+
   state.objectives = (state.objectives || []).filter((o) => o.status !== "reached");
   state.alert = "";
   state.crises = [];
   state.eventChecks = 0;
   state.resolved = 0;
-  logEvent(state, "Headed home: rested, recovered and banked objective karma.");
+  state.alertParts = null;
+  // Prefixed so the Home card can find it again and open with "Last time: …".
+  logEvent(state, `Session closed: ${recap}.${hook ? ` ${hook}` : ""}`);
+  Journal.record({ kind: "lifecycle", text: `Session closed — ${recap}.${hook ? ` ${hook}` : ""}` });
   Journal.endSession();
   save(state);
-  showToast(`Rested${owed ? `, +${owed} karma` : ""}. Karma spending is open — the next alert starts a new crisis.`, { variant: "good", timeout: 6000 });
+
+  // Say what the session was, and what is waiting. "Ending well" is the part that makes the next
+  // sitting startable; a toast that vanishes is not a record.
+  await modal({
+    title: "Session closed",
+    body: el("div", {},
+      el("p", { class: "lede", text: recap.charAt(0).toUpperCase() + recap.slice(1) + "." }),
+      hook ? el("p", { class: "warn", text: hook }) : el("p", { class: "muted small", text: "Nothing is left hanging — the next session starts clean." }),
+      el("p", { class: "muted small", text: "Karma spending is open now, between sessions. When you sit down again, Home will pick up from here." })),
+    actions: [{ label: "Done", variant: "primary" }],
+  }).promise;
   renderSolo(mount);
 }
 
@@ -429,6 +545,12 @@ export function renderSolo(mount) {
       // so resolving comes first in the row, as it does in the fiction.
       state.alert ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
+      // Stopping for the night is not the same as finishing a crisis. Head home was only offered
+      // at loop step 6 — resolved AND nothing left running — so a player who simply had to stop
+      // mid-crisis was given no ending at all. Real sittings end in the middle of things.
+      (state.alert || (state.timers || []).length)
+        ? el("button", { class: "btn ghost", onclick: () => stopForTonight(state, mount) }, "Stop for tonight")
+        : null,
       undoSnapshot ? el("button", { class: "btn ghost", onclick: () => undoSolo(mount) }, `Undo ${undoSnapshot.label}`) : null),
     el("div", { class: "movement-modes" },
       el("span", { class: "crisis-label", text: "Moving" }),

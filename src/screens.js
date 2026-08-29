@@ -10,6 +10,7 @@ import { Settings, TOGGLES, applyTheme } from "./settings.js";
 import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
+import { soloStageCard } from "./solo.js";
 import { buyBaseUpgrade } from "./sheet.js";
 import { NPC_RECIPE, NPC_HANDLING, CREATURE_NOTE } from "../data-npcs.js";
 import { ADVERSARY_NOTE } from "../data-monsters.js";
@@ -25,7 +26,10 @@ export function renderHome(mount) {
   const chars = Store.listCharacters();
   const team = Store.getTeam();
 
-  if (chars.length) mount.append(stageCard());
+  // One spine, not two. A solo player was being told to run the group lifecycle ("Start session"
+  // -> "Start action scene") while the engine that actually generates their game sat on another
+  // tab. When Crisis Mode is on, the solo thread is the thread.
+  if (chars.length) mount.append(Settings.soloMode() ? soloStageCard() : stageCard());
 
   // With an empty roster, learning the game comes before building a hero for it.
   if (!chars.length) {
@@ -399,7 +403,9 @@ function sessionCard(g, mount, openSession) {
     el("span", { class: "session-caret", "aria-hidden": "true", text: expanded ? "▾" : "▸" }),
     el("span", {}, el("strong", { text: g.title }),
       el("span", { class: "muted small", text: ` · ${g.entries.length} entr${g.entries.length === 1 ? "y" : "ies"}${isCurrent ? " · open" : ""}` })));
-  card.append(head);
+  // The disclosure pattern: the button lives INSIDE a heading, so a screen-reader user can jump
+  // between sessions by heading instead of only by walking the controls.
+  card.append(el("h3", { class: "session-title" }, head));
 
   if (!expanded) return card;
 

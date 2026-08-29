@@ -549,6 +549,7 @@ select.select option { background: var(--panel); color: var(--ink); }
 
 /* ---- journal: diary first, mechanics quiet ---- */
 .card.session.current { outline: 3px solid var(--accent); }
+.session-title { margin: 0; font-size: inherit; font-weight: inherit; }
 .session-head { display: flex; gap: .5rem; align-items: baseline; width: 100%; text-align: left;
   background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .session-caret { flex: 0 0 1rem; }

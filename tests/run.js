@@ -3142,6 +3142,103 @@ const run = async () => {
     ok(`gated tab ${tab} renders`, html.length > 200, `${html.length} chars`);
   }
 
+  /* ---------------------------------------------------------------- the arc of a session */
+  // Start, sustain, end. The audits proved every control is reachable and every rule implemented,
+  // and the owner still could not tell how to begin a session, keep one going, or finish it well.
+  section("Starting, sustaining and ending a session");
+
+  const arc = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const Solo = await import("/src/solo.js");
+    localStorage.clear();
+    Settings.set("soloMode", true);
+    const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0]));
+    Store.setActiveCharacter(c.id);
+
+    // COLD: Home must offer the solo spine, not the group lifecycle.
+    location.hash = "#/home";
+    await new Promise((r) => setTimeout(r, 320));
+    const cold = document.querySelector("#screen").textContent;
+    const soloCard = !!document.querySelector("#solo-stage");
+    const groupCard = !!document.querySelector("#session-stage");
+
+    // MID: with a crisis running, Home must say where you are rather than start over.
+    const raw = { crisisLevel: 4, alert: "A dam is failing", alertParts: { headline: "A dam is failing" },
+      crises: [], timers: [{ kind: "crisis", name: "Dam", rung: 3 }], allies: [], objectives: [],
+      encounter: null, mode: "alert", log: [], eventChecks: 2, awaitingSocial: false, resolved: 0 };
+    localStorage.setItem("invincible:solo", JSON.stringify(raw));
+    location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 320));
+    const mid = document.querySelector("#screen").textContent;
+
+    // RETURNING: a closed session must leave a foothold for the next sitting.
+    const closed = { ...raw, alert: "", timers: [], crisisLevel: 3,
+      log: [{ at: Date.now(), text: "Session closed: 1 crisis resolved · crisis level 3 (medium). Still out there: a cult in the docks." }] };
+    localStorage.setItem("invincible:solo", JSON.stringify(closed));
+    location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 320));
+    const back = document.querySelector("#screen").textContent;
+
+    localStorage.clear();
+    return { cold, soloCard, groupCard, mid, back };
+  });
+  ok("a solo player's Home shows the solo spine, not the group lifecycle",
+    arc.soloCard && !arc.groupCard, `solo:${arc.soloCard} group:${arc.groupCard}`);
+  ok("starting: cold Home offers one control that begins play",
+    /Start tonight's session/.test(arc.cold), arc.cold.slice(0, 90));
+  ok("starting: a first-timer is offered a whole worked session first",
+    /Show me a whole session/.test(arc.cold));
+  ok("sustaining: mid-session Home says which step you are on and what is running",
+    /In play — step \d of 6/.test(arc.mid) && /timer/.test(arc.mid) && /Continue the session/.test(arc.mid),
+    arc.mid.slice(0, 140));
+  ok("sustaining: mid-session Home names the crisis rather than starting over",
+    /dam is failing/i.test(arc.mid) && !/Start tonight/.test(arc.mid));
+  ok("ending: a closed session leaves a foothold the next sitting opens with",
+    /Last time:/.test(arc.back) && /cult in the docks/.test(arc.back), arc.back.slice(0, 160));
+  ok("ending: a raised crisis level is carried into the next session in words",
+    /crisis level 3/i.test(arc.back));
+
+  const stopping = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    // Mid-crisis, with a timer running: the player must still be able to end the sitting.
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 5, alert: "A reactor is going critical",
+      alertParts: { headline: "A reactor is going critical" },
+      crises: [], timers: [{ kind: "crisis", name: "Reactor", rung: 2 }], allies: [], objectives: [],
+      encounter: null, mode: "alert", log: [], eventChecks: 3, awaitingSocial: false, resolved: 0 }));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 150));
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 340));
+    const offered = Array.from(document.querySelectorAll("#screen button"))
+      .find((b) => /Stop for tonight/.test(b.textContent));
+    if (!offered) return { offered: false };
+    offered.click();
+    await new Promise((r) => setTimeout(r, 220));
+    const dialog = document.querySelector(".modal")?.textContent || "";
+    Array.from(document.querySelectorAll(".modal button")).find((b) => /Stop here/.test(b.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 250));
+    const after = JSON.parse(localStorage.getItem("invincible:solo"));
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    return {
+      offered: true, dialog,
+      keptTimers: (after.timers || []).length,
+      keptLevel: after.crisisLevel,
+      keptAlert: !!after.alert,
+      closed: (after.log || []).some((e) => /^Session closed:/.test(e.text)),
+    };
+  });
+  ok("ending: a sitting can be closed mid-crisis, not only after resolving one", stopping.offered);
+  ok("ending: stopping mid-crisis explains it differs from heading home",
+    /Head home instead/.test(stopping.dialog || ""), (stopping.dialog || "").slice(0, 100));
+  ok("ending: stopping keeps the crisis in flight so the next sitting resumes it",
+    stopping.keptTimers === 1 && stopping.keptLevel === 5 && stopping.keptAlert === true,
+    JSON.stringify(stopping));
+  ok("ending: stopping mid-crisis still leaves the next-session foothold",
+    stopping.closed === true);
+
   // The probe drives the real app: it clicks every visible control on every route, so it runs
   // after the assertions above and restores the store around every click.
   await runProbe(ok, section, page, base);
