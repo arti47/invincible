@@ -821,6 +821,85 @@ const run = async () => {
     wipeUi.actions.some((a) => /Keep my writing/.test(a)) && wipeUi.actions.some((a) => /Delete everything/.test(a)),
     wipeUi.actions.join(" | "));
 
+  /* ---------------------------------------------------------------- one spine */
+  section("Starting, sustaining and ending a session");
+  const spine = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Combat = await import("/src/combat.js");
+    const { Settings } = await import("/src/settings.js");
+    await import("/src/solo.js");          // registers the solo stage provider
+    localStorage.clear();
+    const hero = Store.createCharacter({});
+    Store.setActiveCharacter(hero.id);
+
+    Settings.set("soloMode", false);
+    const table = Combat.sessionStage();
+    await Combat.applyBundle("start", { id: hero.id });
+    const tableOpen = Combat.sessionStage();
+
+    // With Crisis Mode on, the solo loop owns "what now" everywhere.
+    Settings.set("soloMode", true);
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [],
+      encounter: null, mode: "alert", log: [], eventChecks: 0, awaitingSocial: false, resolved: 0 }));
+    const soloCold = Combat.sessionStage();
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 2, alert: "Reactor fire", crises: [], timers: [{ id: "t", name: "x", proximity: "soon" }],
+      allies: [], objectives: [], encounter: null, mode: "alert", log: [], eventChecks: 1,
+      awaitingSocial: false, resolved: 0 }));
+    const soloPlaying = Combat.sessionStage();
+    Settings.set("soloMode", false);
+    return {
+      tableTitle: table.title, tableLabel: table.label, tableHasEnd: !!table.end,
+      openHasEnd: !!tableOpen.end, openEndLabel: tableOpen.end?.label || "",
+      soloColdTitle: soloCold.title, soloColdHref: soloCold.href,
+      soloPlayingTitle: soloPlaying.title, soloPlayingEnd: soloPlaying.end?.label || "",
+      soloIsNotTableSpine: !/Start session|Start action scene/.test(soloPlaying.label),
+    };
+  });
+  ok("before play, the stage is not-started and offers no ending", /Not playing yet/.test(spine.tableTitle) && !spine.tableHasEnd, spine.tableTitle);
+  ok("once a session is open there is always a way to finish", spine.openHasEnd && /Finish for now/.test(spine.openEndLabel), spine.openEndLabel);
+  ok("Crisis Mode makes the solo loop the spine everywhere", /solo|crisis/i.test(spine.soloColdTitle) && spine.soloColdHref === "#/solo",
+    `${spine.soloColdTitle} → ${spine.soloColdHref}`);
+  ok("a solo session in play reports its step, not the table lifecycle",
+    /step \d of 6/.test(spine.soloPlayingTitle) && spine.soloIsNotTableSpine, spine.soloPlayingTitle);
+  ok("a solo session in play can be stopped", /Stop for tonight|Head home/.test(spine.soloPlayingEnd), spine.soloPlayingEnd);
+
+  await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home";
+  });
+  await page.waitForTimeout(300);
+  const homeSpine = await page.evaluate(() => {
+    // Solo play renders its own stage card; either way it is the one "what now" card on Home.
+    const card = document.querySelector("#solo-stage, #session-stage");
+    const labels = Array.from(card?.querySelectorAll("button, a") || []).map((b) => b.textContent.trim());
+    return { title: card?.querySelector("h2")?.textContent || "", labels };
+  });
+  ok("Home shows the solo spine when Crisis Mode is on",
+    !/Start session|Start action scene/.test(homeSpine.labels.join(" ")), homeSpine.labels.join(" | "));
+  ok("the stage card offers a how-to-play", homeSpine.labels.includes("How do I play?"), homeSpine.labels.join(" | "));
+
+  const howto = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    Combat.howToPlay();
+    await new Promise((r) => setTimeout(r, 150));
+    const dlg = document.querySelector(".modal");
+    const beats = Array.from(dlg?.querySelectorAll(".howto-beat h4") || []).map((h) => h.textContent);
+    const text = dlg?.textContent || "";
+    document.querySelectorAll(".modal-backdrop").forEach((n) => n.remove());
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", false);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    return { beats, mentionsSolo: /crisis alert/i.test(text), tellsYouWhereYouAre: /Right now you are at/.test(text) };
+  });
+  ok("how-to-play is three beats: start, sustain, finish",
+    JSON.stringify(howto.beats) === JSON.stringify(["Starting", "Keeping it going", "Finishing well"]), howto.beats.join(" | "));
+  ok("it is written for the mode you are in", howto.mentionsSolo);
+  ok("it says where you are right now", howto.tellsYouWhereYouAre);
+
   /* ---------------------------------------------------------------- lifecycle & undo */
   section("Lifecycle bundles (audits A22, A23)");
   const lifecycle = await page.evaluate(async () => {

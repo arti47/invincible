@@ -80,7 +80,8 @@ export function soloStageCard() {
       el("div", { class: "row-actions" },
         el("a", { class: "btn primary big", href: "#/solo" }, "Start tonight's session"),
         el("button", { class: "btn ghost", onclick: () => { setLearnTab("walkthrough"); location.hash = "#/learn"; } },
-          "Show me a whole session first")));
+          "Show me a whole session first"),
+        el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
     return card;
   }
 
@@ -97,7 +98,10 @@ export function soloStageCard() {
     el("p", { class: "next-step-why", text: next ? next.why : "Pick up where you left off." }),
     el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running.` }),
     el("div", { class: "row-actions" },
-      el("a", { class: "btn primary big", href: "#/solo" }, "Continue the session")));
+      el("a", { class: "btn primary big", href: "#/solo" }, "Continue the session"),
+      // Knowing how to stop matters as much as knowing how to continue.
+      el("button", { class: "btn", onclick: () => stopForTonight(load(), document.querySelector("#screen")) }, "Stop for tonight"),
+      el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
   return card;
 }
 
@@ -512,6 +516,38 @@ function whatHappenedCard(state, mount) {
           el("tr", {}, el("td", { text: "Ally" }), el("td", { text: "The group faces a threat or tries something dangerous. Off-screen, at least once every few hours of game time." })),
           el("tr", {}, el("td", { text: "Encounter" }), el("td", { text: "Only while exploring somewhere a fight could break out — once per zone you move through or linger in. Ordinary travel needs no timer at all." }))))));
 }
+
+/**
+ * Solo play's answer to "what now", published to the rest of the app. Home and the Sheet render
+ * whichever spine is live, so they can never disagree with the Solo tab again.
+ */
+export function soloStage() {
+  const state = load();
+  const i = currentStep(state);
+  const step = NEXT_STEP[i];
+  const running = state.timers.length + state.objectives.length + state.allies.length + (state.encounter ? 1 : 0);
+  const where = !state.alert
+    ? "No crisis yet"
+    : `In play — step ${i + 1} of 6`;
+  const why = !state.alert
+    ? "Crisis Mode is on. Generate a crisis alert and the app becomes your Game Master."
+    : `${step.why}${running ? ` (${running} timer${running === 1 ? "" : "s"} running)` : ""}`;
+
+  // Ending well: head home once something is resolved, otherwise stop the sitting where it is.
+  const end = state.alert
+    ? (i === 5
+        ? { label: "Head home — rest and bank karma", run: () => { location.hash = "#/solo"; setTimeout(() => headHome(load(), document.querySelector("#screen")), 150); } }
+        : { label: "Stop for tonight", run: () => stopForTonight(load(), document.querySelector("#screen")) })
+    : null;
+
+  return {
+    key: `solo${i}`, title: state.alert ? `${where} — ${step.label}` : "Ready to play solo",
+    why, label: step.label, href: "#/solo", end,
+  };
+}
+
+// One spine: the Solo module owns "what now" whenever Crisis Mode is on.
+Combat.setStageProvider(() => soloStage());
 
 /* ---------------------------------------------------------------- render */
 

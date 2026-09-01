@@ -170,8 +170,18 @@ function guessArmor(p) {
  * that carries it forward. Every surface reads this rather than guessing from its own state, so
  * "what do I do next" has the same answer on Home, the Sheet and the Action tab.
  */
+/**
+ * Solo play has its own spine (the Ch.9 loop), and running both at once is what made "what do I do
+ * now" ambiguous: Home said "Start session" while the Solo tab said "Generate crisis alert". The
+ * Solo module registers itself here at boot, so there is one answer wherever you are looking.
+ * A hook rather than an import, because solo.js already imports this module.
+ */
+let stageProvider = null;
+export function setStageProvider(fn) { stageProvider = fn; }
+
 export function sessionStage(c = Store.activeCharacter()) {
   if (!c) return { key: "create", title: "Make a hero", why: "Nothing to play yet. Build a hero or take a published one.", label: "Create your hero", href: "#/create" };
+  if (Settings.soloMode() && stageProvider) { const solo = stageProvider(c); if (solo) return solo; }
   const combat = getCombat();
   if (combat?.active) {
     const up = currentTurn(combat);
@@ -181,19 +191,20 @@ export function sessionStage(c = Store.activeCharacter()) {
   }
   const st = c.state.session || {};
   if (st.spendUnlocked || st.stage === "idle") {
-    return { key: "start", title: "Between sessions", why: "Karma can be spent now, in a safe location. Start the session when play begins.",
+    return { key: "start", title: "Not playing yet", why: "Karma can be spent now, in a safe location. When you sit down to play, start the session — that closes karma spending and opens the record.",
       label: "Start session", run: () => openLifecycle("start") };
   }
+  const finish = { label: "Finish for now", run: () => openLifecycle("session") };
   if (st.stage === "afterAction") {
     return { key: "social", title: "The action scene is over", why: "Alternate scenes: a social scene now restores Resolve equal to your PRESENCE.",
-      label: "End social scene", run: () => openLifecycle("social") };
+      label: "End social scene", run: () => openLifecycle("social"), end: finish };
   }
   if (st.stage === "afterSocial") {
     return { key: "next", title: "Between scenes", why: "Back to the story: start the next action scene, or close the session if the issue is done.",
-      label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; } };
+      label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; }, end: finish };
   }
   return { key: "open", title: "Session open", why: "Open with a briefing, then alternate action and social scenes.",
-    label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; } };
+    label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; }, end: finish };
 }
 
 /** The stage rendered as the same "do this next" card the Solo tab uses. */
@@ -206,7 +217,65 @@ export function stageCard() {
     el("p", { class: "next-step-eyebrow", text: "Now" }),
     el("h2", { text: s.title }),
     el("p", { class: "next-step-why", text: s.why }),
-    el("div", { class: "row-actions" }, action));
+    el("div", { class: "row-actions" }, action,
+      // Every stage that is mid-play can be finished from here. Not knowing how to stop is as
+      // bad as not knowing how to start.
+      s.end ? el("button", { class: "btn", onclick: () => s.end.run() }, s.end.label) : null,
+      el("button", { class: "btn ghost", onclick: () => howToPlay() }, "How do I play?")));
+}
+
+/**
+ * The whole game in three beats, with the buttons attached. Written for someone who has not read
+ * the rulebook and does not intend to: start, keep going, finish.
+ */
+export function howToPlay() {
+  const solo = Settings.soloMode();
+  const s = sessionStage();
+  const beat = (n, title, lines, action) => el("div", { class: "howto-beat" },
+    el("p", { class: "next-step-eyebrow", text: `Beat ${n}` }),
+    el("h4", { text: title }),
+    ...lines.map((t) => el("p", { class: "small", text: t })),
+    action || null);
+
+  const body = el("div", {},
+    el("p", { class: "lede", text: solo
+      ? "Solo play: the app is your Game Master. It tells you what happens; you say what your hero does."
+      : "You play one hero. Someone describes a situation, you say what your hero does, and dice settle anything risky." }),
+    el("p", { class: "muted small", text: `Right now you are at: ${s.title}.` }));
+
+  body.append(beat(1, "Starting",
+    solo
+      ? ["Generate a crisis alert. That is your emergency — the app rolls it from the threat tables.",
+         "Make an event check, then engage one of the crises it turns up. Engaging starts a crisis timer, which is the clock that makes things get worse while you are busy."]
+      : ["Press Start session. That closes karma spending and opens the record.",
+         "Then start an action scene when trouble arrives, or just play out a social scene first."],
+    el("button", { class: "btn tiny primary", onclick: () => { location.hash = solo ? "#/solo" : "#/home"; if (!solo) openLifecycle("start"); } },
+      solo ? "Go to the Solo tab" : "Start session")));
+
+  body.append(beat(2, "Keeping it going",
+    solo
+      ? ["Decide what your hero does, then press Say what your hero just did. The app works out which checks that action triggers and rolls them.",
+         "Ask the oracles whenever you would have asked a GM: yes/no, a complex answer, or describe a place.",
+         "After something resolves, play a social scene to get Resolve back."]
+      : ["Alternate action scenes and social scenes. Action costs Health; social scenes give Resolve back.",
+         "Tap an attribute on your Sheet to roll it. One 6 succeeds; extra 6s buy stunts.",
+         "This card always names the single next thing to do — you never have to work it out."],
+    null));
+
+  body.append(beat(3, "Finishing well",
+    solo
+      ? ["When the danger is dealt with, press Resolve crisis, then play a social scene.",
+         "Then Head home: full Health and Resolve back, and every objective you reached pays its karma. That is where solo karma is banked.",
+         "Karma is spent between sessions, and home counts."]
+      : ["Press Finish for now — that is End session.",
+         "It runs the ten karma questions, applies Reputation, and unlocks karma spending until you start the next session.",
+         "Everything you rolled and wrote is already in the Journal."],
+    s.end ? el("button", { class: "btn tiny", onclick: () => s.end.run() }, s.end.label) : null));
+
+  body.append(el("p", { class: "cite" },
+    el("a", { href: "#/learn", class: "rules-link" }, "Longer walkthrough with worked examples")));
+
+  return modal({ title: "How do I play?", body, size: "wide", actions: [{ label: "Got it", variant: "primary" }] });
 }
 
 /* ---------------------------------------------------------------- attacking from the board */
