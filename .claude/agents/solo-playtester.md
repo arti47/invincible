@@ -26,8 +26,15 @@ It drives the real UI in a headless browser, answers dialogs the way a player wo
 highlighted default), and writes a transcript to `tests/.playthrough-seed<N>.json`. Exit code is
 non-zero when the session had a stall, a problem, or a console error.
 
-**Run at least three seeds.** One session is an anecdote — the oracles are random, and a path that
-works on seed 1 can dead-end on seed 4. Report which seeds you ran.
+**Run at least three seeds.** One session is an anecdote. The seed drives two separate things: the
+app's dice (a seeded `Math.random` in the page) and, through the harness's own separate PRNG,
+*which branch each chooser takes* — so different seeds genuinely narrate different sessions rather
+than re-rolling the same one. A path that works on seed 1 can dead-end on seed 11. Report which
+seeds you ran.
+
+The harness types into empty prompt fields before confirming, because several flows (naming an
+objective, naming an ally group) silently discard on an empty value — that is what makes the
+objective and karma parts of the loop reachable at all.
 
 ## What counts as a finding
 

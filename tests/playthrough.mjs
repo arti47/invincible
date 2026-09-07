@@ -30,6 +30,25 @@ const args = process.argv.slice(2);
 const SEED = Number(args[args.indexOf("--seed") + 1]) || 1;
 const VERBOSE = args.includes("--verbose");
 
+/**
+ * The harness's own deterministic PRNG, deliberately SEPARATE from the page's seeded Math.random.
+ *
+ * The playtester agent caught this: with every chooser answered by taking the first option, a
+ * different seed changed only the dice and the flavour text, never which branch the session took.
+ * All seeds walked the identical path — the same move three times — so no timer was ever started,
+ * karma never left 0, and combat was never reached. "Run several seeds" was unbuyable advice.
+ *
+ * Keeping this stream separate from the app's means a dialog choice never shifts the app's dice,
+ * so a given seed still reproduces exactly.
+ */
+let rngState = 0;
+const seedRng = (n) => { rngState = (n >>> 0) || 1; };
+const rnd = () => {
+  rngState ^= rngState << 13; rngState ^= rngState >>> 17; rngState ^= rngState << 5;
+  return ((rngState >>> 0) % 1e6) / 1e6;
+};
+const pickIndex = (n) => (n <= 1 ? 0 : Math.floor(rnd() * n) % n);
+
 const BROWSER = process.env.PLAYWRIGHT_CHROMIUM || findChromium();
 function findChromium() {
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH || "/opt/pw-browsers";
@@ -95,18 +114,52 @@ async function answerDialogs(page, { prefer = null, max = 8 } = {}) {
   const answered = [];
   for (let i = 0; i < max; i++) {
     if (!(await modalOpen(page))) break;
-    const picked = await page.evaluate((want) => {
+    // How many real options this dialog offers, so the harness can choose among them.
+    const shape = await page.evaluate(() => {
+      const m = document.querySelector(".modal-backdrop .modal");
+      if (!m) return null;
+      const vis = (b) => (b.offsetParent || b.offsetWidth) && !b.disabled;
+      return { choices: Array.from(m.querySelectorAll(".choice")).filter(vis).length };
+    });
+    if (!shape) break;
+
+    // A player TYPES. Several flows are prompt-driven — naming an objective, naming an ally
+    // group — and clicking OK on an empty field silently discards them (`if (!name) return`).
+    // Filling every empty field first is what makes those parts of the loop reachable at all.
+    const filled = await page.evaluate(() => {
+      const m = document.querySelector(".modal-backdrop .modal");
+      if (!m) return 0;
+      const vis = (e) => e.offsetParent || e.offsetWidth;
+      let n = 0;
+      for (const el of m.querySelectorAll("input, textarea")) {
+        if (!vis(el) || el.disabled || el.type === "checkbox" || el.type === "radio") continue;
+        if (String(el.value || "").trim()) continue;
+        el.value = el.type === "number"
+          ? (el.getAttribute("value") || el.min || "2")
+          : (el.placeholder || "A thing worth doing");
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        n++;
+      }
+      return n;
+    });
+    if (filled) say("note", `(typed into ${filled} empty field${filled === 1 ? "" : "s"})`);
+    // A chooser list is the narrative decision — "what did your hero just do" — and is where the
+    // session's path is actually decided, so it varies by seed. Plain buttons are confirmations;
+    // those still take the highlighted action, which is what a player would press.
+    const wantIndex = shape.choices ? pickIndex(shape.choices) : 0;
+
+    const picked = await page.evaluate(({ want, idx }) => {
       const m = document.querySelector(".modal-backdrop .modal");
       if (!m) return null;
       const title = (m.querySelector("h1,h2,h3,.modal-title")?.textContent || "").trim();
       const vis = (b) => (b.offsetParent || b.offsetWidth) && !b.disabled;
       const btns = Array.from(m.querySelectorAll("button")).filter(vis);
       const label = (b) => (b.textContent || "").trim();
-      // A chooser list first — those are the real decisions in this game.
       const choices = Array.from(m.querySelectorAll(".choice")).filter(vis);
       let target = null;
       if (want) target = btns.find((b) => new RegExp(want, "i").test(label(b)));
-      if (!target && choices.length) target = choices[0];
+      if (!target && choices.length) target = choices[idx] || choices[0];
       if (!target) target = btns.find((b) => /primary|danger|warn/.test(b.className));
       if (!target) target = btns.find((b) => !/cancel|not yet|no |close|back/i.test(label(b)));
       if (!target) target = btns[btns.length - 1];
@@ -114,7 +167,7 @@ async function answerDialogs(page, { prefer = null, max = 8 } = {}) {
       const chosen = label(target).slice(0, 50);
       target.click();
       return { title, chosen, options: btns.length + choices.length };
-    }, prefer);
+    }, { want: prefer, idx: wantIndex });
     if (!picked) break;
     answered.push(picked);
     say("app", `dialog: ${picked.title || "(untitled)"}`, `— chose "${picked.chosen}" of ${picked.options}`);
@@ -124,8 +177,8 @@ async function answerDialogs(page, { prefer = null, max = 8 } = {}) {
 }
 
 /** Press a control by label. Returns false when the app never offered it — that is a stall. */
-async function press(page, pattern, { why = "", prefer = null, optional = false } = {}) {
-  const re = new RegExp(pattern, "i");
+async function press(page, pattern, { why = "", prefer = null, optional = false, exact = false } = {}) {
+  const re = new RegExp(exact ? `^${pattern}$` : pattern, "i");
   const before = await visibleButtons(page);
   const hit = before.find((t) => re.test(t));
   if (!hit) {
@@ -181,7 +234,8 @@ async function readState(page) {
 
 async function report(page, label) {
   const s = await readState(page);
-  say("state", label, `H ${s.health} · R ${s.resolve} · karma ${s.karma} · crisis ${s.crisisLevel} · ${s.timers} timer(s)`);
+  // Objectives were invisible in this line, which hid the fact that none was ever being created.
+  say("state", label, `H ${s.health} · R ${s.resolve} · karma ${s.karma} · crisis ${s.crisisLevel} · ${s.timers} timer(s) · ${s.objectives} objective(s)`);
   return s;
 }
 
@@ -203,6 +257,7 @@ const run = async () => {
   await page.waitForSelector("body[data-ready]", { timeout: 15000 });
 
   // Seed Math.random so a session is reproducible and a regression is a real change, not variance.
+  seedRng(SEED * 2654435761);
   await page.addInitScript((seed) => {
     let s = seed >>> 0 || 1;
     Math.random = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 1e6) / 1e6; };
@@ -261,22 +316,56 @@ const run = async () => {
   /* --- 5. Event check and engaging ---------------------------------------- */
   say("beat", "EVENT CHECK, THEN ENGAGING THE CRISIS");
   await press(page, "Event check", { why: "step 2: does anything escalate?" });
-  await press(page, "Engage", { why: "step 3: turn a crisis into a running timer", optional: true });
-  if (!(await visibleButtons(page)).some((t) => /engage/i.test(t))) {
+
+  // Two controls match /engage/: the next-step card's "Engage a crisis", which only SCROLLS to
+  // the Crises panel, and that panel's own "Engage", which actually starts the timer. Pressing
+  // the first and stopping was why no session ever had a timer running — and with no timer, the
+  // narrated moves below check nothing, so the whole engine went unexercised.
+  await press(page, "Engage a crisis", { why: "step 3: the next-step card points at the crises", optional: true });
+  await press(page, "Engage", { why: "step 3: actually turn a crisis into a running timer", exact: true, optional: true });
+  if (!(await readState(page)).timers) {
     await press(page, "New timer|Start a timer|Add a timer", { why: "step 3 by any route", optional: true });
   }
   st = await report(page, "after engaging");
+  if (!st.timers) {
+    problems.push("After engaging a crisis, no timer is running — the clock that replaces the GM never starts.");
+  }
+
+  // An objective is where solo karma comes from (§3.20 — objective timers replace the session
+  // questions), so a session that never sets one never exercises advancement at all.
+  say("beat", "SETTING AN OBJECTIVE (this is where solo karma comes from)");
+  await press(page, "Set an objective", { why: "solo karma is paid by reached objectives", optional: true });
+  st = await report(page, "objective set");
+  if (!st.objectives) {
+    problems.push("No objective could be set, so this session can never earn karma (§3.20).");
+  }
 
   /* --- 6. Playing the middle ---------------------------------------------- */
   say("beat", "PLAYING — the part that has to sustain itself");
   for (let round = 1; round <= 3; round++) {
     say("note", `beat ${round} of the crisis`);
-    const did = await press(page, "What did your hero just do|Something happened|Time passes",
+    // The control's LABEL is "Say what your hero just did" (step 4) or "Something happened — roll
+    // it" (elsewhere); "What did your hero just do?" is the dialog's title, not the button.
+    // Matching only the title made this fall through to a loose Check|Roll fallback, which hit
+    // the attribute guide — a reference panel — instead of the control that advances play.
+    const did = await press(page, "Say what your hero just did|Something happened|Time passes|What did your hero just do",
       { why: "the player must be able to narrate and have the app work out the checks", optional: true });
-    if (!did) await press(page, "Check|Roll", { why: "any way to advance the fiction", optional: true });
+    if (!did) {
+      await press(page, "Time passes — check every timer|Advance time",
+        { why: "any control that moves the clock forward", optional: true });
+    }
     await answerDialogs(page);
   }
   st = await report(page, "mid-session");
+
+  // Push the objective along: a milestone is the only thing that advances it (never a clock).
+  say("beat", "ADVANCING THE OBJECTIVE");
+  for (let i = 0; i < 4; i++) {
+    const moved = await press(page, "Progress", { why: "an objective advances on a milestone", optional: true });
+    if (!moved) break;
+    await answerDialogs(page);
+  }
+  st = await report(page, "objective pushed");
 
   /* --- 7. A social scene --------------------------------------------------- */
   say("beat", "A SOCIAL SCENE (the only way Resolve comes back)");
@@ -294,11 +383,15 @@ const run = async () => {
   // The ending has more than one legitimate name: Head home is the in-fiction rest that pays
   // objective karma, Stop for tonight parks a live crisis, and End the session closes a sitting
   // whose crisis is already resolved. A player needs ONE of them; the harness accepts any.
+  const before = await readState(page);
   const ended = await press(page, "Head home", { why: "the in-fiction end: rest, recover, bank karma", optional: true })
     || await press(page, "End the session", { why: "closing a sitting whose crisis is resolved", optional: true })
     || await press(page, "Stop for tonight", { why: "an ending must exist at every point in a session" });
   if (!ended) problems.push("No way to end the session was offered at any point.");
   st = await report(page, "session closed");
+  if (before.objectives && st.karma === 0 && before.resolved) {
+    say("note", "(no karma banked — expected unless an objective actually reached the top of its ladder)");
+  }
 
   /* --- 10. Coming back ---------------------------------------------------- */
   say("beat", "COMING BACK NEXT WEEK");
