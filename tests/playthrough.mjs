@@ -416,6 +416,16 @@ const run = async () => {
   console.log(`Problems: ${problems.length}`);
   for (const p of problems) console.log(`  ✗ ${p}`);
 
+  // The journal is the artefact a player keeps, so the run can print it verbatim.
+  if (args.includes("--dump-journal")) {
+    const entries = await page.evaluate(async () => {
+      const J = await import("/src/journal.js");
+      return J.grouped({}).flatMap((g) => g.entries.map((e) => ({ kind: e.kind, text: e.text, note: e.note || null })));
+    });
+    console.log("\n=== JOURNAL (what the app recorded) ===");
+    for (const e of entries) console.log(`[${e.kind}] ${e.text}${e.note ? `  — note: ${e.note}` : ""}`);
+  }
+
   const outFile = path.join(ROOT, "tests", `.playthrough-seed${SEED}.json`);
   fs.writeFileSync(outFile, JSON.stringify({ seed: SEED, transcript, stalls, problems, errors, journal }, null, 2));
   console.log(`\nFull transcript: ${path.relative(ROOT, outFile)}`);
