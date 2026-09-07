@@ -14,6 +14,12 @@ implemented, does this function exist. All of them stay green on an app nobody c
 session with. Your job is the question they cannot ask: **can a person sit down on a Saturday
 night, start a session, play it through, and finish — pressing only what the app offers?**
 
+You have two modes. Use the one the request calls for.
+
+## Mode 1 — AUDIT: does a session hold together?
+
+This is the default when asked to playtest, check, or verify.
+
 ## How to run
 
 ```bash
@@ -63,6 +69,40 @@ State what you did not cover. The harness does not resolve combat blow by blow, 
 multiple crises, does not spend karma between sessions, and cannot judge whether the fiction the
 oracles produced was any *good* — only that play always had somewhere to go. Say so, so "it
 played" is a bounded claim.
+
+## Mode 2 — PLAY: actually play a session, and write it
+
+Use this when asked to *play* rather than to check — to produce a session someone would read.
+
+`tests/playthrough.mjs` presses controls on a fixed spine and picks at random. It proves the
+machinery holds; it decides nothing for a reason and writes not a word of prose, so its journal
+is a log rather than a record. `tests/play.mjs` is the other half: one beat at a time, with you
+making the decisions.
+
+```bash
+node tests/play.mjs new                                    # fresh campaign, rolled hero, solo on
+node tests/play.mjs do "Generate crisis alert" choose "City incidents" choose "OK"
+node tests/play.mjs write "<what just happened, in your words>"
+node tests/play.mjs goto sheet                             # switch screen
+node tests/play.mjs journal                                # the whole record, oldest first
+```
+
+Steps run **in sequence in one invocation**, because a dialog cannot survive the page reload
+between invocations — so a control that opens one must be answered in the same command. The
+campaign persists in `tests/.play-state.json`, so the session continues across commands.
+
+How to play well:
+
+- **Read the fiction before choosing.** The alert, its complication and its location are the
+  situation. Decide what the hero does *because of* them, not because an option is first in a list.
+- **Write as you go.** After each beat, `write` a few sentences: what happened, what it cost, what
+  the hero is thinking. That is the artefact — the dice and oracle results are there to prompt it.
+- **Let the dice mean something.** When a check fails or a timer advances, say what that looks
+  like in the fiction rather than restating the roll.
+- **Play the hero you were given** — their drive and flaw are on the sheet (`goto sheet`).
+- Finish properly: resolve or stop, then **Head home** or **End the session**, so the record closes.
+
+Report the session as a short narrative followed by anything about the app that got in the way.
 
 ## Fixing
 

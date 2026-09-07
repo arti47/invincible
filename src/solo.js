@@ -188,25 +188,36 @@ const NEXT_STEP = [
  */
 async function stopForTonight(state, mount) {
   const live = (state.timers || []).length;
-  // The control renames itself once the crisis is resolved, so the dialog must agree — a button
-  // and its own dialog disagreeing reads as having pressed the wrong thing.
-  const title = (state.resolved || 0) > 0 && !state.alert ? "End the session" : "Stop for tonight";
+  // Two genuinely different endings share this control, so every line it writes has to know which
+  // one happened. The crisis being RESOLVED is not "paused mid-crisis", and saying so put a
+  // falsehood in the player's permanent record.
+  const won = (state.resolved || 0) > 0 && !state.alert;
+  const title = won ? "End the session" : "Stop for tonight";
   const go = await modal({
     title,
     body: el("div", {},
-      el("p", { class: "lede", text: "Leave the crisis exactly where it is and pick it up next time." }),
-      el("p", { class: "muted small", text: `${live} timer${live === 1 ? "" : "s"} still running, crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name}). Nothing is rolled or reset — your hero does not rest, because the emergency is not over.` }),
-      el("p", { class: "muted small", text: "If the crisis IS over and your hero can go home and recover, use Head home instead — that is the one that rests you and pays objective karma." })),
+      el("p", { class: "lede", text: won
+        ? "The crisis is behind you. Close the sitting here and pick the campaign up next time."
+        : "Leave the crisis exactly where it is and pick it up next time." }),
+      el("p", { class: "muted small", text: won
+        ? `Crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name}) carries into the next session. Nothing is rolled or reset.`
+        : `${live} timer${live === 1 ? "" : "s"} still running, crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name}). Nothing is rolled or reset — your hero does not rest, because the emergency is not over.` }),
+      el("p", { class: "muted small", text: "If your hero can go home and recover, use Head home instead — that is the one that rests you and pays objective karma." })),
     actions: [
       { label: "Keep playing", value: false, variant: "ghost" },
-      { label: "Stop here", value: true, variant: "primary" },
+      { label: won ? "End it here" : "Stop here", value: true, variant: "primary" },
     ],
   }).promise;
   if (!go) return;
   const headline = state.alertParts?.headline || state.alert || "a crisis in progress";
   state.closed = true;
-  logEvent(state, `Session closed: paused mid-crisis at level ${state.crisisLevel}. Still out there: ${headline}.`);
-  Journal.record({ kind: "lifecycle", text: `Session paused mid-crisis — ${headline}, crisis level ${state.crisisLevel}.` });
+  const line = won
+    ? `Session closed: crisis resolved, at level ${state.crisisLevel}.`
+    : `Session closed: paused mid-crisis at level ${state.crisisLevel}. Still out there: ${headline}.`;
+  logEvent(state, line);
+  Journal.record({ kind: "lifecycle", text: won
+    ? `Session closed — the crisis was resolved. Crisis level ${state.crisisLevel}.`
+    : `Session paused mid-crisis — ${headline}, crisis level ${state.crisisLevel}.` });
   Journal.endSession();
   save(state);
   showToast("Session closed. Home will pick up from here next time.", { variant: "good", timeout: 6000 });
