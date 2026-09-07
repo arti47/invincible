@@ -24,7 +24,7 @@ function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return 
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
     eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, alertParts: null,
-    showAllLog: false };
+    showAllLog: false, closed: false };
 }
 
 /**
@@ -59,9 +59,27 @@ function undoSolo(mount) {
  * you what tonight is about. This card is the answer to all three of "how do I start, keep
  * going, and finish" — and it reads the same state the Solo tab does, so they never disagree.
  */
+/**
+ * Is a sitting in progress? Not just "is a crisis live" — resolving one clears the alert and the
+ * timers while still owing a social scene, and the player is very much still mid-session then.
+ * Gating on alert-or-timers alone made the session vanish at the exact moment it was won.
+ */
+export function inSession(state) {
+  // Closing is explicit. Inferring it from leftover counters is wrong in both directions:
+  // "Stop for tonight" deliberately KEEPS the timers and event checks so the crisis can be
+  // resumed, so a closed sitting still carries them and would otherwise read as still open.
+  if (state.closed) return false;
+  return !!state.alert
+    || (state.timers || []).length > 0
+    || (state.crises || []).length > 0
+    || !!state.awaitingSocial
+    || (state.resolved || 0) > 0
+    || (state.eventChecks || 0) > 0;
+}
+
 export function soloStageCard() {
   const state = load();
-  const running = !!state.alert || (state.timers || []).length > 0;
+  const running = inSession(state);
   const phase = phaseFor(state.crisisLevel);
   const card = el("section", { class: "card next-step", id: "solo-stage" });
 
@@ -170,8 +188,11 @@ const NEXT_STEP = [
  */
 async function stopForTonight(state, mount) {
   const live = (state.timers || []).length;
+  // The control renames itself once the crisis is resolved, so the dialog must agree — a button
+  // and its own dialog disagreeing reads as having pressed the wrong thing.
+  const title = (state.resolved || 0) > 0 && !state.alert ? "End the session" : "Stop for tonight";
   const go = await modal({
-    title: "Stop for tonight",
+    title,
     body: el("div", {},
       el("p", { class: "lede", text: "Leave the crisis exactly where it is and pick it up next time." }),
       el("p", { class: "muted small", text: `${live} timer${live === 1 ? "" : "s"} still running, crisis level ${state.crisisLevel} (${phaseFor(state.crisisLevel).name}). Nothing is rolled or reset — your hero does not rest, because the emergency is not over.` }),
@@ -183,6 +204,7 @@ async function stopForTonight(state, mount) {
   }).promise;
   if (!go) return;
   const headline = state.alertParts?.headline || state.alert || "a crisis in progress";
+  state.closed = true;
   logEvent(state, `Session closed: paused mid-crisis at level ${state.crisisLevel}. Still out there: ${headline}.`);
   Journal.record({ kind: "lifecycle", text: `Session paused mid-crisis — ${headline}, crisis level ${state.crisisLevel}.` });
   Journal.endSession();
@@ -236,6 +258,7 @@ async function headHome(state, mount) {
   state.eventChecks = 0;
   state.resolved = 0;
   state.alertParts = null;
+  state.closed = true;
   // Prefixed so the Home card can find it again and open with "Last time: …".
   logEvent(state, `Session closed: ${recap}.${hook ? ` ${hook}` : ""}`);
   Journal.record({ kind: "lifecycle", text: `Session closed — ${recap}.${hook ? ` ${hook}` : ""}` });
@@ -584,8 +607,9 @@ export function renderSolo(mount) {
       // Stopping for the night is not the same as finishing a crisis. Head home was only offered
       // at loop step 6 — resolved AND nothing left running — so a player who simply had to stop
       // mid-crisis was given no ending at all. Real sittings end in the middle of things.
-      (state.alert || (state.timers || []).length)
-        ? el("button", { class: "btn ghost", onclick: () => stopForTonight(state, mount) }, "Stop for tonight")
+      inSession(state)
+        ? el("button", { class: "btn ghost", onclick: () => stopForTonight(state, mount) },
+            (state.resolved || 0) > 0 && !state.alert ? "End the session" : "Stop for tonight")
         : null,
       undoSnapshot ? el("button", { class: "btn ghost", onclick: () => undoSolo(mount) }, `Undo ${undoSnapshot.label}`) : null),
     el("div", { class: "movement-modes" },
@@ -1173,6 +1197,10 @@ async function generateAlert(state, mount) {
   state.crises = [];
   addCrisis(state, text, "alert", parts);
   logEvent(state, `New crisis alert: ${text}`);
+  // An alert IS the start of a sitting, so the journal opens a session here. Without this every
+  // entry a solo player wrote landed unfiled — a whole session's record with no session on it.
+  Journal.startSession(state.alertParts?.headline || text, Store.activeCharacter()?.id || null);
+  state.closed = false;
   save(state);
   renderSolo(mount);
   modal({ title: "Crisis alert",

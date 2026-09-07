@@ -6,8 +6,10 @@
   "type": "module",
   "scripts": {
     "test": "node tests/run.js",
+    "playtest": "node tests/playthrough.mjs",
     "serve": "npx --yes http-server -p 8080 -c-1 .",
-    "guide": "node docs/build-guide.mjs"
+    "guide": "node docs/build-guide.mjs",
+    "probe": "PROBE=1 node tests/run.js"
   },
   "devDependencies": {
     "playwright-core": "^1.56.1"

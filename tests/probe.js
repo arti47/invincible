@@ -201,7 +201,18 @@ export async function runProbe(ok, section, page, base) {
           const b = Array.from(document.querySelectorAll("#screen button")).filter(vis)[n];
           if (!b) return null;
           const label = (b.textContent || "").trim().slice(0, 40) || b.getAttribute("aria-label") || "(unnamed)";
-          const stamp = () => localStorage.length + ":" + (localStorage.getItem("invincible:characters") || "").length;
+          // TRAP: localStorage.length counts KEYS, so it does not move when a value grows, and
+          // watching one key misses writes to every other store. A click that wrote to the
+          // journal then went unrestored, so sessions accumulated across the sweep and the
+          // journal route got slower with every route probed. Stamp the whole store.
+          const stamp = () => {
+            let n = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i);
+              n += k.length + (localStorage.getItem(k) || "").length;
+            }
+            return `${localStorage.length}:${n}`;
+          };
           const before = stamp();
           let threw = null;
           try { if (!b.disabled) b.click(); } catch (e) { threw = String(e).slice(0, 100); }

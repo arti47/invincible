@@ -3254,7 +3254,7 @@ const run = async () => {
     const mid = document.querySelector("#screen").textContent;
 
     // RETURNING: a closed session must leave a foothold for the next sitting.
-    const closed = { ...raw, alert: "", timers: [], crisisLevel: 3,
+    const closed = { ...raw, alert: "", timers: [], crisisLevel: 3, closed: true,
       log: [{ at: Date.now(), text: "Session closed: 1 crisis resolved · crisis level 3 (medium). Still out there: a cult in the docks." }] };
     localStorage.setItem("invincible:solo", JSON.stringify(closed));
     location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 120));
@@ -3279,6 +3279,59 @@ const run = async () => {
     /Last time:/.test(arc.back) && /cult in the docks/.test(arc.back), arc.back.slice(0, 160));
   ok("ending: a raised crisis level is carried into the next session in words",
     /crisis level 3/i.test(arc.back));
+
+  // Found by tests/playthrough.mjs: an alert opens a sitting, so it must open a journal session.
+  // Without this a whole session's entries landed unfiled — 4 entries across 0 sessions.
+  const journalSession = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    const Journal = await import("/src/journal.js");
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    localStorage.clear();
+    Settings.set("soloMode", true);
+    Store.setActiveCharacter(Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0])).id);
+    const before = Journal.stats().sessions;
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 320));
+    const btn = Array.from(document.querySelectorAll("#screen button"))
+      .find((b) => /Generate crisis alert/.test(b.textContent));
+    btn?.click();
+    await new Promise((r) => setTimeout(r, 260));
+    // The alert flow asks where the alert comes from, then shows it.
+    for (let i = 0; i < 4; i++) {
+      const m = document.querySelector(".modal-backdrop .modal");
+      if (!m) break;
+      const pick = m.querySelector(".choice") || m.querySelector(".btn.primary, button.primary");
+      if (!pick) break;
+      pick.click();
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    const after = Journal.stats().sessions;
+    const open = Journal.openSession();
+    localStorage.clear();
+    return { before, after, opened: !!open };
+  });
+  ok("starting: generating an alert opens a journal session to file the sitting under",
+    journalSession.after > journalSession.before && journalSession.opened,
+    JSON.stringify(journalSession));
+
+  // Also found by the playthrough: the ending vanished the moment the crisis was resolved,
+  // because it was gated on alert-or-timers, both of which resolving clears.
+  const endingAlways = await page.evaluate(async () => {
+    const Solo = await import("/src/solo.js");
+    const mid = { alert: "x", timers: [], crises: [], resolved: 0, eventChecks: 0, awaitingSocial: false };
+    const won = { alert: "", timers: [], crises: [], resolved: 1, eventChecks: 2, awaitingSocial: true };
+    const done = { ...won, closed: true };
+    const fresh = { alert: "", timers: [], crises: [], resolved: 0, eventChecks: 0, awaitingSocial: false };
+    return { mid: Solo.inSession(mid), won: Solo.inSession(won), fresh: Solo.inSession(fresh),
+      done: Solo.inSession(done) };
+  });
+  ok("ending: a resolved crisis still counts as a session in progress, so an ending is offered",
+    endingAlways.mid === true && endingAlways.won === true && endingAlways.fresh === false,
+    JSON.stringify(endingAlways));
+  ok("ending: once closed, a sitting stops counting as in progress even with counters left over",
+    endingAlways.done === false, JSON.stringify(endingAlways));
 
   const stopping = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
@@ -3318,9 +3371,17 @@ const run = async () => {
   ok("ending: stopping mid-crisis still leaves the next-session foothold",
     stopping.closed === true);
 
-  // The probe drives the real app: it clicks every visible control on every route, so it runs
-  // after the assertions above and restores the store around every click.
-  await runProbe(ok, section, page, base);
+  // The probe clicks every visible control on every route, which is minutes of work — too slow to
+  // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
+  //   npm run probe        (or PROBE=1 npm test)
+  // CI should run it; a developer mid-change usually should not. A skip SAYS SO in the output,
+  // because a silent skip reads exactly like a pass (§12.6).
+  if (process.env.PROBE) {
+    await runProbe(ok, section, page, base);
+  } else {
+    section("Reachability — probed in the real app");
+    console.log("  ⊘ SKIPPED (minutes-long click sweep) — run `npm run probe` to include it.");
+  }
 
   ok("no console errors for the whole run", consoleErrors.length === 0, consoleErrors.slice(0, 5).join(" | "));
 
