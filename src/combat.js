@@ -378,6 +378,11 @@ function npcAttack(attacker, kind, target, situ = {}) {
 
 function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext = null) {
   const effective = defence ? defence.remainingSixes : roll.sixes;
+  // A block that cancels more 6s than the attack threw turns into a counterattack (audit A5).
+  const counter = !!(defence && defence.kind === "block" && defence.counterattack);
+  // It is a slugfest attack by the defender, so it deals THEIR Slugfest Damage. Surplus 6s beyond
+  // the first buy stunts rather than more damage, which is what defence.note already explains.
+  const counterDamage = () => target.slugfest || 1;
   const stunts = Roller.stuntsFor(kind, { huge: target.huge });
   const available = Math.max(0, effective - 1);
   const chosen = new Set();
@@ -432,17 +437,56 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext
   };
 
   draw();
-  const actions = [{ label: "Done", variant: "ghost" }];
+  // A hit that is never applied is the worst outcome available here: the roll is already in the
+  // journal, so the record says the blow landed while the board says the target is untouched.
+  // The way out therefore has to NAME what it does — "Done" reads like a confirm.
+  let applied = false;
+  const actions = [{ label: effective ? "Don't apply it" : "Done", variant: "ghost" }];
   if (effective) {
-    actions.push({ label: "Apply damage", variant: "primary", onClick: () => {
+    actions.push({ label: `Apply ${damageFor()} damage`, variant: "primary", onClick: () => {
       applyAttackDamage(target, damageFor(), combat, [...chosen]);
+      applied = true;
+      return true;
+    } });
+  }
+  if (counter) {
+    actions.push({ label: `Counterattack for ${counterDamage()}`, variant: "warn", onClick: () => {
+      // §3.2: the counterattack hits automatically using the 6s beyond those needed to cancel,
+      // and cannot itself be blocked. The app said it happened and gave no way to deal it.
+      applyAttackDamage(attacker, counterDamage(), combat, []);
+      applied = true;
       return true;
     } });
   }
   modal({ title: `${attacker.name} → ${target.name}`, body, actions }).promise.then(() => {
+    if (effective && !applied) {
+      showToast(`No damage applied — ${target.name} is untouched. Use Damage on their card if that was a mistake.`,
+        { variant: "warn", timeout: 7000 });
+    }
     announce(upNext ? `${upNext.name} acts next.` : "Everyone has acted.");
     renderCombat(mount);
   });
+}
+
+/**
+ * Refresh every combatant backed by a real character from that character. Returns true when
+ * anything moved, so the caller can persist it. The character is authoritative: the board is a
+ * view of it, and any disagreement is the board being out of date.
+ */
+export function syncHeroCombatants(combat) {
+  let changed = false;
+  for (const cb of combat?.combatants || []) {
+    if (!cb.refId) continue;
+    const ch = Store.getCharacter(cb.refId);
+    if (!ch) continue;
+    const s = Derived.summary(ch);
+    const next = { health: ch.state.health, maxHealth: s.maxHealth,
+      resolve: ch.state.resolve, maxResolve: s.maxResolve, armor: s.armor.value, slugfest: s.slugfest };
+    for (const [k, v] of Object.entries(next)) {
+      if (cb[k] !== v) { cb[k] = v; changed = true; }
+    }
+  }
+  return changed;
 }
 
 /** Damage lands on the board: minions drop one per point, heroes route through the crit engine. */
@@ -492,6 +536,12 @@ export function renderCombat(mount) {
     renderTasks(mount);
     return;
   }
+
+  // A hero on the board is a MIRROR of their character, not a second copy. applyAttackDamage
+  // synced card-from-character after damage, but nothing synced the other way — so healing on the
+  // Sheet (a Rally, a rest, the end-of-scene bundle) left the card stale, and the board went on
+  // believing a hero at full health was still broken and could not act. One source of truth.
+  if (syncHeroCombatants(combat)) save(combat);
 
   const up = currentTurn(combat);
   const roundDone = !up;

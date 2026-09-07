@@ -1999,6 +1999,69 @@ const run = async () => {
     JSON.stringify(combatSeq.turn) === JSON.stringify(["Attack", "Hold off", "Altitude", "Conditions", "Damage", "Acted", "Remove"]),
     combatSeq.turn.join(" | "));
 
+  // Found by playing a real session (tests/play.mjs), not by any spec: three defects that only
+  // show up when someone actually resolves a fight on the board.
+  const boardTruth = await page.evaluate(async () => {
+    const Combat = await import("/src/combat.js");
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const Roller = await import("/src/roller.js");
+    // Do NOT clear storage: the running action scene belongs to the checks that follow, and
+    // wiping it made a later test read combatants off a null combat. Work on a scratch hero and
+    // an in-memory board instead, then put the active character back.
+    const priorActive = Store.activeCharacter()?.id || null;
+    const hero = Store.saveCharacter({ ...W.pregenToCharacter(P.PREGENS[0]), id: "sync_hero" });
+    Store.setActiveCharacter(hero.id);
+
+    // (1) The board is a MIRROR of the character. Heal on the sheet, the card must agree.
+    const combat = { active: true, round: 1, wreckedZones: [], combatants: [] };
+    const card = Combat.combatantFromCharacter(Store.activeCharacter());
+    combat.combatants.push(card);
+    const full = card.maxHealth;
+    Store.updateCharacter((ch) => { ch.state.health = 0; }, { id: hero.id });
+    const staleBefore = card.health;                       // card still holds the old value
+    Combat.syncHeroCombatants(combat);
+    const afterDamage = card.health;
+    Store.updateCharacter((ch) => { ch.state.health = ch.state.health + 4; }, { id: hero.id });
+    Combat.syncHeroCombatants(combat);
+    const afterHeal = card.health;                          // the direction that never synced
+
+    // (2) A block that cancels more 6s than the attack threw is a counterattack (A5).
+    const surplus = Roller.resolveBlock({ sixes: 1 }, { sixes: 3 });
+    const exact = Roller.resolveBlock({ sixes: 2 }, { sixes: 2 });
+    Store.deleteCharacter("sync_hero");
+    if (priorActive) Store.setActiveCharacter(priorActive);
+    return { full, staleBefore, afterDamage, afterHeal,
+      counter: surplus.counterattack, counterSixes: surplus.counterSixes,
+      noCounterOnExactBlock: exact.counterattack === false };
+  });
+  ok("a hero's card on the board follows their character in BOTH directions",
+    boardTruth.afterDamage === 0 && boardTruth.afterHeal === 4 && boardTruth.staleBefore === boardTruth.full,
+    JSON.stringify(boardTruth));
+  ok("a block with surplus 6s reports a counterattack, an exact block does not",
+    boardTruth.counter === true && boardTruth.counterSixes === 2 && boardTruth.noCounterOnExactBlock,
+    JSON.stringify(boardTruth));
+
+  // The counterattack and the un-applied-damage warning must exist on the PATH, not just in the
+  // engine — the old A5 check called resolveBlock with fake numbers and never opened the dialog.
+  const attackDialog = await page.evaluate(async () => {
+    const src = await (await fetch("/src/combat.js")).text();
+    // Search the whole module, not a fixed-length slice from showAttack: a byte offset is the
+    // brittle kind of marker docs/COVERAGE.md warns about, and it already failed once when the
+    // warning text sat 158 characters past the window. These strings are unique to this path.
+    const body = src;
+    return {
+      offersCounter: /Counterattack for/.test(body),
+      namesTheOptOut: /Don't apply it/.test(body),
+      warnsWhenUnapplied: /No damage applied/.test(body),
+    };
+  });
+  ok("the attack dialog offers the counterattack it tells you about",
+    attackDialog.offersCounter, JSON.stringify(attackDialog));
+  ok("dismissing a hit without applying it is named, and says so afterwards",
+    attackDialog.namesTheOptOut && attackDialog.warnsWhenUnapplied, JSON.stringify(attackDialog));
+
   // Turn order is the sequence of play: lowest card acts first, and reinforcements must not
   // reshuffle a round that is already under way.
   const turnSeq = await page.evaluate(async () => {
