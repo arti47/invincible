@@ -1116,11 +1116,21 @@ const run = async () => {
   const soloTail = await page.evaluate(async () => {
     const Solo = await import("/src/solo.js");
     const S = await import("/data-solo.js");
+    // The state a RESOLVED sitting actually has. resolveCrisis() clears alert and eventChecks in
+    // the same call that increments resolved, so the old fixture — alert:"x", eventChecks:1,
+    // resolved:1 — was a state the app can never produce, and it made an unreachable step 6 look
+    // reachable. Head home is the only thing that unlocks solo karma, so that hand-built fixture
+    // hid a bug that silently locked the whole economy. Build fixtures the app could reach.
     const base = { alert: "x", eventChecks: 1, timers: [], crises: [], awaitingSocial: false, objectives: [] };
+    const afterResolve = { alert: "", eventChecks: 0, timers: [], crises: [], awaitingSocial: false, resolved: 1, objectives: [] };
     const steps = {
       unresolved: Solo.currentStep({ ...base, crises: [{ id: "c" }], resolved: 0 }),
       midResolve: Solo.currentStep({ ...base, resolved: 0 }),
-      done: Solo.currentStep({ ...base, resolved: 1 }),
+      done: Solo.currentStep(afterResolve),
+      // …and the social scene still comes first when one is owed.
+      owesSocial: Solo.currentStep({ ...afterResolve, awaitingSocial: true }),
+      // A second crisis picked up before going home is step 3, not step 6.
+      secondCrisis: Solo.currentStep({ ...afterResolve, alert: "y", eventChecks: 1, crises: [{ id: "c2" }] }),
       stillDanger: Solo.currentStep({ ...base, resolved: 1, crises: [{ id: "c" }] }),
     };
     localStorage.setItem("invincible:solo", JSON.stringify({ ...Solo.defaultState ? {} : {}, crisisLevel: 1, alert: "x",
@@ -1143,6 +1153,9 @@ const run = async () => {
   ok("an unengaged crisis is still loop step 3", soloTail.steps.unresolved === 2 && soloTail.steps.midResolve === 2);
   ok("loop step 6 fires only once something is resolved and nothing is left",
     soloTail.steps.done === 5 && soloTail.steps.stillDanger === 2, JSON.stringify(soloTail.steps));
+  ok("step 6 is reachable from the state resolveCrisis actually leaves behind",
+    soloTail.steps.done === 5 && soloTail.steps.owesSocial === 4 && soloTail.steps.secondCrisis === 2,
+    JSON.stringify(soloTail.steps));
   ok("step 6 offers going home to rest and bank karma",
     /Head home/.test(soloTail.nextLabel) && /Step 6 of 6/.test(soloTail.eyebrow), `${soloTail.eyebrow} — ${soloTail.nextLabel}`);
   ok("every loop step has a next-step action", soloTail.loop === 6);
@@ -1998,6 +2011,78 @@ const run = async () => {
   ok("a combatant's controls run attack → hold off → set state → take damage → mark acted",
     JSON.stringify(combatSeq.turn) === JSON.stringify(["Attack", "Hold off", "Altitude", "Conditions", "Damage", "Acted", "Remove"]),
     combatSeq.turn.join(" | "));
+
+  // Found by the second, thorough playthrough — all three were implemented and unreachable or
+  // mislabelled, and all three were invisible to specs that test functions rather than paths.
+  const played2 = await page.evaluate(async () => {
+    const Roller = await import("/src/roller.js");
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const D = await import("/data.js");
+
+    const prior = Store.activeCharacter()?.id || null;
+    const c = Store.saveCharacter({ ...W.pregenToCharacter(P.PREGENS[0]), id: "play2_hero" });
+    Store.setActiveCharacter(c.id);
+    const hero = Store.listCharacters().find((x) => x.id === "play2_hero");
+
+    // (a) Help dice reach the pool: buildPool accepted `help` and nothing ever passed it.
+    const alone = Roller.buildPool(hero, "fighting", {});
+    const helped = Roller.buildPool(hero, "fighting", { help: 3 });
+    const helpLabelled = (helped.mods || []).some((m) => /help/i.test(m.label) && m.value === 3);
+
+    // (b) An automatic purchase is a success, and must not read as one.
+    hero.identity.resourcesBase = 8;
+    Store.saveCharacter(hero);
+    const cheap = (D.GENERAL_GEAR || []).find((g) => g.cost && g.cost <= 3 && !g.restricted);
+    const bought = Roller.purchase(Store.listCharacters().find((x) => x.id === "play2_hero"), cheap);
+    const autoText = Roller.describeOutcome({ sixes: 0, meta: { purchase: true, automatic: true } });
+    const realFailText = Roller.describeOutcome({ sixes: 0, meta: {} });
+
+    // (c) A push refused at 0 Resolve must give a reason to show.
+    const drained = Store.listCharacters().find((x) => x.id === "play2_hero");
+    drained.state.resolve = 0;
+    Store.saveCharacter(drained);
+    const refused = Derived.canPush(Store.listCharacters().find((x) => x.id === "play2_hero"), {});
+
+    Store.deleteCharacter("play2_hero");
+    if (prior) Store.setActiveCharacter(prior);
+    return {
+      alone: alone.pool, helped: helped.pool, helpLabelled,
+      boughtOk: bought.ok, boughtMode: bought.mode, autoText, realFailText,
+      refusedOk: refused.ok, refusedReason: refused.reason || "",
+    };
+  });
+  ok("help dice from allies actually reach the pool (§3.1)",
+    played2.helped === played2.alone + 3 && played2.helpLabelled,
+    `${played2.alone} alone vs ${played2.helped} helped`);
+
+  // …and the question is only asked when someone could actually be helping. Prompting before
+  // every solitary roll would be worse than the missing rule was.
+  const helpAsked = await page.evaluate(async () => {
+    const Sheet = await import("/src/sheet.js");
+    const Store = await import("/src/store.js");
+    const priorCombat = Store.getCombat();
+    Store.clearCombat();
+    const soloRaw = localStorage.getItem("invincible:solo");
+    localStorage.removeItem("invincible:solo");
+    const alone = await Sheet.askHelp("fighting");        // returns 0 without opening anything
+    const dialogOpened = !!document.querySelector(".modal-backdrop .modal");
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    if (soloRaw) localStorage.setItem("invincible:solo", soloRaw);
+    if (priorCombat) Store.saveCombat(priorCombat);
+    return { alone, dialogOpened };
+  });
+  ok("a hero rolling alone is never asked who is helping",
+    helpAsked.alone === 0 && helpAsked.dialogOpened === false, JSON.stringify(helpAsked));
+  ok("an automatic purchase is not recorded as a failure",
+    played2.boughtOk && played2.boughtMode === "automatic"
+    && !/fail/i.test(played2.autoText) && played2.realFailText === "Failure",
+    `${played2.autoText} | a real 0-six roll still reads: ${played2.realFailText}`);
+  ok("a push refused at 0 Resolve says why instead of hiding the control",
+    played2.refusedOk === false && /stressed out|resolve/i.test(played2.refusedReason),
+    played2.refusedReason);
 
   // Found by playing a real session (tests/play.mjs), not by any spec: three defects that only
   // show up when someone actually resolves a fight on the board.

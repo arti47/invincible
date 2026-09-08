@@ -426,6 +426,10 @@ export function logRoll(rollObj, { update = false } = {}) {
 
 export function describeOutcome(r) {
   if (r.meta?.crit) return r.meta.result;
+  // A purchase at Resources above the item's Cost succeeds with no roll at all, and is logged
+  // with an empty pool — reading that as 0 sixes put "Failure" in the permanent record for a
+  // purchase that went through and added the item to the sheet.
+  if (r.meta?.automatic) return "Bought — no roll needed";
   if (r.sixes === 0) return "Failure";
   const stunts = r.sixes - 1;
   return stunts > 0 ? `Success with ${stunts} stunt${stunts === 1 ? "" : "s"}` : "Success";

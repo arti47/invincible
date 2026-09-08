@@ -222,7 +222,8 @@ const run = async () => {
       crisis: solo.alertParts?.headline || solo.alert || "(no crisis running)",
       where: solo.place?.text || null,
       level: solo.crisisLevel ?? 0,
-      timers: (solo.timers || []).map((t) => `${t.name} (${t.status || t.rung})`),
+      // Timers are keyed `proximity`; reading status/rung printed every one as "(undefined)".
+      timers: (solo.timers || []).map((t) => `${t.name} (${t.proximity || t.status || t.rung || "?"})`),
       objectives: (solo.objectives || []).map((o) => `${o.name} — ${o.status}`),
       dialog: modal ? {
         title: (modal.querySelector("h1,h2,h3,.modal-title")?.textContent || "").trim(),

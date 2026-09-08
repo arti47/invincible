@@ -1,6 +1,6 @@
 // sheet.js — the live character sheet, persistent resource header and all in-play tracking.
 
-import { el, clear, clamp, uid } from "./core.js";
+import { el, clear, clamp, uid, STORAGE_PREFIX } from "./core.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -390,10 +390,45 @@ export async function askAttributeScore(attrKey, { title = "How good are they?",
 }
 
 export async function rollAttribute(c, attr, opts = {}) {
+  const help = opts.help !== undefined ? opts.help : await askHelp(attr);
+  if (help === null) return null;                       // the player backed out of the roll
   const manual = Settings.manualDice() ? await askManualFaces() : null;
-  const r = Roller.roll(c, attr, `${attr.toUpperCase()} roll`, { ...opts, manualFaces: manual });
+  const r = Roller.roll(c, attr, `${attr.toUpperCase()} roll`, { ...opts, help, manualFaces: manual });
   showRollResult(c, r);
   return r;
+}
+
+/**
+ * Who could plausibly be helping right now: allies on the action-scene board, or a solo ally
+ * group that still has people in it. Alone, the question is never asked — a hero rolling by
+ * themselves should not be interrogated about helpers who do not exist.
+ */
+function helpersAvailable() {
+  const combat = Store.getCombat();
+  const onBoard = (combat?.combatants || []).filter((c) => c.side === "hero" && c.health > 0).length;
+  if (onBoard > 1) return true;
+  try {
+    const solo = JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}solo`) || "{}");
+    return (solo.allies || []).some((a) => (a.rung ?? a.step ?? 1) > 0);
+  } catch { return false; }
+}
+
+/**
+ * Help (§3.1): up to three allies at +1 die each, or +2 from a Supportive one. `buildPool` has
+ * always accepted this and no caller ever passed it, so the rule was implemented and unreachable
+ * — nowhere in the app could a hero take a die from someone helping them.
+ */
+export async function askHelp(attr) {
+  if (!helpersAvailable()) return 0;             // nobody to help; do not ask
+  const pick = await chooseModal(`Is anyone helping with this ${attr.toUpperCase()} roll?`, [
+    { label: "No — rolling alone", hint: "Just your own dice", value: "0" },
+    { label: "One ally helping", hint: "+1 die", value: "1" },
+    { label: "Two allies helping", hint: "+2 dice", value: "2" },
+    { label: "Three allies helping", hint: "+3 dice — the most the rules allow", value: "3" },
+    { label: "A Supportive ally", hint: "+2 dice from one helper with the Supportive talent", value: "2" },
+  ]);
+  if (pick === null || pick === undefined) return null;
+  return Number(pick) || 0;
 }
 
 async function openAttackDialog(c) {

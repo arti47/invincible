@@ -211,6 +211,10 @@ export function showRollResult(character, r, { damage = null, power = null, onPu
     power ? el("p", { class: "cite" }, el("a", { href: "#/rules/powers", class: "rules-link" }, "Rules: Using powers")) : null);
 
   const pushCheck = Roller.canPush(character, r);
+  // A control that silently disappears reads as a missing feature, not a rule. Say why.
+  if (!pushCheck.ok && pushCheck.reason) {
+    body.append(el("p", { class: "muted small", text: `Cannot push: ${pushCheck.reason}` }));
+  }
   const actions = [{ label: "Done", variant: "primary" }];
   if (pushCheck.ok) {
     actions.unshift({

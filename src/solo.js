@@ -132,13 +132,22 @@ function lastClosing(state) {
 export function currentStep(state) {
   // Step 5 outranks step 1: resolving a crisis clears the alert, and the social scene comes first.
   if (state.awaitingSocial) return 4;      // 5. play a social scene
+
+  // 6. Something has been resolved and nothing is left running or pending: go home.
+  //
+  // This MUST be tested before the no-alert case. resolveCrisis() increments `resolved` and
+  // clears `alert` and `eventChecks` in the same call, so a step 6 gated on a live alert could
+  // never be reached by playing — and Head home is the only thing that sets spendUnlocked, which
+  // under §3.20 is the whole solo karma economy. Every karma a solo player earned was permanently
+  // unspendable. Found by playing; the old check asserted currentStep() against a hand-built
+  // state the app can never actually produce.
+  if ((state.resolved || 0) > 0
+      && !(state.timers || []).length
+      && !(state.crises || []).length) return 5;
+
   if (!state.alert) return 0;              // 1. generate a crisis alert
   if (!state.eventChecks) return 1;        // 2. crisis level 0, begin event checks
-  if (!state.timers.length) {
-    // 6. something has been resolved and nothing is left running or waiting: go home.
-    if (state.resolved > 0 && !(state.crises || []).length) return 5;
-    return 2;                              // 3. choose a crisis, start timers
-  }
+  if (!state.timers.length) return 2;      // 3. choose a crisis, start timers
   return 3;                                // 4. make checks, track timers
 }
 
