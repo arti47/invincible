@@ -193,11 +193,17 @@ const run = async () => {
     }
 
     if (verb === "journal") {
+      // grouped() gives sessions NEWEST-first and, via entries(), the items inside each session
+      // NEWEST-first as well. A diary reads the other way round on both axes, so reverse both —
+      // reversing only the flat list (or only the sessions) prints a sitting backwards.
       const entries = await page.evaluate(async () => {
         const J = await import("/src/journal.js");
-        return J.grouped({}).flatMap((g) => g.entries.map((e) => `[${e.kind}] ${e.text}`));
+        return J.grouped({}).slice().reverse().flatMap((g) => [
+          `\n=== ${g.title || "Unfiled"} ===`,
+          ...g.entries.slice().reverse().map((e) => `[${e.kind}] ${e.text}`),
+        ]);
       });
-      console.log(entries.slice().reverse().join("\n") || "(nothing written yet)");
+      console.log(entries.join("\n").trim() || "(nothing written yet)");
       await browser.close(); server.close(); return;
     }
 
