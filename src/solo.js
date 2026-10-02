@@ -1222,7 +1222,11 @@ function doEventCheck(state, mount) {
     body: el("div", {}, el("p", { text: r.entry.text }), r.extra ? el("p", { class: "lede", text: r.extra }) : null,
       r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null,
       r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
-    actions: [{ label: "OK", variant: "primary" }] });
+    // With nothing engaged yet, the next step is choosing a crisis: offer it here.
+    actions: (state.crises || []).length && !(state.timers || []).length
+      ? [{ label: "Later", value: false, variant: "ghost" }, { label: "Take on a crisis", value: true, variant: "primary" }]
+      : [{ label: "OK", variant: "primary" }] })
+    .promise.then((go) => { if (go === true) engageFromCard(load(), mount); });
   renderSolo(mount);
 }
 
@@ -1293,7 +1297,19 @@ async function generateAlert(state, mount) {
   const hero = Store.activeCharacter();
   const rankKey = hero?.identity?.rank || "global";
   const sources = S.SOLO_SETUP.alertsByRank[rankKey] || S.SOLO_SETUP.alertsByRank.global;
-  const pick = await chooseModal("Where does the alert come from?", sources.map((s) => ({ label: s, value: s })));
+  // A first-timer has no basis for this choice, so each option says what kind of trouble it rolls
+  // and "Pick for me" is offered first. The list itself is the rank's own (SOLO_SETUP.alertsByRank).
+  const SOURCE_HINT = [
+    [/criminal/i, "Street-level crime: a robbery, a gang, a crime lord's scheme"],
+    [/city/i, "Trouble in the city: an accident, a disaster, something gone wrong"],
+    [/global/i, "A threat to the whole world: alien, supernatural, natural, technological"],
+    [/cosmic/i, "Beyond the Earth: an answer from the Complex Response Engine"],
+  ];
+  const hintFor = (s) => (SOURCE_HINT.find(([re]) => re.test(s)) || [null, ""])[1];
+  let pick = await chooseModal("Where does the alert come from?", [
+    { label: "Pick for me", hint: "Not sure? Let the dice choose one of these", value: "__any", icon: "die" },
+    ...sources.map((s) => ({ label: s, hint: hintFor(s), value: s }))]);
+  if (pick === "__any") pick = sources[Math.floor(Math.random() * sources.length)];
   if (!pick) return;
   let parts;
   if (/criminal/i.test(pick)) {
@@ -1308,8 +1324,9 @@ async function generateAlert(state, mount) {
     parts = { kind: cat.entry.text, headline: inc.entry.text, where: loc.entry.text, complication: comp.entry.text };
   } else if (/global/i.test(pick)) {
     const cat = R.rollNamedTable(D.GM_TABLES.globalCategory);
-    const key = "global" + cat.entry.text.replace(/[^a-z]/gi, "");
-    const table = D.GM_TABLES[key] || D.GM_TABLES.globalCriminal;
+    // Shared resolver: the exact-key lookup here sent every Extra-dimensional roll to the
+    // Criminal table, the same mismatch the GM screen had.
+    const table = R.globalDangerTable(cat.entry.text);
     const danger = R.rollNamedTable(table);
     const comp = R.rollNamedTable(D.GM_TABLES.globalComplications);
     parts = { kind: `${cat.entry.text} danger`, headline: danger.entry.text, complication: comp.entry.text };
@@ -1341,7 +1358,9 @@ async function generateAlert(state, mount) {
       el("div", { class: "chiprow" }, ...Object.keys(S.LOCATION_ENGINES).map((k) =>
         el("button", { class: "chip", onclick: () => describePlace(state, mount, k) },
           S.LOCATION_ENGINES[k].name.replace(" Engine", ""))))),
-    actions: [{ label: "OK", variant: "primary" }] });
+    // The next step is the event check; hand it over rather than describe it.
+    actions: [{ label: "Later", value: false, variant: "ghost" }, { label: "Make the event check", value: true, variant: "primary" }] })
+    .promise.then((go) => { if (go) doEventCheck(load(), mount); });
 }
 
 /* ---------------------------------------------------------------- reading a timer at a glance */
