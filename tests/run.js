@@ -3999,6 +3999,34 @@ const run = async () => {
     homeSpend.hero && /Spend karma \(14\)/.test(homeSpend.label) && homeSpend.karmaOpen && homeSpend.unlocked,
     JSON.stringify(homeSpend));
 
+  // A scene started from Home holds only the hero: the board must say so and offer the fix, and
+  // Attack must not claim "nobody left". The add list must not offer a second copy of the hero.
+  const lone = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", false);
+    const Store = await import("/src/store.js");
+    const Combat = await import("/src/combat.js");
+    Store.clearCombat();
+    Combat.startActionScene();
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/combat"; await new Promise((r) => setTimeout(r, 300));
+    const card = document.getElementById("no-opponent");
+    const hasAdd = !!card && Array.from(card.querySelectorAll("button")).some((b) => /Add an opponent/.test(b.textContent));
+    Array.from(document.querySelectorAll("#screen .combatant button")).find((b) => /^Attack/.test(b.textContent.trim()))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const toast = Array.from(document.querySelectorAll(".toast")).map((t) => t.textContent).join(" ");
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    card?.querySelector("button")?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const opts = Array.from(document.querySelectorAll(".modal .choice, .modal button")).map((b) => b.textContent);
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    Store.clearCombat();
+    return { card: !!card, hasAdd, toast, ownOffered: opts.some((t) => /Name one myself/.test(t)), heroOffered: opts.some((t) => /^Your hero/.test(t.trim())) };
+  });
+  ok("action: a scene with no opponent says so and offers Add an opponent", lone.card && lone.hasAdd, JSON.stringify(lone));
+  ok("action: attacking with nobody else in the scene points at adding one", /Nobody else is in the scene/.test(lone.toast) && /Add an opponent/.test(lone.toast), lone.toast);
+  ok("action: the add list offers a home-made opponent and no second copy of the hero", lone.ownOffered && !lone.heroOffered, JSON.stringify(lone));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
