@@ -113,11 +113,13 @@ function renderNav() {
   const play = by(playPath());
   navHost.append(
     navLink(by("home")), navLink(by("sheet")),
-    el("span", { class: "nav-gap", "aria-hidden": "true" }),
+    // The Roll button lives IN the bar's centre slot. It used to be fixed at 50% of the viewport
+    // while this gap sits third of six (two tabs left, three right), so it covered the Play tab.
+    el("span", { class: "nav-gap" }, ensureFab()),
     el("a", { class: "nav-item", href: `#/${play.path}`, "data-path": play.path, "data-tab": "play" },
       el("span", { class: "nav-icon" }, icon("play", { size: 22 })), el("span", { class: "nav-label", text: "Play" })),
     navLink(by("journal")), navLink(by("more")));
-  ensureFab();
+  updateFab();
 }
 
 /** The More screen: every route that is not one of the five tabs, gated ones included when on. */
@@ -137,11 +139,9 @@ function renderMore(mount) {
 /* The floating Roll button: "which one do I roll?", from anywhere a hero exists. */
 let fab = null;
 function ensureFab() {
-  if (fab && fab.isConnected) return;
-  fab = el("button", { class: "fab", type: "button", "aria-label": "Roll — which attribute do I roll?", title: "Roll",
+  if (!fab) fab = el("button", { class: "fab", type: "button", "aria-label": "Roll — which attribute do I roll?", title: "Roll",
     onclick: () => Sheet.openAttributeGuide() }, icon("die", { size: 32 }));
-  document.body.append(fab);
-  updateFab();
+  return fab;
 }
 function updateFab() {
   if (!fab) return;

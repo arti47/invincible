@@ -361,10 +361,12 @@ span.chip { cursor: default; }
 .nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item[aria-current="page"] { color: var(--ink); }
 .nav-item[aria-current="page"] .nav-icon { background: var(--accent); color: #121018; border: 2px solid #121018; }
-.nav-gap { flex: 0 0 72px; }
+/* The Roll button's own slot: it rises out of the bar from here, so it can never sit on a tab. */
+.nav-gap { flex: 0 0 72px; position: relative; display: flex; justify-content: center; }
+.nav-gap:has(> .fab[hidden]) { flex-basis: 0; }
 
 .fab {
-  position: fixed; z-index: 35; left: 50%; bottom: calc(var(--nav-h) - 30px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  position: absolute; z-index: 35; left: 50%; top: -24px; transform: translateX(-50%);
   width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
   background: var(--accent); color: #121018; border: 3px solid #121018; box-shadow: 4px 4px 0 var(--shadow-c);
   transition: transform .15s var(--ease);
@@ -921,9 +923,11 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
     border-top: 0; border-right: 3px solid var(--line); padding: 1rem 0;
   }
   .nav-item { flex: 0 0 auto; min-height: 76px; }
-  .nav-gap { flex: 0 0 0; }
-  .fab { left: 52px; top: auto; bottom: 24px; transform: translateX(-50%); }
-  .fab:hover { transform: translateX(-50%) rotate(-12deg) scale(1.05); }
+  .nav-gap { flex: 0 0 84px; align-items: center; }
+  .nav-gap:has(> .fab[hidden]) { flex-basis: 0; }
+  .fab { position: static; transform: none; }
+  .fab:hover { transform: rotate(-12deg) scale(1.05); }
+  .fab:active { transform: scale(.94); }
   .oracle-fab { bottom: 24px; }
   .toasts { bottom: 24px; }
   .wizard-nav { bottom: 12px; }
