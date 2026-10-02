@@ -1302,7 +1302,7 @@ const run = async () => {
   ok("the place survives leaving and returning to the tab", place.persisted);
 
   ok("the objective dialog states the guiding principle", guidance.objHints >= 3, String(guidance.objHints));
-  ok("the objective dialog offers a generator", /Complex Engine/.test(guidance.objSuggest), guidance.objSuggest);
+  ok("the objective dialog offers a generator", /Suggest one/.test(guidance.objSuggest), guidance.objSuggest);
   ok("the ally dialog explains what a group is", guidance.allyHints >= 3, String(guidance.allyHints));
   ok("allies can be generated from the Ch.6 minion profiles", guidance.fromBook, guidance.generated);
 
@@ -4058,6 +4058,41 @@ const run = async () => {
   ok("solo: the alert chooser leads with Pick for me and explains every source", /^Pick for me/.test(alertFlow.first) && alertFlow.allHinted, JSON.stringify(alertFlow));
   ok("solo: the alert dialog hands over the event check, which then offers to take on a crisis",
     alertFlow.handEvent && alertFlow.checks >= 1 && alertFlow.handEngage === (alertFlow.crises > 0), JSON.stringify(alertFlow));
+
+  // An ally group's fight damage (each 6 = 2) must reach the board, not only be printed.
+  const allyHit = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Combat = await import("/src/combat.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    Store.clearCombat();
+    const combat = Combat.startActionScene();
+    const foe = Combat.blankCombatant("Enforcer", { health: 20 });
+    Combat.joinCombat(combat, foe);
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 1, alert: "x", alertParts: { headline: "x" }, crises: [], timers: [{ kind: "crisis", name: "x", rung: 3 }],
+      allies: [{ id: "a1", name: "Police officers", status: "unified" }], objectives: [], encounter: null,
+      mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, resolved: 0 }));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 340));
+    const real = Math.random; Math.random = () => 0.999;   // every die a 6, no 1s
+    const btn = (re, root) => Array.from((root || document).querySelectorAll("button")).find((b) => re.test(b.textContent.trim()));
+    btn(/^Fight$/, document.getElementById("screen"))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    document.querySelector(".modal .choice")?.click();          // No bonus
+    await new Promise((r) => setTimeout(r, 300));
+    const apply = btn(/^Apply \d+ damage$/, document.querySelector(".modal"));
+    const label = apply?.textContent || "";
+    apply?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    Math.random = real;
+    const after = Store.getCombat().combatants.find((c) => c.name === "Enforcer");
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    Store.clearCombat();
+    return { label, health: after?.health };
+  });
+  ok("solo: an ally group's fight damage is offered and lands on the enemy on the board",
+    /Apply 12 damage/.test(allyHit.label) && allyHit.health === 8, JSON.stringify(allyHit));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:

@@ -510,6 +510,7 @@ async function whatHappened(state, mount) {
   const move = MOVES.find((m) => m.key === pick);
   const report = el("div", {});
   let acted = false;
+  let allyDamage = 0;
 
   // These two hand straight over to the screen that does the work, rather than rolling timers.
   if (move.steps[0] === "roll") { openAttributeGuide(); return; }
@@ -579,6 +580,7 @@ async function whatHappened(state, mount) {
         { label: "In a fight", hint: "Each 6 becomes 2 damage to enemies", value: true },
       ]);
       const r = rollAlly(state, ally, Number(bonus), fight === true);
+      allyDamage += r.damage;
       acted = true;
       report.append(el("h4", { class: "section", text: `Allies — ${ally.name}` }), diceRow(r.faces), el("p", { text: r.text }));
     } else if (step === "event") {
@@ -594,7 +596,8 @@ async function whatHappened(state, mount) {
   modal({ title: move.label,
     body: el("div", {}, report,
       el("p", { class: "muted small", text: acted ? `Rolled: ${move.fires}.` : "Nothing was running that this affects." })),
-    actions: [{ label: "OK", variant: "primary" }] });
+    actions: allyDamageActions(allyDamage) })
+    .promise.then((v) => { if (v === "apply") landAllyDamage(allyDamage); });
   renderSolo(mount);
 }
 
@@ -1592,11 +1595,18 @@ async function addObjective(state, mount) {
       "It can also measure progress through a place when you are not using a map — 'reach the reactor core'.",
       "Progress comes from milestones in the fiction: each time something meaningful happens for or against it, roll its progress dice.",
     ],
-    suggest: { label: "Stuck? Ask the Complex Engine", fn: () => complexPhrase() },
+    // The obvious objective is the crisis itself; offer that first, then the engine for ideas.
+    suggest: { label: "Stuck? Suggest one", fn: (() => {
+      let n = 0;
+      const crisis = state.alertParts?.headline;
+      return () => (n++ === 0 && crisis ? `Stop it: ${crisis.replace(/\.$/, "")}` : complexPhrase());
+    })() },
   });
   if (!name) return;
   const status = await chooseModal("How far away is it?", S.OBJECTIVE_TIMER.ladder.slice(0, 4).map((l) => ({
-    label: l.name, hint: `${l.dice} progress dice · ${l.karma} karma`, value: l.key })));
+    label: l.name, value: l.key,
+    // Fewer dice = slower, more karma. A first-timer needs a place to start, so one is marked.
+    hint: `${l.dice} progress dice · ${l.karma} karma${l.key === "manageable" ? " · a good first choice" : ""}` })));
   if (!status) return;
   const rung = S.OBJECTIVE_TIMER.ladder.find((l) => l.key === status);
   state.objectives.push({ id: uid("obj"), name, status, karma: rung.karma });
@@ -1695,7 +1705,7 @@ function alliesCard(state, mount) {
       ],
     }));
   }
-  if (!state.allies.length) put(card, el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
+  if (!state.allies.length) put(card, el("p", { class: "muted small", text: "No allies yet? Add a group — the dialog can suggest one (police, soldiers, bystanders…)." }));
   put(card, el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
   return card;
 }
@@ -1720,7 +1730,7 @@ async function addAllies(state, mount) {
       "The Ch.6 minion profiles are ready-made groups: police officers, soldiers, bystanders, martial artists, gangsters, ninjas. Roll one below if nobody has turned up yet.",
       "You can also ask the oracles: use yes / no to test whether help arrives at all, then the Complex Engine for who they are.",
     ],
-    suggest: { label: "Roll a group from Ch.6", fn: () => suggestAllyGroup() },
+    suggest: { label: "Suggest a group (police, soldiers…)", fn: () => suggestAllyGroup() },
   });
   if (!name) return;
   const status = await chooseModal("Starting status", S.ALLY_TIMER.start.map((t) => {
@@ -1753,6 +1763,33 @@ export function rollAlly(state, ally, bonus, inFight) {
   return { faces, sixes, ones, damage, text, dice, status: ladder[next].name };
 }
 
+/** Living adversaries on the board, if an action scene is running. */
+function boardFoes() {
+  const combat = Store.getCombat();
+  if (!combat?.active) return { combat: null, foes: [] };
+  return { combat, foes: combat.combatants.filter((c) => c.side === "adversary" && c.health > 0) };
+}
+
+/**
+ * An ally group's fight result is damage (each 6 = 2), but it was only ever printed, so it never
+ * reached the board the fight was on. Offer it as an action that lands it on a chosen enemy.
+ */
+function allyDamageActions(damage) {
+  const { foes } = boardFoes();
+  return damage > 0 && foes.length
+    ? [{ label: "Don't apply it", value: false, variant: "ghost" }, { label: `Apply ${damage} damage`, value: "apply", variant: "primary" }]
+    : [{ label: "OK", variant: "primary" }];
+}
+
+async function landAllyDamage(damage) {
+  const { combat, foes } = boardFoes();
+  if (!combat || !foes.length || damage <= 0) return;
+  const id = foes.length === 1 ? foes[0].id : await chooseModal(`Who takes the allies' ${damage} damage?`,
+    foes.map((f) => ({ label: f.name, hint: `Health ${f.health}/${f.maxHealth}${f.armor ? ` · Armor ${f.armor}` : ""}`, value: f.id })));
+  const target = combat.combatants.find((c) => c.id === id);
+  if (target) Combat.applyAttackDamage(target, damage, combat);
+}
+
 async function allyCheck(state, ally, mount, inFight) {
   const rung = S.ALLY_TIMER.ladder.find((l) => l.key === ally.status);
   if (rung.dice === 0) { showToast("You are alone — there is nobody left to roll for.", { variant: "warn" }); return; }
@@ -1769,7 +1806,8 @@ async function allyCheck(state, ally, mount, inFight) {
       diceRow(r.faces),
       el("p", { text: r.text }),
       r.ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null),
-    actions: [{ label: "OK", variant: "primary" }] });
+    actions: allyDamageActions(r.damage) })
+    .promise.then((v) => { if (v === "apply") landAllyDamage(r.damage); });
   renderSolo(mount);
 }
 
