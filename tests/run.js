@@ -4094,6 +4094,58 @@ const run = async () => {
   ok("solo: an ally group's fight damage is offered and lands on the enemy on the board",
     /Apply 12 damage/.test(allyHit.label) && allyHit.health === 8, JSON.stringify(allyHit));
 
+  // The gear catalogue says per item whether this hero can get it, and the purchase dialog offers
+  // only loans that are legal and reach the Cost.
+  const gear = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    let c = Store.activeCharacter();
+    if (!c) { c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    Store.updateCharacter((ch) => { ch.identity.resourcesBase = 1; ch.talents = ch.talents.filter((t) => t.name !== "Streetwise"); }, { id: c.id });
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 340));
+    const btn = (re, root) => Array.from((root || document).querySelectorAll("button")).find((b) => re.test(b.textContent));
+    btn(/Buy \/ add gear/, document.getElementById("screen"))?.click();
+    await new Promise((r) => setTimeout(r, 250));
+    const rows = Array.from(document.querySelectorAll(".modal .gear-row"));
+    const verdicts = rows.filter((r) => r.querySelector(".gear-verdict")).length;
+    const search = document.querySelector(".modal input[type=search]");
+    search.value = "zzzzqq"; search.dispatchEvent(new Event("input"));
+    const empty = /Nothing matches/.test(document.querySelector(".modal .gear-list")?.textContent || "");
+    search.value = ""; search.dispatchEvent(new Event("input"));
+    // An expensive unrestricted item a Resources-1 hero cannot borrow towards.
+    const pricey = Array.from(document.querySelectorAll(".modal .gear-row")).find((r) => /Needs a loan/.test(r.textContent));
+    pricey?.click();
+    await new Promise((r) => setTimeout(r, 250));
+    const dlg = document.querySelector(".modal")?.textContent || "";
+    const loanButtons = Array.from(document.querySelectorAll(".modal button")).filter((b) => /Borrow/.test(b.textContent)).length;
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    Store.updateCharacter((ch) => { delete ch.identity.resourcesBase; }, { id: c.id });
+    return { rows: rows.length, verdicts, empty, found: !!pricey, loanButtons, explains: /cannot get loans/.test(dlg) };
+  });
+  ok("gear: every catalogue row says whether this hero can get it", gear.rows > 30 && gear.verdicts === gear.rows, JSON.stringify(gear));
+  ok("gear: a search with no match says so", gear.empty);
+  ok("gear: a hero who cannot borrow is offered no loan button, and told why", gear.found && gear.loanButtons === 0 && gear.explains, JSON.stringify(gear));
+
+  // Locked karma says how to unlock it, in the live mode's words.
+  const lockedKarma = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Sheet = await import("/src/sheet.js");
+    const { Settings } = await import("/src/settings.js");
+    const c = Store.activeCharacter();
+    Store.updateCharacter((ch) => { ch.state.session.spendUnlocked = false; }, { id: c.id });
+    const read = (solo) => {
+      Settings.set("soloMode", solo);
+      Sheet.openKarma(Store.activeCharacter());
+      const t = document.querySelector(".modal .karma-panel")?.textContent || "";
+      document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+      return t;
+    };
+    const solo = read(true), table = read(false);
+    Store.updateCharacter((ch) => { ch.state.session.spendUnlocked = true; }, { id: c.id });
+    return { solo: /Head home/.test(solo), table: /End session/.test(table), nulls: /\bnull\b/.test(solo + table) };
+  });
+  ok("karma: locked spending names the control that unlocks it, per mode", lockedKarma.solo && lockedKarma.table && !lockedKarma.nulls, JSON.stringify(lockedKarma));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
