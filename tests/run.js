@@ -3511,6 +3511,29 @@ const run = async () => {
   ok("journal session tools sit in one row", r3.toolsRow);
   ok("a selected segment stays visible in the night palette", r3.segVisible);
 
+  const r4 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    location.hash = "#/compendium"; await wait(250);
+    document.querySelector("#screen .npc-row")?.click(); await wait(100);
+    const m = [...document.querySelectorAll(".modal")].pop();
+    const tiles = m?.querySelectorAll(".stat-tiles .stat-tile").length || 0;
+    const spoken = /FTG \d+ · AGL \d+/.test(m?.querySelector(".stat-tiles")?.getAttribute("aria-label") || "");
+    m?.querySelector(".modal-actions .btn")?.click();
+    location.hash = "#/rules"; await wait(250);
+    const chips = document.querySelectorAll("#screen .rule-entry > summary > .muted").length;
+    location.hash = "#/create"; await wait(250);
+    document.querySelectorAll(".wizard-step")[2]?.click(); await wait(150);
+    const tracks = document.querySelectorAll("#screen .attr-row .attr-track").length;
+    document.querySelectorAll(".wizard-step")[3]?.click(); await wait(150);
+    const typed = document.querySelectorAll("#screen .type-head .ico svg").length;
+    location.hash = "#/home"; await wait(150);
+    return { tiles, spoken, chips, tracks, typed };
+  });
+  ok("a stat block lays its six scores out as tiles, still spoken as one line", r4.tiles === 6 && r4.spoken, JSON.stringify(r4));
+  ok("the wizard draws each score against the rank's ceiling", r4.tracks === 6, String(r4.tracks));
+  ok("the wizard's power list is headed by type icons", r4.typed === 6, String(r4.typed));
+  ok("rule entries carry their chapter as a chip", r4.chips > 10, String(r4.chips));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

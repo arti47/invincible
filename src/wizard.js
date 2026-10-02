@@ -9,6 +9,7 @@ import { blankCharacter, normalizeCharacter, creationBudget, validateCharacter, 
 import * as Store from "./store.js";
 import { PREGENS } from "../data-pregens.js";
 import { Settings } from "./settings.js";
+import { icon, iconFor } from "./icons.js";
 
 const STEPS = [
   "Rank", "Archetype & Role", "Attributes", "Powers", "Power sources",
@@ -299,7 +300,10 @@ function stepAttributes(budget) {
             render();
           },
         }, "+")),
-      el("span", { class: "score-desc", text: D.SCORE_DESCRIPTIONS[v] })));
+      el("span", { class: "score-desc", text: D.SCORE_DESCRIPTIONS[v] }),
+      // The score against the rank's ceiling, drawn as a track of cells.
+      el("span", { class: "attr-track", "aria-hidden": "true" },
+        ...Array.from({ length: rank.attrMax }, (_, i) => el("span", { class: i < v ? "on" : "" })))));
   }
 
   const c = normalizeCharacter(draft);
@@ -346,9 +350,9 @@ function stepPowers(budget) {
     for (const [type, powers] of Object.entries(byType)) {
       const matches = powers.filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.summary.toLowerCase().includes(needle));
       if (!matches.length) continue;
-      list.append(el("h4", { class: "section", text: `${type} (${matches.length})` }));
+      list.append(el("h4", { class: "section type-head", "data-type": type }, iconFor(type) ? icon(iconFor(type), { size: 18 }) : null, `${type} (${matches.length})`));
       for (const p of matches) {
-        list.append(el("button", { class: "power-option", onclick: () => addPower(p) },
+        list.append(el("button", { class: "power-option", "data-type": type, onclick: () => addPower(p) },
           el("strong", { text: p.name }), el("span", { class: "muted small", text: p.summary.slice(0, 110) + (p.summary.length > 110 ? "…" : "") })));
       }
     }
