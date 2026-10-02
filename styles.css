@@ -6,9 +6,11 @@
 
 /* ================================================================ fonts (self-hosted, OFL) */
 @font-face { font-family: "Bangers"; src: url("./fonts/bangers.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+/* Atkinson Hyperlegible slashes its zero, which reads as Ø in counts ("Karma Ø"). Its faces skip
+   the digits (unicode-range), so numbers come from the next face in the stack. */
+@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-400-normal.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0000-002F, U+003A-FFFF; }
+@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; unicode-range: U+0000-002F, U+003A-FFFF; }
+@font-face { font-family: "Atkinson"; src: url("./fonts/atkinson-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; unicode-range: U+0000-002F, U+003A-FFFF; }
 
 /* ================================================================ tokens */
 :root {
@@ -901,6 +903,9 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 
 /* sticky search on long reference screens */
 .sticky-search { position: sticky; top: calc(var(--hud-h, 58px) + 4px); z-index: 11; }
+.searchbar { position: sticky; top: calc(var(--hud-h, 58px) + 6px); z-index: 11; margin: -.4rem 0 1rem; }
+.searchbar .input { box-shadow: var(--shadow-sm); border-width: 3px; }
+.screen.cols > .searchbar { grid-column: 1 / -1; }
 
 /* ================================================================ settings: grouped list */
 .settings-group { border: 2px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: .3rem .9rem .6rem; margin: .4rem 0 1rem; }

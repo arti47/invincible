@@ -156,8 +156,9 @@ export function renderRules(mount, anchor) {
   mount.append(
     el("section", { class: "card" },
       el("h2", { text: "Rules library" }),
-      el("p", { class: "muted small", text: "Search both the words and the rules. If a term in the app is unfamiliar, it is almost certainly explained below." }),
-      search),
+      el("p", { class: "muted small", text: "Search both the words and the rules. If a term in the app is unfamiliar, it is almost certainly explained below." })),
+    // Outside any card, so it stays pinned under the HUD for the whole length of the library.
+    el("div", { class: "searchbar" }, search),
     el("section", { class: "card", id: "glossary" },
       el("h3", { text: `Words you'll see (${D.GLOSSARY.length})` }),
       el("p", { class: "muted small", text: "Plain-English definitions of everything the app calls by name." }),
@@ -658,7 +659,8 @@ export function renderSettings(mount) {
     el("details", {}, el("summary", { text: "Known source gaps" }),
       el("ul", {},
         el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
-        el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));
+        el("li", { text: "Two Ch.7 complication rows (61–63, 64–66) carry identical text in the source; both are kept as printed." }),
+        el("li", { text: "The starter-set pregens (Metro Mayhem) were not supplied." }))));
   mount.append(card);
 }
 

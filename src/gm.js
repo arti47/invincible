@@ -134,7 +134,6 @@ function globalDanger() {
 function tablesPanel() {
   const card = el("section", { class: "card" }, el("h3", { text: "Rollable tables" }),
     helpPanel(["Every generator table in the core rules, individually rollable.", "Tables with a documented gap in the source re-roll automatically when a roll lands in it."]));
-  const row = el("div", { class: "chiprow" });
   const tables = [
     ...R.gmTableList(),
     { key: "baseEvents", name: "Base Events", die: "D66", entries: D.BASE_EVENTS.map((e) => ({ range: e.range, text: `${e.name} — ${e.desc}` })) },
@@ -143,15 +142,30 @@ function tablesPanel() {
     { key: "powerSources", name: "Power Sources", die: "D66", entries: D.POWER_SOURCES.map((s) => ({ range: [s.roll, s.roll], text: `${s.name} — ${s.desc}` })) },
     { key: "knowledge", name: "Knowledgeable Subjects", die: "D6", entries: D.KNOWLEDGEABLE_SUBJECTS.map((s) => ({ range: [s.roll, s.roll], text: `${s.name} — ${s.desc}` })) },
   ];
+  // Grouped by what each table generates, so thirty-odd chips read as six short rows.
+  const GROUPS = [
+    ["Criminal activity", ["crime", "crimeComplications", "threatRewards"]],
+    ["City incidents", ["catalyst", "incidents", "cityLocations", "incidentComplications"]],
+    ["Global dangers", (k) => k.startsWith("global")],
+    ["Scenes and the team", ["socialHooks", "baseEvents"]],
+    ["Action", ["chase", "component"]],
+    ["Heroes", ["powerSources", "knowledge"]],
+  ];
+  const groupOf = (k) => (GROUPS.find(([, m]) => (typeof m === "function" ? m(k) : m.includes(k))) || ["Other"])[0];
+  const rows = new Map();
   for (const t of tables) {
-    row.append(el("button", { class: "chip", onclick: () => {
+    const g = groupOf(t.key);
+    if (!rows.has(g)) rows.set(g, el("div", { class: "chiprow" }));
+    rows.get(g).append(el("button", { class: "chip", onclick: () => {
       const res = R.rollNamedTable(t);
       modal({ title: `${t.name} — ${res.value}`,
         body: el("div", {}, el("p", { class: "lede", text: res.entry.text }), t.gap ? el("p", { class: "muted small", text: t.gap }) : null),
         actions: [{ label: "OK", variant: "primary" }] });
     } }, t.name));
   }
-  card.append(row);
+  for (const [g] of [...GROUPS, ["Other"]]) {
+    if (rows.has(g)) card.append(el("h4", { class: "section", text: g }), rows.get(g));
+  }
   card.append(el("details", {}, el("summary", { text: "Critical injury table" }),
     el("table", { class: "data-table" },
       el("tr", {}, el("th", { text: "Roll" }), el("th", { text: "Injury" }), el("th", { text: "Healing" })),
@@ -166,13 +180,24 @@ function tablesPanel() {
 function adversaryPanel() {
   const card = el("section", { class: "card" }, el("h3", { text: "Adversaries & NPCs" }),
     helpPanel(["Stock NPC profiles, animals, published adversaries and hero stat blocks.", "Open one to see its full stat block. Minion groups use a single Health equal to the number of minions."]));
-  const search = el("input", { class: "input", type: "search", placeholder: "Search NPC profiles, creatures and adversaries…" });
+  const search = el("input", { class: "input sticky-search", type: "search", placeholder: "Search NPC profiles, creatures and adversaries…", "aria-label": "Search adversaries and NPCs" });
   const list = el("div", { class: "npc-list" });
   const all = R.compendium();
+  // Same filter as the Compendium: one group at a time instead of every stat block at once.
+  const groups = ["Adversaries", ...new Set(all.map((n) => n.group).filter((g) => g !== "Adversaries")), "All"];
+  const filter = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Show" });
+  const drawFilter = () => {
+    clear(filter);
+    for (const g of groups) {
+      filter.append(el("button", { class: `chip ${gmGroup === g ? "selected" : ""}`, role: "radio", type: "button",
+        "aria-checked": gmGroup === g ? "true" : "false", onclick: () => { gmGroup = g; drawFilter(); draw(); } }, g));
+    }
+  };
   const draw = () => {
     clear(list);
     const q = search.value.trim().toLowerCase();
     for (const n of all) {
+      if (gmGroup !== "All" && n.group !== gmGroup && !q) continue;
       if (q && !n.name.toLowerCase().includes(q) && !(n.desc || n.descriptor || "").toLowerCase().includes(q)) continue;
       list.append(el("button", { class: "npc-row", onclick: () => showNPC(n) },
         el("div", {}, el("strong", { text: n.name }),
@@ -181,10 +206,12 @@ function adversaryPanel() {
     }
   };
   search.addEventListener("input", draw);
+  drawFilter();
   draw();
-  card.append(search, list);
+  card.append(search, filter, list);
   return card;
 }
+let gmGroup = "Adversaries";
 
 function altBlock(n) {
   const has = n.altAttrs || n.altHealth !== undefined || n.altResolve !== undefined || n.altSlugfest !== undefined;
