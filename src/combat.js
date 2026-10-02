@@ -289,7 +289,13 @@ export function howToPlay() {
  */
 async function openAttack(attacker, combat, mount) {
   const targets = combat.combatants.filter((c) => c.id !== attacker.id && c.health > 0);
-  if (!targets.length) { showToast("Nobody left to attack.", { variant: "warn" }); return; }
+  if (!targets.length) {
+    // A fresh scene holds only the hero: "nobody left" would be false, and leaves no way on.
+    const anyone = combat.combatants.some((c) => c.id !== attacker.id);
+    showToast(anyone ? "Nobody left to attack." : "Nobody else is in the scene yet.", { variant: "warn",
+      action: anyone ? undefined : { label: "Add an opponent", onClick: () => openAddCombatant(mount) } });
+    return;
+  }
 
   const kind = await chooseModal(`${attacker.name} attacks — how?`, [
     { label: "Slugfest", hint: "FIGHTING, same zone, full action. Blockable.", value: "slugfest", icon: "attack" },
@@ -594,6 +600,14 @@ export function renderCombat(mount) {
       role: "listitem", "data-n": cb.card || "—", title: cb.name,
     }, el("span", { class: "n", text: cb.card ? String(cb.card) : "—" }), el("span", { class: "who", text: cb.name })))));
 
+  // A scene started from Home holds only the hero. Say so, and put the one fix first.
+  if (!combat.combatants.some((cb) => cb.side === "adversary")) {
+    mount.append(el("div", { class: "card next-step", id: "no-opponent" },
+      el("h3", { text: "Nobody to fight yet" }),
+      el("p", { text: "Add who the heroes are up against — a profile from the book, a group of minions, or one you name yourself." }),
+      el("button", { class: "btn primary", onclick: () => openAddCombatant(mount) }, "Add an opponent")));
+  }
+
   const list = el("div", { class: "combatants" });
   for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount, cb === up));
   mount.append(list);
@@ -730,7 +744,10 @@ async function holdOff(cb, combat, mount) {
 async function openAddCombatant(mount) {
   const combat = getCombat() || newCombat();
   const options = [
-    { label: "Your hero", value: "hero" },
+    // The hero mirrors the sheet; a second copy would split one Health track in two.
+    ...(Store.activeCharacter() && !combat.combatants.some((c) => c.refId === Store.activeCharacter().id)
+      ? [{ label: "Your hero", value: "hero" }] : []),
+    { label: "Name one myself", hint: "An opponent the book does not list — ordinary stats you can adjust", value: "own" },
     ...NPC_PROFILES.map((p) => ({ label: p.name + (p.minion ? " (minions)" : ""), hint: p.desc, value: `npc:${p.name}` })),
     ...ADVERSARIES.map((a) => ({ label: a.name, hint: a.descriptor, value: `adv:${a.name}` })),
     ...CREATURES.map((c) => ({ label: c.name, hint: "Creature", value: `crt:${c.name}` })),
@@ -740,6 +757,10 @@ async function openAddCombatant(mount) {
   if (pick === "hero") {
     const hero = Store.activeCharacter();
     if (hero) combat.combatants.push(combatantFromCharacter(hero));
+  } else if (pick === "own") {
+    const name = await promptModal("What are they called?", { title: "Name an opponent", value: "" });
+    if (!name) return;
+    combat.combatants.push(blankCombatant(name));
   } else {
     const [kind, name] = pick.split(/:(.+)/);
     let profile = null;
