@@ -112,6 +112,17 @@ async function openPregens() {
 
 /* ---------------------------------------------------------------- rules library */
 
+/** Where each rule is played in the app. Gated screens are only offered while they exist. */
+const RULE_TOOL_MAP = {
+  initiative: "combat", actions: "combat", slugfest: "combat", shooting: "combat", wrecking: "combat",
+  minions: "combat", huge: "combat", chases: "combat", banter: "combat", challenges: "combat", stunts: "combat",
+  damage: "sheet", death: "sheet", crits: "sheet", recovery: "sheet", powers: "sheet", resources: "sheet",
+  karma: "sheet", reputation: "sheet", resolution: "sheet", push: "sheet", help: "sheet", opposed: "combat",
+  lifecycle: "home",
+};
+const TOOL_LABEL = { combat: "Run it on the Action screen", sheet: "Use it on the Hero tab", home: "Open the session controls on Home" };
+const RULE_TOOLS = Object.fromEntries(Object.entries(RULE_TOOL_MAP).map(([id, r]) => [id, [`#/${r}`, TOOL_LABEL[r]]]));
+
 export function renderRules(mount, anchor) {
   clear(mount);
   const search = el("input", { class: "input sticky-search", type: "search", placeholder: "Search the rules…", "aria-label": "Search the rules" });
@@ -123,7 +134,9 @@ export function renderRules(mount, anchor) {
     for (const e of entries) {
       results.append(el("details", { class: "rule-entry", id: `rule-${e.id}`, open: anchor === e.id },
         el("summary", {}, el("strong", { text: e.title }), el("span", { class: "muted small", text: ` ${e.chapter}` })),
-        el("p", { text: e.body })));
+        el("p", { text: e.body }),
+        // Reading a rule should be one tap from the screen that runs it.
+        RULE_TOOLS[e.id] ? el("p", { class: "cite" }, el("a", { class: "rules-link tool-link", href: RULE_TOOLS[e.id][0] }, `${RULE_TOOLS[e.id][1]} →`)) : null));
     }
     if (anchor) {
       const node = results.querySelector(`#rule-${CSS.escape(anchor)}`);
@@ -618,8 +631,9 @@ function exportMarkdown(characterId, sessionId = null) {
 export function renderSettings(mount) {
   clear(mount);
   const card = el("section", { class: "card" }, el("h2", { text: "Settings" }));
+  const GROUP_ICONS = { Theme: "theme", Features: "settings", Backup: "journal", "Mission data": "hazard", Multiplayer: "npcs", About: "info" };
   const group = (title, ...kids) => {
-    card.append(el("h3", { class: "section", text: title }));
+    card.append(el("h3", { class: "section with-ico" }, el("span", { class: "head-ico small-ico", "aria-hidden": "true" }, icon(GROUP_ICONS[title] || "info", { size: 14 })), title));
     const g = el("div", { class: `settings-group ${title === "Mission data" ? "danger-zone" : ""}` }, ...kids.filter(Boolean));
     card.append(g);
     return g;

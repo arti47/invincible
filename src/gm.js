@@ -267,7 +267,12 @@ export function showNPC(n) {
       (n.talents || []).length ? el("p", {}, el("strong", { text: "Talents: " }), n.talents.join(", ")) : null,
       (n.drawbacks || []).length ? el("div", {}, el("h4", { class: "section", text: "Drawbacks" }), el("ul", {}, ...n.drawbacks.map((d) => el("li", { text: d })))) : null,
       (n.special || []).length ? el("div", {}, el("h4", { class: "section", text: "Special abilities" }), el("ul", {}, ...n.special.map((d) => el("li", { text: d })))) : null,
-      (n.gear || []).length ? el("p", {}, el("strong", { text: "Gear: " }), n.gear.join(", ")) : null),
+      (n.gear || []).length ? el("p", {}, el("strong", { text: "Gear: " }), n.gear.join(", ")) : null,
+      // A minion group or a huge creature plays by its own rules; link to them from the block.
+      n.minion || n.huge ? el("p", { class: "cite" },
+        n.minion ? el("a", { class: "rules-link", href: "#/rules/minions" }, "Rules: Minions") : null,
+        n.minion && n.huge ? " · " : null,
+        n.huge ? el("a", { class: "rules-link", href: "#/rules/huge" }, "Rules: Huge creatures") : null) : null),
     actions: [
       { label: "Close", variant: "ghost" },
       // A stat block you are reading is usually one you are about to fight: put it on the board.
