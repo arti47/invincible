@@ -2979,7 +2979,81 @@ const run = async () => {
     moves.triggers.join(" || "));
   ok("the encounter panel says ordinary travel needs no timer", /Ordinary travel needs no encounter timer/.test(moves.encText));
   ok("the encounter panel explains how a fight starts", /When does a fight actually start\?/.test(moves.encText));
-  ok("the move list covers the six things a solo hero does", moves.choices.length === 6, String(moves.choices.length));
+  ok("the move list covers the eight things a solo hero does", moves.choices.length === 8, String(moves.choices.length));
+
+  const stepFlow = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const solo = await import("/src/solo.js");
+    const Store = await import("/src/store.js");
+    const KEY = "invincible:solo";
+    const saved = localStorage.getItem(KEY);
+    const pick = (re) => Array.from(document.querySelectorAll(".modal .choice")).find((c) => re.test(c.textContent));
+    const top = () => [...document.querySelectorAll(".modal")].pop();
+    const out = {};
+    // step 3's own button engages a lone crisis (it used to only scroll)
+    const st = JSON.parse(saved || "{}");
+    st.alert = "Test alert"; st.eventChecks = 1; st.timers = []; st.crises = [{ id: "crisis_t", text: "Test crisis", parts: { headline: "Test crisis" } }];
+    localStorage.setItem(KEY, JSON.stringify(st));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    document.querySelector("#solo-next .btn.primary")?.click(); await wait(150);
+    const choices = Array.from(top()?.querySelectorAll(".choice") || []).map((c) => c.textContent);
+    out.engageOpens = /How close/.test(top()?.querySelector(".modal-title")?.textContent || "");
+    out.rollFirst = /^Unsure/.test(choices[0] || "");
+    pick(/^Unsure/)?.click(); await wait(200);
+    out.timerStarted = JSON.parse(localStorage.getItem(KEY)).timers.length === 1;
+    // "I tried something risky" opens the attribute guide
+    document.querySelector("#solo-next .btn.primary")?.click(); await wait(150);
+    pick(/I tried something risky/)?.click(); await wait(200);
+    out.riskyGuide = /Which attribute/.test(top()?.querySelector(".modal-title")?.textContent || "");
+    top()?.querySelector(".modal-actions .btn")?.click(); await wait(80);
+    // "A fight broke out" puts an enemy on the board and goes there
+    Store.clearCombat();
+    document.querySelector("#solo-next .btn.primary")?.click(); await wait(150);
+    pick(/A fight broke out/)?.click(); await wait(150);
+    pick(/Roll one from the book/)?.click(); await wait(300);
+    const c = Store.getCombat();
+    out.fight = location.hash === "#/combat" && !!c?.active && c.combatants.some((x) => x.side === "adversary");
+    Store.clearCombat();
+    if (saved) localStorage.setItem(KEY, saved); else localStorage.removeItem(KEY);
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    location.hash = "#/solo"; await wait(150);
+    return out;
+  });
+  ok("step 3's own button engages the crisis instead of only scrolling", stepFlow.engageOpens && stepFlow.timerStarted, JSON.stringify(stepFlow));
+  ok("the proximity chooser leads with 'roll for it' for players with no basis to pick", stepFlow.rollFirst);
+  ok("'I tried something risky' opens the attribute guide", stepFlow.riskyGuide);
+  ok("'A fight broke out' puts an enemy on the board and goes to it", stepFlow.fight);
+
+  const r1b = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const KEY = "invincible:solo";
+    const saved = localStorage.getItem(KEY);
+    const st = JSON.parse(saved || "{}");
+    const top = () => [...document.querySelectorAll(".modal")].pop();
+    // resolving clears the structured headline, so Home cannot show a finished crisis as live
+    st.alert = "Old crisis"; st.alertParts = { headline: "Old crisis headline" }; st.eventChecks = 1;
+    st.timers = []; st.crises = []; st.objectives = [];
+    localStorage.setItem(KEY, JSON.stringify(st));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "Resolve crisis")?.click(); await wait(120);
+    Array.from(top()?.querySelectorAll(".modal-actions .btn") || []).find((b) => b.textContent === "Resolve")?.click(); await wait(200);
+    const after = JSON.parse(localStorage.getItem(KEY));
+    const cleared = !after.alert && after.alertParts === null;
+    // engaging a crisis with no objective asks for one
+    after.alert = "New"; after.awaitingSocial = false; after.resolved = 0; after.eventChecks = 1;
+    after.crises = [{ id: "c1", text: "Something", parts: { headline: "Something" } }]; after.objectives = [];
+    localStorage.setItem(KEY, JSON.stringify(after));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    document.querySelector("#solo-next .btn.primary")?.click(); await wait(120);
+    Array.from(top()?.querySelectorAll(".choice") || []).find((c) => /^Unsure/.test(c.textContent))?.click(); await wait(250);
+    const asks = /Set an objective/.test(top()?.querySelector(".modal-title")?.textContent || "");
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    if (saved) localStorage.setItem(KEY, saved); else localStorage.removeItem(KEY);
+    location.hash = "#/home"; await wait(150);
+    return { cleared, asks };
+  });
+  ok("resolving a crisis clears its headline, so Home never shows it as live", r1b.cleared);
+  ok("engaging a crisis with no objective asks for one (the only source of solo karma)", r1b.asks);
   ok("a finished fight rolls the crisis timers at +1 and then an event check",
     /\+1 die/.test(moves.reportHeads.join(" ")) && moves.reportHeads.some((h) => /Event check/.test(h))
       && moves.eventChecks === 2,
