@@ -3358,6 +3358,33 @@ const run = async () => {
   ok("the fonts are shipped and precached for offline play", design.fontsCached && design.fontsServed);
   ok("a hero without a portrait gets a drawn emblem in the HUD and the sheet", design.emblem);
 
+  const settle = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("gmScreen", true);
+    location.hash = "#/gm";
+    await new Promise((x) => setTimeout(x, 220));
+    const gmCard = Array.from(document.querySelectorAll("#screen .card")).find((c) => c.querySelector("h3")?.textContent === "Rollable tables");
+    const groups = Array.from(gmCard?.querySelectorAll("h4.section") || []).map((h) => h.textContent);
+    const ungrouped = Array.from(gmCard?.querySelectorAll(".chiprow") || []).length !== groups.length;
+    Settings.set("gmScreen", false);
+    location.hash = "#/rules";
+    await new Promise((x) => setTimeout(x, 220));
+    const bar = document.querySelector("#screen > .searchbar");
+    const pinned = !!bar && getComputedStyle(bar).position === "sticky" && !!bar.querySelector('input[type="search"]');
+    location.hash = "#/settings";
+    await new Promise((x) => setTimeout(x, 220));
+    const about = document.querySelector("#screen").textContent;
+    const ranges = Array.from(document.styleSheets).flatMap((sh) => { try { return Array.from(sh.cssRules); } catch { return []; } })
+      .filter((r) => r instanceof CSSFontFaceRule && /Atkinson/.test(r.style.getPropertyValue("font-family")))
+      .map((r) => r.style.getPropertyValue("unicode-range"));
+    return { groups, ungrouped, pinned, staleGap: /proximity labels were partly truncated/.test(about),
+      digitsExcluded: ranges.length === 3 && ranges.every((u) => /U\+3A-FFFF/i.test(u.replace(/U\+00/gi, "U+").replace(/\s/g, ""))), ranges };
+  });
+  ok("GM rollable tables are grouped by what they generate", settle.groups.length >= 5 && !settle.ungrouped, settle.groups.join(" | "));
+  ok("the rules search sits outside any card and stays pinned", settle.pinned);
+  ok("Settings no longer lists the closed crisis-timer gap", !settle.staleGap);
+  ok("digits never take Atkinson's slashed zero", settle.digitsExcluded, settle.ranges.join(" ; "));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

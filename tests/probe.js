@@ -106,6 +106,14 @@ export async function runProbe(ok, section, page, base) {
     await page.waitForSelector("body[data-ready]", { timeout: 15000 });
   }
 
+  /* Content the UI keeps one tap away — the Hero sheet's other sections and the Solo oracle
+     drawer — is shown for the sweep, so "every visible button" also means every button that is
+     merely folded away. A stylesheet survives every re-render a click causes. */
+  await page.addStyleTag({ content: `
+    .sheet-pane[hidden] { display: block !important; }
+    #solo-oracles.drawer { position: static !important; transform: none !important; visibility: visible !important; max-height: none !important; }
+    .drawer-scrim { display: none !important; }` });
+
   /* ---------------------------------------------------------------- per-route sweep */
   for (const route of ROUTES) {
     await page.evaluate((r) => { location.hash = `#/${r}`; }, route);
@@ -339,7 +347,8 @@ export async function runProbe(ok, section, page, base) {
 
   /* ---------------------------------------------------------------- coverage boundary */
   // A clean run must state what it did NOT look at, or "clean" is an unbounded claim.
-  console.log("  → probed: " + ROUTES.length + " routes, every visible button on each, with the store");
+  console.log("  → probed: " + ROUTES.length + " routes, every visible button on each (folded Hero sections and");
+  console.log("    the oracle drawer unfolded for the sweep), with the store");
   console.log("    snapshotted per route and restored after any click that wrote to it.");
   console.log("  → NOT covered: controls behind a dialog (only first-level dialogs are opened);");
   console.log("    multi-step flows past their first click; drag, keyboard-only and pointer");
