@@ -3588,6 +3588,31 @@ const run = async () => {
   ok("rank cards show their tier as 1–4 stars", r7.stars.join(",") === "1,2,3,4", r7.stars.join(","));
   ok("the tutorial's example hero shows its scores as tiles", r7.heroTiles === 6, String(r7.heroTiles));
 
+  const r8 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const U = await import("/src/ui.js");
+    const t = U.showToast("Check toast", { variant: "good", timeout: 0 });
+    const toastIco = !!t.querySelector(".toast-ico svg") && t.textContent.includes("Check toast");
+    t.remove();
+    const C = await import("/src/combat.js");
+    const N = await import("/data-npcs.js");
+    const Store = await import("/src/store.js");
+    Store.clearCombat();
+    const cb = C.startActionScene();
+    C.joinCombat(cb, C.combatantFromProfile(N.NPC_PROFILES[0]));
+    location.hash = "#/combat"; await wait(250);
+    [...document.querySelectorAll("#screen .cbt-actions button")].find((b) => b.textContent === "Attack" && !b.disabled)?.click();
+    await wait(150);
+    const m = [...document.querySelectorAll(".modal")].pop();
+    const kinds = m ? m.querySelectorAll(".choice.has-ico .choice-ico svg").length : 0;
+    m?.querySelector(".modal-actions .btn")?.click();
+    Store.clearCombat();
+    location.hash = "#/home"; await wait(150);
+    return { toastIco, kinds };
+  });
+  ok("toasts lead with a tone glyph and keep their words", r8.toastIco);
+  ok("the attack-kind chooser shows an icon per kind", r8.kinds === 4, String(r8.kinds));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

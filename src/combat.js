@@ -2,7 +2,7 @@
 // and the scene / session / adventure lifecycle engine with confirmation + one-step undo.
 
 import { el, clear, uid, clamp, d6, dieEl } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
+import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -291,10 +291,10 @@ async function openAttack(attacker, combat, mount) {
   if (!targets.length) { showToast("Nobody left to attack.", { variant: "warn" }); return; }
 
   const kind = await chooseModal(`${attacker.name} attacks — how?`, [
-    { label: "Slugfest", hint: "FIGHTING, same zone, full action. Blockable.", value: "slugfest" },
-    { label: "Shooting", hint: "AGILITY at range, full action. Dodgeable.", value: "shooting" },
-    { label: "Charge", hint: "STRENGTH, full + quick. Cannot be blocked, can be dodged.", value: "charge" },
-    { label: "Grapple", hint: "FIGHTING, no weapon. Blockable.", value: "grapple" },
+    { label: "Slugfest", hint: "FIGHTING, same zone, full action. Blockable.", value: "slugfest", icon: "attack" },
+    { label: "Shooting", hint: "AGILITY at range, full action. Dodgeable.", value: "shooting", icon: "target" },
+    { label: "Charge", hint: "STRENGTH, full + quick. Cannot be blocked, can be dodged.", value: "charge", icon: "movement" },
+    { label: "Grapple", hint: "FIGHTING, no weapon. Blockable.", value: "grapple", icon: "immobilised" },
   ]);
   if (!kind) return;
 
@@ -378,6 +378,7 @@ function npcAttack(attacker, kind, target, situ = {}) {
 }
 
 function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext = null) {
+  let burstShown = false;
   const effective = defence ? defence.remainingSixes : roll.sixes;
   // A block that cancels more 6s than the attack threw turns into a counterattack (audit A5).
   const counter = !!(defence && defence.kind === "block" && defence.counterattack);
@@ -404,6 +405,8 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext
         ? `Hit — ${dmg} damage${target.armor ? ` before ${target.name}'s Armor ${target.armor}` : ""}.`
         : defence ? `Stopped — the ${defence.kind} cancelled it.` : "Miss." }));
     if (defence?.note) body.append(el("p", { class: "warn", text: defence.note }));
+    // One burst, on the first draw only — re-drawing for a stunt toggle should not replay it.
+    if (!burstShown) { burstShown = true; sfx(body, effective ? "POW!" : defence ? "BLOCK!" : "WHIFF!", effective ? "" : "zap"); }
 
     if (effective && available) {
       body.append(el("p", { class: "muted small", text: `${available} stunt${available === 1 ? "" : "s"} available — tap to apply.` }));
