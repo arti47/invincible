@@ -684,7 +684,11 @@ function inventoryCard(c, s) {
           Store.updateCharacter((ch) => { const t = ch.inventory.items.find((x) => x.id === item.id); if (t) t.equipped = !t.equipped; });
         } }, item.equipped ? "Unequip" : "Equip") : null,
         el("button", { class: "btn tiny danger", onclick: () => {
-          Store.updateCharacter((ch) => { ch.inventory.items = ch.inventory.items.filter((x) => x.id !== item.id); });
+          // A bought item can cost a roll to get back; keep it one tap away.
+          let at = -1;
+          Store.updateCharacter((ch) => { at = ch.inventory.items.findIndex((x) => x.id === item.id); ch.inventory.items = ch.inventory.items.filter((x) => x.id !== item.id); });
+          showToast(`${item.name} dropped.`, { action: { label: "Undo", onClick: () =>
+            Store.updateCharacter((ch) => { ch.inventory.items.splice(Math.max(0, at), 0, item); }) } });
         } }, "Drop"))));
   }
   if (!(c.inventory.items || []).length) list.append(el("p", { class: "muted", text: "Nothing carried. Heroes don't track encumbrance in this game — the GM disallows the absurd." }));
