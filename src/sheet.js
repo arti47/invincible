@@ -188,7 +188,7 @@ function heroHead(c, s) {
     el("span", { class: "track-label", text: label }),
     el("span", { class: "track-boxes" }, ...Array.from({ length: max }, (_, i) => el("span", { class: `track-box ${i < value ? "on" : ""}` }))),
     el("span", { class: "track-value", text: `${value}/${max}` }));
-  return el("section", { class: "hero-head" },
+  return el("section", { class: `hero-head ${c.state.broken ? "is-broken" : ""} ${c.state.dying?.active ? "is-dying" : ""}` },
     el("div", { class: "identity-head" },
       emblem(c.identity.heroName || c.identity.realName, c.identity.role, { portrait: c.identity.portraitUrl }),
       el("div", { style: "min-width:0;flex:1" },
