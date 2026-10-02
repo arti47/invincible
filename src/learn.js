@@ -27,7 +27,7 @@ export function exampleHero() {
 
 let activeTab = "basics";
 
-/** Lets another screen deep-link a specific tutorial — the Solo tab points at the solo walkthrough. */
+/** Lets another screen deep-link a specific tutorial — the Solo screen points at the solo walkthrough. */
 export function setLearnTab(key) {
   if (TUTORIAL_INDEX.some((t) => t.key === key)) activeTab = key;
 }
@@ -55,16 +55,16 @@ export function renderLearn(mount) {
   if (activeTab === "walkthrough") {
     mount.append(el("section", { class: "card" },
       el("h3", { text: "Now play one" }),
-      el("p", { class: "small", text: "The Solo tab's top card always names the step you are on, and \"What did your hero just do?\" rolls the right checks for you." }),
+      el("p", { class: "small", text: "The Solo screen's top card always names the step you are on, and \"What did your hero just do?\" rolls the right checks for you." }),
       el("div", { class: "row-actions" },
-        el("a", { class: "btn primary", href: "#/solo", onclick: () => enableSolo(false) }, "Open the Solo tab"))));
+        el("a", { class: "btn primary", href: "#/solo", onclick: () => enableSolo(false) }, "Open the Solo screen"))));
   } else if (activeTab === "solo") {
     mount.append(el("section", { class: "card" },
       el("h3", { text: "Ready to play" }),
-      el("p", { class: "small", text: "Turn Crisis Mode on and the Solo tab appears in the bottom bar." }),
+      el("p", { class: "small", text: "Turn Crisis Mode on and the Play tab opens it." }),
       el("div", { class: "row-actions" },
         el("button", { class: "btn primary", onclick: () => enableSolo(true) }, "Turn on Crisis Mode"),
-        el("a", { class: "btn", href: "#/solo", onclick: () => enableSolo(false) }, "Open the Solo tab"))));
+        el("a", { class: "btn", href: "#/solo", onclick: () => enableSolo(false) }, "Open the Solo screen"))));
   } else {
     mount.append(el("section", { class: "card" },
       el("h3", { text: "Ready to play" }),
@@ -75,10 +75,27 @@ export function renderLearn(mount) {
   }
 }
 
+/**
+ * Where an "In the app" pointer sends you. The pointer names a screen in words; this turns that
+ * into a link, so the tutorial and the screen it describes are one tap apart. Crisis Mode pointers
+ * go to Settings while the mode is off, because the Solo screen does not exist until then.
+ */
+function appTarget(text) {
+  const solo = Settings.soloMode();
+  if (/^(On the )?Hero\b/.test(text)) return { href: "#/sheet", label: "Open the Hero tab" };
+  if (/Action screen/.test(text)) return { href: "#/combat", label: "Open the Action screen" };
+  if (/Solo screen|Crises panel|Crisis Mode header/.test(text)) {
+    return solo ? { href: "#/solo", label: "Open the Solo screen" } : { href: "#/settings", label: "Turn on Crisis Mode in Settings" };
+  }
+  if (/^Home\b/.test(text)) return { href: "#/home", label: "Open Home" };
+  if (/wizard/.test(text)) return { href: "#/create", label: "Open the creation wizard" };
+  return null;
+}
+
 function enableSolo(toast = true) {
   Settings.set("soloMode", true);
   document.dispatchEvent(new CustomEvent("nav-refresh"));
-  if (toast) showToast("Crisis Mode on — the Solo tab is in the bottom bar.", { variant: "good", timeout: 6000 });
+  if (toast) showToast("Crisis Mode on — the Play tab now opens it.", { variant: "good", timeout: 6000 });
 }
 
 function heroCard(hero) {
@@ -103,7 +120,11 @@ function chapterCard(ch, open, hero, mount) {
   for (const step of ch.steps) {
     const li = el("li", {}, el("p", { text: step.text }));
     if (step.example) li.append(el("p", { class: "tut-example" }, el("strong", { text: "Example: " }), step.example));
-    if (step.app) li.append(el("p", { class: "tut-app" }, el("strong", { text: "In the app: " }), step.app));
+    if (step.app) {
+      const go = appTarget(step.app);
+      li.append(el("p", { class: "tut-app" }, el("strong", { text: "In the app: " }), step.app,
+        go ? el("a", { class: "tut-go", href: go.href }, ` ${go.label} →`) : null));
+    }
     // A recorded roll from the worked session: the dice exactly as they fell.
     if (step.roll) li.append(el("div", { class: "tut-roll" }, dice(step.roll.faces),
       el("p", { class: "small", text: step.roll.caption })));
@@ -211,7 +232,7 @@ function runDemo(kind, out, hero) {
     },
     enableSolo: () => {
       enableSolo();
-      say(out, el("p", { class: "good", text: "Crisis Mode is on. The Solo tab is now in the bottom bar." }));
+      say(out, el("p", { class: "good", text: "Crisis Mode is on. The Play tab now opens it." }));
     },
   };
   (DEMOS[kind] || (() => say(out, el("p", { class: "muted", text: "No demo for this step." }))))();

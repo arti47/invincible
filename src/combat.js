@@ -168,11 +168,11 @@ function guessArmor(p) {
 /**
  * The one thing the whole app can agree on: which beat of §3.12 is live, and the single control
  * that carries it forward. Every surface reads this rather than guessing from its own state, so
- * "what do I do next" has the same answer on Home, the Sheet and the Action tab.
+ * "what do I do next" has the same answer on Home, the Sheet and the Action screen.
  */
 /**
  * Solo play has its own spine (the Ch.9 loop), and running both at once is what made "what do I do
- * now" ambiguous: Home said "Start session" while the Solo tab said "Generate crisis alert". The
+ * now" ambiguous: Home said "Start session" while the Solo screen said "Generate crisis alert". The
  * Solo module registers itself here at boot, so there is one answer wherever you are looking.
  * A hook rather than an import, because solo.js already imports this module.
  */
@@ -207,7 +207,7 @@ export function sessionStage(c = Store.activeCharacter()) {
     label: "Start action scene", run: () => { startActionScene(); location.hash = "#/combat"; }, end: finish };
 }
 
-/** The stage rendered as the same "do this next" card the Solo tab uses. */
+/** The stage rendered as the same "do this next" card the Solo screen uses. */
 export function stageCard() {
   const s = sessionStage();
   const action = s.href
@@ -250,7 +250,7 @@ export function howToPlay() {
       : ["Press Start session. That closes karma spending and opens the record.",
          "Then start an action scene when trouble arrives, or just play out a social scene first."],
     el("button", { class: "btn tiny primary", onclick: () => { location.hash = solo ? "#/solo" : "#/home"; if (!solo) openLifecycle("start"); } },
-      solo ? "Go to the Solo tab" : "Start session")));
+      solo ? "Go to the Solo screen" : "Start session")));
 
   body.append(beat(2, "Keeping it going",
     solo
@@ -528,6 +528,8 @@ export function renderCombat(mount) {
       el("h2", { text: "No action scene running" }),
       el("p", { text: "Start a scene to draw initiative, track combatants and apply damage." }),
       el("button", { class: "btn primary", onclick: () => { startActionScene(); renderCombat(mount); } }, "Start action scene"),
+      // In Crisis Mode a fight is one beat of the solo loop; the way back must be on this screen.
+      Settings.soloMode() ? el("a", { class: "btn ghost", href: "#/solo" }, "Back to Crisis Mode") : null,
       // Between scenes, not next steps: these close stages you have already played.
       el("p", { class: "stage-label", text: "Between scenes" }),
       el("div", { class: "row-actions" },
@@ -556,6 +558,7 @@ export function renderCombat(mount) {
       el("button", { class: "btn danger", onclick: async () => {
         if (await confirmModal("End the action scene and run the end-of-scene recovery?", { title: "End action scene", confirmLabel: "End scene" })) {
           Store.clearCombat(); openLifecycle("action"); renderCombat(mount);
+          if (Settings.soloMode()) showToast("Scene over — the crisis is still running.", { timeout: 8000, action: { label: "Back to Crisis Mode", onClick: () => { location.hash = "#/solo"; } } });
         }
       } }, "End scene"))));
 
@@ -570,6 +573,7 @@ export function renderCombat(mount) {
   for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount, cb === up));
   mount.append(list);
 
+  if (Settings.soloMode()) mount.append(el("p", { class: "small" }, el("a", { href: "#/solo" }, "← Back to Crisis Mode"), " — the crisis timers keep their place while you fight."));
   if (combat.wreckedZones.length) {
     mount.append(el("p", { class: "warn small", text: `Wrecked zones this scene: ${combat.wreckedZones.join(", ")} — wrecking costs bad karma at the end of the session.` }));
   }
@@ -605,7 +609,11 @@ function combatantCard(cb, combat, mount, isUp = false) {
   return el("div", { class: `combatant ${cb.side} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""} ${isUp ? "current" : ""}` },
     el("div", { class: "cbt-head" },
       el("span", { class: "cbt-card", text: cb.card ? `#${cb.card}` : "—" }),
-      el("strong", { text: cb.name + (isMinion ? ` (${cb.health} minions)` : "") }),
+      // A hero's card is a view of their character, so its name opens the sheet it mirrors.
+      cb.side === "hero" && cb.refId
+        ? el("a", { class: "cbt-name", href: "#/sheet", title: `Open ${cb.name}'s sheet`,
+            onclick: () => Store.setActiveCharacter(cb.refId) }, el("strong", { text: cb.name }))
+        : el("strong", { text: cb.name + (isMinion ? ` (${cb.health} minions)` : "") }),
       isUp ? el("span", { class: "chip", text: "Acts now" }) : null,
       cb.acted ? el("span", { class: "chip muted", text: "Acted" }) : null,
       cb.huge ? el("span", { class: "chip warn", text: "Huge" }) : null),
@@ -1015,13 +1023,13 @@ async function openSessionEnd(c) {
     const gained = solo ? 0 : D.KARMA.earnQuestions.reduce((n, q) => n + (answers[q.key] ? (q.key === "flaw" && answers.flawOvercome ? D.KARMA.overcomeFlawBonus : 1) : 0), 0);
     const lost = solo ? 0 : D.KARMA.badQuestions.reduce((n, q) => n + (bad[q.key] ? 1 : 0), 0);
     total.textContent = solo
-      ? `Solo play: karma comes from completed objectives on the Solo tab (current total ${c.state.karma}).`
+      ? `Solo play: karma comes from completed objectives on the Solo screen (current total ${c.state.karma}).`
       : `Karma this session: +${gained} − ${lost} = ${Math.max(0, gained - lost)} (current total ${c.state.karma})`;
   };
 
   if (solo) {
-    body.append(el("p", { class: "muted", text: "Crisis Mode is on. In solo play karma is earned by reaching objectives on the objective timer, so the ten session questions do not apply — claim objective karma on the Solo tab instead." }));
-    body.append(el("p", { class: "cite" }, el("a", { href: "#/solo", class: "rules-link" }, "Open the Solo tab")));
+    body.append(el("p", { class: "muted", text: "Crisis Mode is on. In solo play karma is earned by reaching objectives on the objective timer, so the ten session questions do not apply — claim objective karma on the Solo screen instead." }));
+    body.append(el("p", { class: "cite" }, el("a", { href: "#/solo", class: "rules-link" }, "Open the Solo screen")));
   }
 
   if (!solo) body.append(el("h4", { class: "section", text: "Karma questions" }));

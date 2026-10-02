@@ -12,7 +12,7 @@ import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from
 import { Settings } from "./settings.js";
 import * as Journal from "./journal.js";
 import { stageCard } from "./combat.js";
-import { askTalentSubject } from "./wizard.js";
+import { askTalentSubject, openTeamWizard } from "./wizard.js";
 import { NPC_PROFILES } from "../data-npcs.js";
 
 /* ---------------------------------------------------------------- persistent header */
@@ -225,7 +225,9 @@ function identityCard(c, s) {
     // Only the scene-entry action belongs here. Karma is spent between sessions, so its control
     // sits in the advancement card at the foot of the sheet, where the sequence of play puts it.
     el("div", { class: "row-actions" },
-      el("button", { class: "btn", onclick: () => rollReputation(c) }, "Reputation roll")));
+      el("button", { class: "btn", onclick: () => rollReputation(c) }, "Reputation roll"),
+      // The team is shared state the hero belongs to; reach it from the hero, not only from Home.
+      el("button", { class: "btn ghost", onclick: () => openTeamWizard() }, Store.getTeam() ? `Team: ${Store.getTeam().name || "your team"}` : "Create a team")));
 }
 
 /** End of the sheet, end of the session: karma is only spendable between sessions (§3.3). */
@@ -365,7 +367,7 @@ function attributesCard(c, s) {
 /**
  * "Which attribute do I roll?" — the six, each with its live pool, what it covers, and the uses
  * the rules actually define. Expand one to read them, then roll it without leaving the dialog.
- * This is the answer to being stuck mid-scene, so it opens from the Sheet and from the Solo tab.
+ * This is the answer to being stuck mid-scene, so it opens from the Sheet and from the Solo screen.
  */
 export function openAttributeGuide(c = Store.activeCharacter()) {
   if (!c) { showToast("No hero yet.", { variant: "warn" }); return null; }
@@ -778,7 +780,11 @@ function notesCard(c) {
   ta.addEventListener("change", () => Store.updateCharacter((ch) => { ch.notes = ta.value; }));
   return el("section", { class: "card" }, el("h3", { text: "Notes" }),
     el("p", { class: "muted small", text: "Anything you want to remember about this hero — contacts, leads, promises made. Saved as you type, and included in the JSON backup." }),
-    ta);
+    ta,
+    // Notes are what you keep; the journal is what happened. They belong a tap apart.
+    el("div", { class: "row-actions" },
+      el("a", { class: "btn ghost", href: "#/journal" }, "Open the journal"),
+      el("button", { class: "btn ghost", onclick: () => quickJournal(c) }, "Write a journal entry")));
 }
 
 /* ---------------------------------------------------------------- rest & recovery */

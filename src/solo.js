@@ -62,7 +62,7 @@ function undoSolo(mount) {
  * "Start action scene") to a solo player, while the actual solo spine lived on a separate tab.
  * Two parallel engines with nothing saying which one is the game, and neither opening by telling
  * you what tonight is about. This card is the answer to all three of "how do I start, keep
- * going, and finish" — and it reads the same state the Solo tab does, so they never disagree.
+ * going, and finish" — and it reads the same state the Solo screen does, so they never disagree.
  */
 /**
  * Is a sitting in progress? Not just "is a crisis live" — resolving one clears the alert and the
@@ -598,7 +598,7 @@ function whatHappenedCard(state, mount) {
 
 /**
  * Solo play's answer to "what now", published to the rest of the app. Home and the Sheet render
- * whichever spine is live, so they can never disagree with the Solo tab again.
+ * whichever spine is live, so they can never disagree with the Solo screen again.
  */
 export function soloStage() {
   const state = load();
@@ -1817,7 +1817,7 @@ function encounterCard(state, mount) {
   if (!state.encounter) {
     put(card, el("p", { class: "muted small", text: "No encounter timer running — nothing is stalking you. Start one when your hero enters somewhere dangerous on foot." }));
     put(card, el("details", { class: "help" }, el("summary", { text: "When does a fight actually start?" }),
-      el("p", { class: "small", text: "Three ways, and only three. (1) An encounter timer reaches Encountered and you neither avoid nor escape it — the panel walks you to Draw initiative. (2) You choose to attack something the fiction has already put in front of you — draw initiative from the Action tab. (3) A crisis timer fires into a fight, because that is what you said it would trigger." }),
+      el("p", { class: "small", text: "Three ways, and only three. (1) An encounter timer reaches Encountered and you neither avoid nor escape it — the panel walks you to Draw initiative. (2) You choose to attack something the fiction has already put in front of you — draw initiative from the Action screen. (3) A crisis timer fires into a fight, because that is what you said it would trigger." }),
       el("p", { class: "small", text: "You never roll to see whether combat happens. Combat happens because the encounter sequence delivered an enemy, or because you decided to swing first." })));
     put(card, el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
@@ -2171,13 +2171,13 @@ async function pickEncounterEnemy(state) {
   const pick = await chooseModal(`What are you facing? (${threat.name})`, [
     { label: "Roll one from the book", hint: threat.examples, value: "__roll" },
     { label: "Name it myself", hint: "Established facts beat the table — a blank enemy you fill in", value: "__own" },
-    { label: "Nothing yet", hint: "Add it on the Action tab instead", value: "__skip" },
+    { label: "Nothing yet", hint: "Add it on the Action screen instead", value: "__skip" },
     ...pool.map((p) => ({ label: p.name, hint: p.desc || p.descriptor || "", value: p.name })),
   ]);
   if (!pick || pick === "__skip") return null;
   if (pick === "__own") {
     const name = await promptModal("Who or what is it?", { title: "Name the enemy",
-      hints: ["You can flesh it out on the Action tab — this just puts something on the board with a card."] });
+      hints: ["You can flesh it out on the Action screen — this just puts something on the board with a card."] });
     if (!name || !name.trim()) return null;
     return Combat.blankCombatant(name.trim());
   }
@@ -2213,8 +2213,8 @@ async function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
   if (enc.surprised || enemySurprised) Combat.drawInitiative(combat);
   Store.saveCombat(combat);
   showToast(enemy
-    ? `Action scene started — ${enemy.name} is on the board. Initiative is on the Action tab.`
-    : "Action scene started — add the enemy on the Action tab.", { variant: "good", timeout: 6000 });
+    ? `Action scene started — ${enemy.name} is on the board. Initiative is on the Action screen.`
+    : "Action scene started — add the enemy on the Action screen.", { variant: "good", timeout: 6000 });
   renderSolo(mount);
 }
 
@@ -2375,7 +2375,7 @@ function referenceCard(state, mount) {
 
 /**
  * Called by the End social scene lifecycle bundle so a social scene played through the normal
- * table flow also satisfies solo loop step 5 — otherwise the solo tab stays stuck on it.
+ * table flow also satisfies solo loop step 5 — otherwise the Solo screen stays stuck on it.
  */
 export function markSocialScenePlayed() {
   const state = load();
