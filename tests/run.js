@@ -3478,6 +3478,39 @@ const run = async () => {
   ok("the next-step card shows its step as a decorative numeral", soloArt.stepBig);
   ok("no card prints its own title twice", soloArt.dupSummaries === 0, String(soloArt.dupSummaries));
 
+  const r3 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const C = await import("/src/combat.js");
+    const N = await import("/data-npcs.js");
+    const Store = await import("/src/store.js");
+    const Journal = await import("/src/journal.js");
+    const R = await import("/src/roller.js");
+    const cb = C.startActionScene();
+    C.joinCombat(cb, C.combatantFromProfile(N.NPC_PROFILES.find((x) => x.minion), { count: 4 }));
+    location.hash = "#/combat"; await wait(250);
+    const cards = Array.from(document.querySelectorAll("#screen .combatant"));
+    const out = { cards: cards.length,
+      sides: cards.filter((c) => c.querySelector(".cbt-side svg")).length,
+      alts: cards.filter((c) => c.querySelector(".alt-badge svg")).length };
+    Store.clearCombat();
+    if (!Journal.openSession()) Journal.startSession("Art check", Store.activeCharacter().id);
+    R.roll(Store.activeCharacter(), "fighting", "Art check");
+    location.hash = "#/journal"; await wait(250);
+    out.jrIcons = document.querySelectorAll("#screen .jr-icon svg").length;
+    const tools = document.querySelector("#screen .session-tools");
+    out.toolsRow = !tools || getComputedStyle(tools).flexDirection === "row";
+    document.documentElement.setAttribute("data-theme", "dark"); await wait(50);
+    const sel = document.querySelector("#screen .segmented > .chip.selected");
+    const panel = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim();
+    out.segVisible = !!sel && getComputedStyle(sel).backgroundColor !== "rgb(18, 16, 24)";
+    document.documentElement.removeAttribute("data-theme");
+    return out;
+  });
+  ok("every combatant shows its side and altitude as icons", r3.cards > 1 && r3.sides === r3.cards && r3.alts === r3.cards, JSON.stringify(r3));
+  ok("journal entries carry drawn kind icons", r3.jrIcons > 0, String(r3.jrIcons));
+  ok("journal session tools sit in one row", r3.toolsRow);
+  ok("a selected segment stays visible in the night palette", r3.segVisible);
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

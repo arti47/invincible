@@ -431,7 +431,7 @@ function sessionCard(g, mount, openSession) {
 
   if (g.session) {
     const closed = !!g.session.endedAt;
-    card.append(el("div", { class: "chosen-actions" },
+    card.append(el("div", { class: "chosen-actions session-tools" },
       el("button", { class: "btn tiny ghost", onclick: async () => {
         const t = await promptModal("Name this session — an issue title works well.",
           { title: "Rename session", value: g.session.title || "" });
@@ -474,6 +474,9 @@ function burstRow(burst, mount) {
   return wrap;
 }
 
+/** Drawn icons for the journal's entry kinds (the KINDS glyphs stay as the text fallback). */
+const JR_ICONS = { note: "pen", roll: "die", solo: "solo", lifecycle: "play", state: "hero" };
+
 function entryRow(e, mount, { compact = false } = {}) {
   const meta = Journal.KINDS[e.kind] || { name: e.kind, icon: "•" };
   const isOracle = e.kind === "solo" && /→|answer|Engine|oracle/i.test(e.text);
@@ -484,7 +487,7 @@ function entryRow(e, mount, { compact = false } = {}) {
     if (acts) acts.hidden = !acts.hidden;
   } },
     el("span", { class: "jr-head" },
-      el("span", { class: "jr-icon", "aria-hidden": "true", text: meta.icon }),
+      el("span", { class: "jr-icon", "aria-hidden": "true" }, icon(JR_ICONS[e.kind] || "burst", { size: 14 })),
       el("span", { class: "jr-when", text: new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }),
       compact ? null : el("span", { class: "jr-kind", text: meta.name })),
     el("span", { class: e.kind === "note" ? "jr-text written" : "jr-text", text: e.text }));

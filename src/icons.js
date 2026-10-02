@@ -6,6 +6,11 @@
 import { el } from "./core.js";
 
 const P = {
+  pen: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1Z"/><path d="m14 7 3 3"/>',
+  ground: '<path d="M2 18h20"/><path d="M5 18v-3l3-2 3 2v3M14 18v-6h5v6"/>',
+  building: '<path d="M5 21V5l7-2v18M12 8h7v13"/><path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1"/><path d="M2 21h20"/>',
+  cloud: '<path d="M7 18a4.5 4.5 0 1 1 1-8.9A5.5 5.5 0 0 1 18.5 10 4 4 0 0 1 18 18Z"/>',
+  planet: '<circle cx="12" cy="12" r="5"/><path d="M4.5 15.5C1.7 18 1.6 20.2 3.5 20.5c2.6.4 8.6-2.4 12.8-6.6S21.2 4.7 20.5 3.5C20 2.6 18 2.9 15.5 4.6"/>',
   clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/>',
   target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
   map: '<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/>',

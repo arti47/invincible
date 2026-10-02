@@ -11,6 +11,7 @@ import * as Roller from "./roller.js";
 import { Settings } from "./settings.js";
 import * as Journal from "./journal.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
+import { icon } from "./icons.js";
 import { ADVERSARIES } from "../data-monsters.js";
 
 /* ---------------------------------------------------------------- state */
@@ -598,9 +599,14 @@ export function attackBlockedReason(combat, cb) {
   return null;
 }
 
+const ALT_ICONS = { ground: "ground", elevated: "building", sky: "cloud", orbit: "planet" };
+const SIDE_ICONS = { hero: "hero", ally: "hero", adversary: "adversary" };
+
 function healthBar(cb) {
   const pct = cb.maxHealth ? Math.max(0, Math.min(100, Math.round((100 * cb.health) / cb.maxHealth))) : 0;
-  return el("div", { class: `cbt-bar ${pct <= 25 ? "low" : pct <= 55 ? "mid" : ""}`, "aria-hidden": "true" }, el("span", { style: `width:${pct}%` }));
+  // One tick per point of Health (up to 30), so the bar reads as a track, not a gauge.
+  const ticks = cb.maxHealth > 1 && cb.maxHealth <= 30 ? `--hp:${cb.maxHealth}` : "--hp:1";
+  return el("div", { class: `cbt-bar ${pct <= 25 ? "low" : pct <= 55 ? "mid" : ""}`, style: ticks, "aria-hidden": "true" }, el("span", { style: `width:${pct}%` }));
 }
 
 function combatantCard(cb, combat, mount, isUp = false) {
@@ -608,6 +614,7 @@ function combatantCard(cb, combat, mount, isUp = false) {
   const blocked = attackBlockedReason(combat, cb);
   return el("div", { class: `combatant ${cb.side} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""} ${isUp ? "current" : ""}` },
     el("div", { class: "cbt-head" },
+      el("span", { class: `cbt-side side-${cb.side}`, "aria-hidden": "true" }, icon(SIDE_ICONS[cb.side] || "npcs", { size: 18 })),
       el("span", { class: "cbt-card", text: cb.card ? `#${cb.card}` : "—" }),
       // A hero's card is a view of their character, so its name opens the sheet it mirrors.
       cb.side === "hero" && cb.refId
@@ -625,7 +632,7 @@ function combatantCard(cb, combat, mount, isUp = false) {
       el("span", { text: `Slugfest ${cb.slugfest}` }),
       cb.slugfestEmanation ? el("span", { text: `Emanation ${cb.slugfestEmanation}` }) : null,
       cb.altActive ? el("span", { class: "chip warn", text: "Alternate form" }) : null,
-      el("span", { text: cb.altitude })),
+      el("span", { class: `alt-badge alt-${cb.altitude}`, title: "Altitude" }, icon(ALT_ICONS[cb.altitude] || "ground", { size: 14 }), cb.altitude)),
     activeConditionChips(cb),
     // A turn in order: pass your place, move, resolve what hits you, then mark the turn spent.
     el("div", { class: "cbt-actions" },
