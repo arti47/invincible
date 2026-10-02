@@ -4146,6 +4146,24 @@ const run = async () => {
   });
   ok("karma: locked spending names the control that unlocks it, per mode", lockedKarma.solo && lockedKarma.table && !lockedKarma.nulls, JSON.stringify(lockedKarma));
 
+  // Every problem on the last wizard step links to the step that fixes it.
+  const wizFix = await page.evaluate(async () => {
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/create"; await new Promise((r) => setTimeout(r, 300));
+    Array.from(document.querySelectorAll(".wizard-step")).pop()?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const items = Array.from(document.querySelectorAll(".validation li"));
+    const fixes = items.map((li) => li.querySelector(".wizard-fix")?.textContent || "");
+    const unspent = items.find((li) => /unspent|more than your budget/.test(li.textContent));
+    const srcFix = (items.find((li) => /power source/i.test(li.textContent))?.querySelector(".wizard-fix")?.textContent) || "";
+    unspent?.querySelector(".wizard-fix")?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    const now = document.querySelector(".wizard .stage-label")?.textContent || "";
+    return { n: items.length, fixes, srcFix, now };
+  });
+  ok("wizard: a validation problem links to the step that fixes it", wizFix.n > 0 && /Step 3 of 9/.test(wizFix.now), JSON.stringify(wizFix));
+  ok("wizard: a missing power source points at the Power sources step, not Powers", !wizFix.srcFix || /step 5: Power sources/.test(wizFix.srcFix), wizFix.srcFix);
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

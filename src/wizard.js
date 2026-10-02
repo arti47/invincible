@@ -712,11 +712,27 @@ function stepFinish() {
 
   const v = validateCharacter(normalizeCharacter(draft));
   const report = el("div", { class: "validation" });
-  if (v.errors.length) report.append(el("h4", { class: "bad", text: "Not legal yet" }), el("ul", {}, ...v.errors.map((e) => el("li", { text: e }))));
-  if (v.warnings.length) report.append(el("h4", { class: "warn", text: "Warnings" }), el("ul", {}, ...v.warnings.map((e) => el("li", { text: e }))));
+  // Each problem links to the step that fixes it, so "not legal" is never a dead end.
+  const item = (e) => {
+    const to = fixStepFor(e);
+    return el("li", {}, e, to === null ? null : el("button", { class: "btn tiny ghost wizard-fix", onclick: () => { step = to; render(); } },
+      `Fix it — step ${to + 1}: ${STEPS[to]}`));
+  };
+  if (v.errors.length) report.append(el("h4", { class: "bad", text: "Not legal yet" }), el("ul", {}, ...v.errors.map(item)));
+  if (v.warnings.length) report.append(el("h4", { class: "warn", text: "Warnings" }), el("ul", {}, ...v.warnings.map(item)));
   if (!v.errors.length && !v.warnings.length) report.append(el("p", { class: "good", text: "Legal build — ready to play." }));
   wrap.append(report);
   return wrap;
+}
+
+/** Which wizard step owns a validation message (derived.validateCharacter's wording). */
+function fixStepFor(msg) {
+  if (/attribute point|must be at least 1|exceeds the .* maximum|^(FIGHTING|AGILITY|STRENGTH|REASON|INTUITION|PRESENCE)\b/i.test(msg)) return 2;
+  if (/power source/i.test(msg)) return 4;
+  if (/power|Massive|Monstrous| level\./i.test(msg)) return 3;
+  if (/drawback|talent|can only be taken/i.test(msg)) return 5;
+  if (/occupation/i.test(msg)) return 6;
+  return null;
 }
 
 function field(label, value, onInput, multiline = false) {
@@ -730,8 +746,12 @@ async function finish() {
   const c = normalizeCharacter(draft);
   const v = validateCharacter(c);
   if (v.errors.length) {
-    const go = await confirmModal(`This build has ${v.errors.length} rules problem(s):\n\n${v.errors.join("\n")}\n\nSave anyway?`, { title: "Illegal build", confirmLabel: "Save anyway", variant: "warn" });
-    if (!go) return;
+    const go = await confirmModal(`This build has ${v.errors.length} rules problem(s):\n\n${v.errors.join("\n")}\n\nSave anyway?`, { title: "Illegal build", confirmLabel: "Save anyway", cancelLabel: "Fix it first", variant: "warn" });
+    if (!go) {
+      const to = fixStepFor(v.errors[0]);
+      if (to !== null) { step = to; render(); }
+      return;
+    }
   }
   c.state.health = maxHealth(c);
   c.state.resolve = maxResolve(c);
