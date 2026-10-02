@@ -882,6 +882,7 @@ export function renderTasks(mount) {
         el("strong", { text: t.name }),
         done ? el("span", { class: "chip tiny good task-state", text: "Overcome" }) : null,
         outOfTime ? el("span", { class: "chip tiny warn task-state", text: "Out of time — the failure happens" }) : null,
+        t.retry && t.attempts ? el("span", { class: "chip tiny warn task-state", text: `−${t.retry.penalty * t.attempts} dice (attempt ${t.attempts + 1})` }) : null,
         el("p", { class: "muted small", text: `${t.remaining} of ${t.rating} remaining · limit ${t.timeLimit} · ${t.timeSpent} spent` }),
         t.detail ? el("p", { class: "small", text: t.detail }) : null,
         (t.objectives || []).length ? el("details", {}, el("summary", { text: "Objectives" }),
@@ -889,6 +890,18 @@ export function renderTasks(mount) {
       el("div", { class: "chosen-actions" },
         done ? null : el("button", { class: "btn tiny primary", onclick: () => contributeToTask(t, mount) }, "Roll"),
         done ? null : el("button", { class: "btn tiny ghost", onclick: () => { t.timeSpent += 1; Store.saveTasks(tasks); renderRefresh(mount); } }, "Advance time"),
+        // A challenge that publishes a retry rule (Magical Ward): failing the limit resets the
+        // rating and every later attempt rolls at a cumulative penalty until it is left alone.
+        outOfTime && t.retry ? el("button", { class: "btn tiny", onclick: () => {
+          t.attempts = (t.attempts || 0) + 1;
+          t.rating = t.retry.rating; t.remaining = t.retry.rating; t.timeSpent = 0;
+          Store.saveTasks(tasks); renderRefresh(mount);
+          showToast(`${t.name} resets to ${t.retry.rating}. Rolls against it now take −${t.retry.penalty * t.attempts} dice.`, { variant: "warn", timeout: 6000 });
+        } }, `Try again (resets to ${t.retry.rating}, −${t.retry.penalty * ((t.attempts || 0) + 1)} dice)`) : null,
+        t.retry && t.attempts && !outOfTime ? el("button", { class: "btn tiny ghost", onclick: () => {
+          t.attempts = 0; Store.saveTasks(tasks); renderRefresh(mount);
+          showToast("Left alone for a few hours — the penalty is gone.", { variant: "good" });
+        } }, "Left alone for a few hours") : null,
         // Dropping was instant and permanent; it now keeps a copy the toast can put back.
         el("button", { class: "btn tiny danger", onclick: () => {
           const before = Store.getTasks();
@@ -915,7 +928,7 @@ async function openChallengePicker(mount) {
   if (!pick) return;
   const src = D.CHALLENGES.find((c) => c.name === pick);
   const tasks = Store.getTasks();
-  tasks.push({ id: uid("task"), name: src.name, detail: `${src.tagline} ${src.detail}`, rating: src.rating, remaining: src.rating, timeLimit: src.limit, timeSpent: 0, objectives: src.objectives, contributors: [] });
+  tasks.push({ id: uid("task"), name: src.name, detail: `${src.tagline} ${src.detail}`, rating: src.rating, remaining: src.rating, timeLimit: src.limit, timeSpent: 0, objectives: src.objectives, contributors: [], retry: src.retry || null, attempts: 0 });
   Store.saveTasks(tasks);
   renderRefresh(mount);
 }
@@ -943,7 +956,9 @@ async function contributeToTask(task, mount) {
   if (!hero) { showToast("No active hero.", { variant: "warn" }); return; }
   const attr = await chooseModal("Which attribute?", D.ATTRIBUTES.map((a) => ({ label: a.name, hint: a.desc, value: a.key })));
   if (!attr) return;
-  const res = Roller.challengeContribution(hero, attr, task);
+  const penalty = task.retry && task.attempts ? task.retry.penalty * task.attempts : 0;
+  const res = Roller.challengeContribution(hero, attr, task,
+    { situational: penalty ? [{ label: "Earlier failed attempts", value: -penalty }] : [] });
   const tasks = Store.getTasks();
   const t = tasks.find((x) => x.id === task.id);
   t.remaining = Math.max(0, t.remaining - res.progress);

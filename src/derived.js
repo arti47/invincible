@@ -94,7 +94,9 @@ export function reputation(character) {
 export function resources(character) {
   const occ = R.findOccupation(character.identity?.occupation);
   const base = character.identity?.resourcesBase ?? (occ ? occ.resources : 3);
-  return clamp(base + talentStatBonus(character, "resources"), 1, 8);
+  // A loan drops Resources one step for its term (Ch.4); the step returns when the loan ends.
+  const loan = character.state?.loan ? 1 : 0;
+  return clamp(base + talentStatBonus(character, "resources") - loan, 1, 8);
 }
 
 export function liftLimit(character) {
@@ -383,6 +385,15 @@ export function normalizeCharacter(raw) {
   c.state.session = { ...base.state.session, ...(c.state.session || {}) };
   c.state.altForm = { ...base.state.altForm, ...(c.state.altForm || {}) };
   c.state.restFlags = c.state.restFlags || {};
+  // Loans before 2026-10-02 lowered identity.resourcesBase permanently and parked an unread
+  // restFlags.loan. Move them to state.loan (which expires) and give the base its step back.
+  if (c.state.restFlags.loan && !c.state.loan) {
+    const old = c.state.restFlags.loan;
+    c.state.loan = { steps: old.steps || 1, at: old.at || Date.now() };
+    if (typeof c.identity?.resourcesBase === "number") c.identity.resourcesBase += 1;
+    delete c.state.restFlags.loan;
+  }
+  if (c.state.loan === undefined) c.state.loan = null;
   c.talents = (c.talents || []).map((t) => (typeof t === "string" ? { name: t, rank: 1 } : { rank: 1, ...t }));
   c.powers = (c.powers || []).map((p) => (typeof p === "string"
     ? { ...R.parsePowerRef(p), boosts: [], limits: [] }

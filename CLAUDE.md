@@ -281,7 +281,7 @@ the rolls that satisfy it; handling an objective **always requires a roll, even 
 otherwise the stated failure happens. Eight published challenges extracted: Burning Building (6,
 special), Complex Investigation (4, 2 days), Extreme Weather (8, 4 rounds), Hostage Negotiation
 (3, 3 rounds), Doomsday Device (6, 3 rounds), Magical Ward (9, 3 rounds — resets to 8, then −2 dice
-cumulative), Runaway Train (4, 3 rounds), Toxic Accident (10, 5 rounds). One **generic progress
+cumulative; applied by the tracker via `CHALLENGES[].retry`), Runaway Train (4, 3 rounds), Toxic Accident (10, 5 rounds). One **generic progress
 tracker** component serves all of them (plus story countdowns and solo objective timers).
 
 ### 3.14 Powers — **YES, a full subsystem**
@@ -316,7 +316,8 @@ compare **Resources vs item Cost**: higher → automatic; equal → roll Resourc
 (**cannot be pushed**), on failure one **PRESENCE** barter attempt, on double failure the item is
 unavailable for a few days; lower → impossible without a **loan** (+1 Cost for a few weeks at −1
 Resources, or +2 for a few months; Resources 2–3 needs **Streetwise** to borrow, Resources 1 cannot
-borrow). Others may **pool** Resources dice into a purchase. **Restricted (R)** items need
+borrow; the step is `state.loan` and ends from the Hero tab). Others may **pool** Resources dice
+into a purchase (asked before any purchase roll). **Restricted (R)** items need
 **Streetwise** regardless of Resources. Purchased items are consumed/lost after their purpose
 unless written on the sheet.
 Catalogues extracted: **17 weapons**, **3 body armors**, **17 general gear items** (plus the mobile phone from the price ladder), **21 vehicles**
@@ -516,7 +517,8 @@ campaigns/{campaignId}
                               slugfest, attrs{}, minionCount, huge, conditions{}, altitude,
                               zone, actions{full,quick}, crits[] } },
              pendingOpposed{ type, attackerId, defenderId, attackerDice, defenderDice } }
-  tasks/{taskId}: { name, rating, remaining, timeLimit, timeSpent, contributors[], objectives[] }
+  tasks/{taskId}: { name, rating, remaining, timeLimit, timeSpent, contributors[], objectives[],
+                    retry?:{ rating, penalty }, attempts }
   rollLog/{pushId}: { by, characterName, label, attribute, pool, dice[], sixes, ones,
                       pushed, stressTaken, stunts[], outcome, ts }
   broadcast/{pushId}: { text, ts, from }
@@ -533,7 +535,7 @@ characters/{characterId}
                broken, dying{ active, deadline, stabiliseAttempted },
                scene{ wreckedZone, poweredUsed[], energyDice, barriers[] },
                session{ karmaAnswers{}, badKarmaAnswers{}, flawState, stage },
-               altForm:{ active, source }, restFlags{} }
+               altForm:{ active, source }, restFlags{}, loan:{ steps, at }|null }
   talents:   [{ name, subject?, rank }]
   powers:    [{ name, level, boosts[], limits[], source, notes }]
   drawbacks: [{ name, detail }]
@@ -889,6 +891,7 @@ meant.
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-10-02 | **Rules-fidelity fixes — three book rules that were printed or half-built.** Asked whether the app is still faithful: no rules data or engine changed across the twelve audit rounds, and the 25 rules-accuracy checks pass; three older gaps were found and closed. (1) **A loan's Resources drop was permanent.** `applyLoan` wrote the −1 into `identity.resourcesBase` and parked a `restFlags.loan` nothing read, so the book's "a few weeks / a few months" never ended (it also folded talent bonuses into the base). Now `state.loan` holds it, `Derived.resources` subtracts the step while it lasts, and the Gear card shows the loan with **That time has passed — end the loan**. `normalizeCharacter` migrates old saves: the base gets its step back and the loan moves to `state.loan`. (2) **Pooling Resources dice was unreachable** — `roller.purchase` has always taken `pooledDice` and no caller passed it. Before any purchase roll the app asks **Is anyone chipping in?** — each other hero (+their Resources) or someone else (typed). (3) **The Magical Ward's retry rule was prose only.** `CHALLENGES` gained `retry: { rating: 8, penalty: 2 }` from its own detail line; a ward out of time offers **Try again** (rating and remaining to 8, time to 0, attempt counted), later rolls carry −2 per failed attempt, and **Left alone for a few hours** clears the penalty. | Asked: is the app still faithful to the rules? | `npm test` — 573 passed, 0 failed; `npm run probe` — 583 passed, 0 failed; playtest seed 1 — 0 stalls, 0 console errors. 4 new checks: a loan drops one step and the step returns, an old permanent loan migrates, a teammate's Resources join a purchase roll (4 + 3 dice), and the ward resets to 8 with the retry at −2. | v80 |
 | 2026-10-02 | **Second pass, round 6 — every removal is one tap from undone, and final verification.** Swept every remove/stop/drop control. Seven were instant and permanent, so one mis-tap lost a timer's progress, an objective's karma, a purchased item or a combatant's state: the Crises **Ignore**, a timer's **Stop**, an objective's and an ally group's **Drop**, **Stop the encounter timer**, a combatant's **Remove**, and an inventory item's **Drop**. The five solo ones now share `discard()` (snapshot → apply → toast with **Undo**, reusing the existing single-step solo undo); the combatant restores the board as it was; the item goes back into its slot. Closed with the full suite, the click probe and three playtest seeds. | Second pass, round 6. | `npm test` — 569 passed, 0 failed; `npm run probe` — 579 passed, 0 failed; playtest seeds 1, 5, 11 — 0 stalls, 0 console errors. 1 new check covering the four solo board removals, each driven through its button and its toast's Undo. | v79 |
 | 2026-10-02 | **Second pass, round 5 — challenges say how they ended, and Drop is undoable.** Click probe re-run clean (575/0), then the challenge tracker walked as a first-timer. (1) **A finished challenge looked unfinished.** The row read *"0 of 6 remaining · limit 3 rounds · 1 spent"* and still offered **Roll**; one past its limit read *"3 spent"* and said nothing. It now carries **Overcome** (Roll and Advance time removed, Drop renamed Clear) or **Out of time — the failure happens** when time spent reaches a numeric limit (§3.13). (2) **Drop deleted instantly with no way back**; it now snapshots the list and the toast offers **Undo**. | Second pass, round 5. | `npm test` — 568 passed, 0 failed; `npm run probe` — 575 passed, 0 failed; 3 new checks: Overcome with no roll offered, Out of time past the limit, and Drop → Undo restores the challenge. | v78 |
 | 2026-10-02 | **Second pass, round 4 — the creation wizard's "not legal yet" is no longer a dead end.** The last step listed validation problems as plain text, and *Create hero* on an illegal build offered only *Save anyway* / *Cancel*; a first-timer had to work out which of nine steps each message belonged to. Each error and warning now carries **Fix it — step N: <name>**, mapped from `validateCharacter`'s wording (attribute budget/limits → Attributes, powers and levels → Powers, a missing power source → Power sources, drawbacks/talent caps → Talents & Drawbacks); the illegal-build dialog's cancel became **Fix it first** and jumps to the step owning the first error. | Second pass, round 4. | `npm test` — 565 passed, 0 failed; 2 new checks: a problem links to its step and lands there, and a missing power source points at Power sources rather than Powers (the word "power" would otherwise match first). | v77 |

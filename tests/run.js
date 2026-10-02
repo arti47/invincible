@@ -4230,6 +4230,79 @@ const run = async () => {
   ok("solo: ignoring a crisis, stopping a timer, dropping an objective or an ally group can each be undone",
     Object.values(undoables).every((v) => v.found && v.gone === 0 && v.back === 1), JSON.stringify(undoables));
 
+  // Rules fidelity (2026-10-02): a loan's step ends, others can pool Resources dice, and the
+  // Magical Ward's retry rule is applied rather than only printed.
+  const fidelity = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const Derived = await import("/src/derived.js");
+    const R = await import("/src/rules.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", false);
+    const out = {};
+    // Loan: a step that ends, and old saves migrated.
+    let c = Store.activeCharacter();
+    Store.updateCharacter((ch) => { ch.identity.resourcesBase = 4; ch.state.loan = null; }, { id: c.id });
+    const before = Derived.resources(Store.activeCharacter());
+    Store.updateCharacter((ch) => { ch.state.loan = { steps: 1, at: Date.now() }; }, { id: c.id });
+    out.loanDrop = before - Derived.resources(Store.activeCharacter());
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 100));
+    location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 300));
+    Array.from(document.querySelectorAll("#screen button")).find((b) => /end the loan/.test(b.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 150));
+    out.loanEnded = Derived.resources(Store.activeCharacter()) === before && !Store.activeCharacter().state.loan;
+    const old = Derived.normalizeCharacter({ ...JSON.parse(JSON.stringify(Store.activeCharacter())),
+      identity: { ...Store.activeCharacter().identity, resourcesBase: 3 }, state: { ...Store.activeCharacter().state, loan: undefined, restFlags: { loan: { steps: 2, at: 1 } } } });
+    out.migrated = old.identity.resourcesBase === 4 && old.state.loan?.steps === 2 && !old.state.restFlags.loan;
+    // Pooling: a second hero chips in their Resources as dice on an equal-Cost purchase.
+    const mate = Store.createCharacter({});
+    Store.updateCharacter((ch) => { ch.identity.resourcesBase = 3; }, { id: mate.id });
+    Store.setActiveCharacter(c.id);
+    const item = R.allGear().find((i) => i.cost === 4 && !i.restricted);
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 100));
+    location.hash = "#/sheet"; await new Promise((r) => setTimeout(r, 300));
+    Array.from(document.querySelectorAll("#screen button")).find((b) => /Buy \/ add gear/.test(b.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    Array.from(document.querySelectorAll(".modal .gear-row")).find((r) => r.querySelector("strong")?.textContent === item.name)?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    Array.from(document.querySelectorAll(".modal button")).find((b) => /Roll Resources/.test(b.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const choices = Array.from(document.querySelectorAll(".modal .choice"));
+    out.poolOffered = choices.some((x) => /^With /.test(x.textContent));
+    choices.find((x) => /^With /.test(x.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const last = Store.rollLog().filter((e) => /Purchase:/.test(e.label || "")).pop();
+    out.pool = last ? (last.dice || []).length : -1;
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    Store.deleteCharacter?.(mate.id);
+    // Magical Ward: out of time → Try again → rating 8, attempts 1, the next roll at −2.
+    const keep = Store.getTasks();
+    const ward = R.D.CHALLENGES.find((x) => x.name === "Magical Ward");
+    Store.saveTasks([{ id: "w", name: ward.name, rating: 9, remaining: 5, timeLimit: ward.limit, timeSpent: 3, objectives: [], contributors: [], retry: ward.retry, attempts: 0 }]);
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 100));
+    location.hash = "#/combat"; await new Promise((r) => setTimeout(r, 300));
+    Array.from(document.querySelectorAll("#screen .task button")).find((b) => /Try again/.test(b.textContent))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const t = Store.getTasks()[0];
+    out.ward = { rating: t.rating, remaining: t.remaining, spent: t.timeSpent, attempts: t.attempts };
+    Array.from(document.querySelectorAll("#screen .task button")).find((b) => b.textContent === "Roll")?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    document.querySelector(".modal .choice")?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const wr = Store.rollLog().filter((e) => /Challenge: Magical Ward/.test(e.label || "")).pop();
+    out.wardMods = JSON.stringify(wr?.mods || []);
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.querySelectorAll(".toast").forEach((x) => x.remove());
+    Store.saveTasks(keep);
+    Store.updateCharacter((ch) => { delete ch.identity.resourcesBase; ch.state.loan = null; }, { id: c.id });
+    return { ...out, itemCost: item?.cost, mateRes: 3 };
+  });
+  ok("rules: a loan lowers Resources one step and the step comes back when it ends", fidelity.loanDrop === 1 && fidelity.loanEnded, JSON.stringify(fidelity));
+  ok("rules: an old permanent loan migrates to one that can end, base restored", fidelity.migrated, JSON.stringify(fidelity));
+  ok("rules: a teammate can chip in their Resources dice on a purchase roll", fidelity.poolOffered && fidelity.pool === 4 + 3, JSON.stringify(fidelity));
+  ok("rules: Magical Ward resets to 8 after a failed limit and the retry rolls at -2 dice",
+    fidelity.ward.rating === 8 && fidelity.ward.remaining === 8 && fidelity.ward.spent === 0 && fidelity.ward.attempts === 1 && /-2/.test(fidelity.wardMods), JSON.stringify(fidelity));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
