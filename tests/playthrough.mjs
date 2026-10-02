@@ -24,7 +24,7 @@ import path from "node:path";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const PORT = 8124;
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+  ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
 
 const args = process.argv.slice(2);
 const SEED = Number(args[args.indexOf("--seed") + 1]) || 1;
@@ -179,8 +179,20 @@ async function answerDialogs(page, { prefer = null, max = 8 } = {}) {
 /** Press a control by label. Returns false when the app never offered it — that is a stall. */
 async function press(page, pattern, { why = "", prefer = null, optional = false, exact = false } = {}) {
   const re = new RegExp(exact ? `^${pattern}$` : pattern, "i");
-  const before = await visibleButtons(page);
-  const hit = before.find((t) => re.test(t));
+  let before = await visibleButtons(page);
+  let hit = before.find((t) => re.test(t));
+  // A move like "A fight broke out" hands play to the Action screen. A player there finishes the
+  // fight and comes back; the app's own End scene returns a Crisis Mode player to the Solo screen,
+  // so the harness takes that same route rather than calling it a stall.
+  if (!hit && /#\/combat/.test(await page.evaluate(() => location.hash)) && before.some((t) => /^End scene$/.test(t))) {
+    say("press", `"End scene" (the fight is over — back to the crisis)`);
+    await page.evaluate(() => Array.from(document.querySelectorAll("#screen button")).find((b) => b.textContent.trim() === "End scene")?.click());
+    await page.waitForTimeout(220);
+    await answerDialogs(page, {});
+    await page.waitForTimeout(300);
+    before = await visibleButtons(page);
+    hit = before.find((t) => re.test(t));
+  }
   if (!hit) {
     if (optional) { if (VERBOSE) say("note", `(no "${pattern}" here — skipped)`); return false; }
     stalls.push({ wanted: String(pattern), why, offered: before });

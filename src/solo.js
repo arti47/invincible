@@ -1,7 +1,7 @@
 // solo.js — Crisis Mode assistant (Ch.9): event checks, response engines, and the four timers.
 
 import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup } from "./core.js";
-import { modal, showToast, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
+import { modal, showToast, promptModal, chooseModal, announce, helpPanel, confirmModal } from "./ui.js";
 import * as S from "../data-solo.js";
 import { NPC_PROFILES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
@@ -210,7 +210,9 @@ const NEXT_STEP = [
     run: (state, mount) => doEventCheck(state, mount) },
   { label: "Engage a crisis",
     why: "Pick one of the dangers below and start a crisis timer for it. A running timer is what makes the clock tick without a GM.",
-    run: (state, mount) => focusCard(state, mount, "solo-crises") },
+    // The step's own button must DO the step. It used to only scroll to the Crises panel, so a
+    // first-timer pressed the big yellow button and nothing happened.
+    run: (state, mount) => engageFromCard(state, mount) },
   { label: "Say what your hero just did",
     why: "The timers are set — now play. Decide what your hero does in the fiction, then tell the app: it works out which checks that action triggers and rolls them in order. You never have to pick a timer yourself.",
     run: (state, mount) => whatHappened(state, mount) },
@@ -355,6 +357,8 @@ function nextStepCard(state, mount) {
       el("button", { class: "btn primary big", onclick: () => step.run(state, mount) }, step.label),
       // Step 4 is "play the scene", which is exactly where "but what do I roll?" stops people.
       i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
+      // How a crisis ends was only a header button; at the step where play happens, offer it here.
+      i === 3 && state.alert ? el("button", { class: "btn ghost", title: "When the danger is dealt with in the fiction", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")));
 }
 
@@ -455,6 +459,16 @@ async function rallyOnMemory(state, mount) {
    checks, in the right order, with the right modifiers. */
 
 const MOVES = [
+  // The two things a first-timer does most — try something, or start a fight — had no entry, so
+  // the list described only what happens AROUND the hero and never what the hero does.
+  { key: "risky", label: "I tried something risky",
+    when: "Climbing, persuading, hacking, lifting, sneaking — anything that could fail.",
+    fires: "An attribute roll — the app shows which attribute and rolls it",
+    steps: ["roll"] },
+  { key: "brawl", label: "A fight broke out",
+    when: "You attacked someone, or someone came at you.",
+    fires: "Action scene — pick the enemy, draw initiative, fight on the Action screen",
+    steps: ["combat"] },
   { key: "zone", label: "I moved to a new place",
     when: "Walking into the next zone, room, street or corridor.",
     fires: "Encounter check · crisis timers",
@@ -488,6 +502,10 @@ async function whatHappened(state, mount) {
   const move = MOVES.find((m) => m.key === pick);
   const report = el("div", {});
   let acted = false;
+
+  // These two hand straight over to the screen that does the work, rather than rolling timers.
+  if (move.steps[0] === "roll") { openAttributeGuide(); return; }
+  if (move.steps[0] === "combat") { await startFight(state, mount); return; }
 
   for (const step of move.steps) {
     if (step === "encounter") {
@@ -974,6 +992,21 @@ function crisesCard(state, mount) {
   return card;
 }
 
+/** Step 3 from the next-step card: one crisis engages directly, several ask which. */
+async function engageFromCard(state, mount) {
+  const crises = state.crises || [];
+  if (!crises.length) { focusCard(state, mount, "solo-crises"); return; }
+  let pick = crises[0];
+  if (crises.length > 1) {
+    const id = await chooseModal("Which crisis do you take on?", crises.map((c) => ({
+      label: c.parts?.headline || c.text, hint: [c.parts?.kind, c.parts?.where].filter(Boolean).join(" · "), value: c.id, icon: "hazard",
+    })));
+    pick = crises.find((c) => c.id === id);
+    if (!pick) return;
+  }
+  await engageCrisis(state, pick, mount);
+}
+
 async function engageCrisis(state, crisis, mount) {
   const start = await chooseProximity(state, "How close is it?");
   if (!start) return;
@@ -985,6 +1018,13 @@ async function engageCrisis(state, crisis, mount) {
   save(state);
   showToast(`Crisis timer started at "${start}". Check it as time passes.`, { variant: "good" });
   renderSolo(mount);
+  // Objectives are the whole of solo karma (§3.20), and nothing asked for one — a first session
+  // could be played start to finish and end with nothing earned. Ask once, at the natural moment.
+  if (!(state.objectives || []).length) {
+    const yes = await confirmModal("What is your hero trying to achieve in this crisis? An objective is how solo play pays karma — a session without one earns nothing.",
+      { title: "Set an objective?", confirmLabel: "Set an objective", cancelLabel: "Not now" });
+    if (yes) await addObjective(state, mount);
+  }
 }
 
 /* ---------------------------------------------------------------- loop steps 5 & 6 */
@@ -1047,7 +1087,7 @@ async function resolveCrisis(state, mount) {
   ].filter(Boolean);
   const ok = await modal({ title: "Resolve crisis",
     body: el("div", {},
-      el("p", { class: "muted", text: "This applies the whole bundle. You can undo it in one step." }),
+      el("p", { class: "muted", text: "All of the steps below happen at once. You can undo them in one step." }),
       el("ul", {}, ...lines.map((t) => el("li", { text: t }))),
       el("p", { class: "muted small", text: "Objectives and allies are left alone — claim any objective karma first." })),
     actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Resolve", value: true, variant: "primary" }] }).promise;
@@ -1055,6 +1095,9 @@ async function resolveCrisis(state, mount) {
   snapshot(state, "Resolve crisis");
   state.resolved = (state.resolved || 0) + 1;
   state.alert = "";
+  // The structured parts go with it: Home's "in play" card reads the headline from alertParts,
+  // so leaving them behind showed a resolved crisis as the one still running.
+  state.alertParts = null;
   state.crises = [];
   state.timers = [];
   state.encounter = null;
@@ -1373,7 +1416,9 @@ async function chooseProximity(state, title) {
   // Every rung except "now" — a timer that starts at now has already happened.
   const options = S.CRISIS_TIMER.ladder.slice(0, -1).map((l) => ({
     label: l.name, hint: `${l.dice} threat dice`, value: l.key }));
-  options.push({ label: `Unsure — roll 2D6 for it`, hint: `Reads the ${phase.name.toLowerCase()} column of the proximity table`, value: "__roll" });
+  // A first-timer has no basis for picking a rung, so the roll — the book's own answer to
+  // "unsure" — comes first.
+  options.unshift({ label: `Unsure — roll 2D6 for it`, hint: `Reads the ${phase.name.toLowerCase()} column of the proximity table`, value: "__roll", icon: "die" });
   const pick = await chooseModal(title, options);
   if (!pick) return null;
   if (pick !== "__roll") return pick;
@@ -2205,6 +2250,18 @@ async function pickEncounterEnemy(state) {
   return Combat.combatantFromProfile(profile, { count: n });
 }
 
+/** A fight outside the encounter sequence: pick the enemy, start the scene, go to the board. */
+async function startFight(state, mount) {
+  const enemy = await pickEncounterEnemy(state);
+  const combat = Combat.startActionScene();
+  if (enemy) Combat.joinCombat(combat, enemy);
+  Store.saveCombat(combat);
+  logEvent(state, `Fight broke out${enemy ? ` against ${enemy.name}` : ""}.`);
+  save(state);
+  showToast(enemy ? `${enemy.name} is on the board. Fight it out, then come back here.` : "Add the enemy with Add combatant.", { variant: "good", timeout: 6000 });
+  location.hash = "#/combat";
+}
+
 /** Step 9: draw initiative. Starts a real action scene and puts the enemy on the board with you. */
 async function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
   const enc = state.encounter;
@@ -2228,9 +2285,10 @@ async function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
   if (enc.surprised || enemySurprised) Combat.drawInitiative(combat);
   Store.saveCombat(combat);
   showToast(enemy
-    ? `Action scene started — ${enemy.name} is on the board. Initiative is on the Action screen.`
-    : "Action scene started — add the enemy on the Action screen.", { variant: "good", timeout: 6000 });
-  renderSolo(mount);
+    ? `Action scene started — ${enemy.name} is on the board.`
+    : "Action scene started — add the enemy with Add combatant.", { variant: "good", timeout: 6000 });
+  // The fight happens on the board; send the player there instead of telling them to go.
+  location.hash = "#/combat";
 }
 
 /** Step 10: reset the timer to fit what just happened. */

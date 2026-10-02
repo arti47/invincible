@@ -31,7 +31,7 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..")
 const STATE = path.join(ROOT, "tests", ".play-state.json");
 const PORT = 8126;
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-  ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+  ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2" };
 
 // A dialog cannot survive a page reload, so a command that opens one must also answer it in the
 // SAME invocation. Steps are therefore read as a sequence of verb/argument pairs — which is the

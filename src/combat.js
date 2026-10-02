@@ -13,6 +13,7 @@ import * as Journal from "./journal.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { icon } from "./icons.js";
 import { ADVERSARIES } from "../data-monsters.js";
+import { BINARY_ENGINE } from "../data-solo.js";
 
 /* ---------------------------------------------------------------- state */
 
@@ -314,9 +315,25 @@ async function openAttack(attacker, combat, mount) {
   let defence = null;
   if (defKind && !target.huge) {
     const dice = target.attrs?.[defAttr] || 0;
-    const declared = dice > 0 && await confirmModal(
-      `Declared before the roll: does ${target.name} spend a quick action to ${defKind}? They would roll ${dice} ${defAttr.toUpperCase()} dice, and each 6 cancels one of the attacker's.`,
-      { title: defKind === "block" ? "Block?" : "Dodge?", confirmLabel: `They ${defKind}`, cancelLabel: "No defence" });
+    // With no GM, nobody decides what the enemy does — so in Crisis Mode the oracle can (Ch.9's
+    // Binary Response Engine: 4+ on a D6 is yes).
+    let declared = false;
+    if (dice > 0) {
+      const opts = [
+        { label: `They ${defKind}`, hint: `${dice} ${defAttr.toUpperCase()} dice; each 6 cancels one of the attacker's`, value: "yes" },
+        { label: "No defence", hint: "Keep their quick action", value: "no" },
+      ];
+      if (Settings.soloMode() && target.side !== "hero") opts.unshift({ label: "Let the oracle decide", hint: "Yes / no on a D6 — 4 or more and they defend", value: "oracle", icon: "oracle" });
+      // Declared before the roll (§3.2); it costs the defender their quick action.
+      const pick = await chooseModal(`Does ${target.name} ${defKind}? (before the roll, costs a quick action)`, opts);
+      if (!pick) return;
+      if (pick === "oracle") {
+        const v = 1 + Math.floor(Math.random() * 6);
+        const entry = BINARY_ENGINE.entries.find((e) => v >= e.range[0] && v <= e.range[1]);
+        declared = v >= 4;
+        showToast(`Oracle: ${v} — ${entry?.text || (declared ? "Yes" : "No")}. ${target.name} ${declared ? `${defKind}s` : "does not defend"}.`, { timeout: 5000 });
+      } else declared = pick === "yes";
+    }
     if (declared) { defence = { kind: defKind, dice }; spendDefence(target); }
   }
 
@@ -559,11 +576,15 @@ export function renderCombat(mount) {
       el("button", { class: "btn ghost", onclick: () => openAddCombatant(mount) }, "Add combatant"),
       el("button", { class: "btn ghost", onclick: () => openWreck(combat, mount) }, "Wreck a zone"),
       el("button", { class: roundDone ? "btn primary" : "btn", onclick: () => advanceRound(combat, mount) }, "Next round"),
+      // One confirmation, not two: the bundle dialog already lists what ending does and is undoable.
       el("button", { class: "btn danger", onclick: async () => {
-        if (await confirmModal("End the action scene and run the end-of-scene recovery?", { title: "End action scene", confirmLabel: "End scene" })) {
-          Store.clearCombat(); openLifecycle("action"); renderCombat(mount);
-          if (Settings.soloMode()) showToast("Scene over — the crisis is still running.", { timeout: 8000, action: { label: "Back to Crisis Mode", onClick: () => { location.hash = "#/solo"; } } });
-        }
+        if (!(await openLifecycle("action"))) return;
+        Store.clearCombat();
+        if (Settings.soloMode()) {
+          // A fight is one beat of the solo loop: go straight back, and say what to tell the app.
+          showToast("Scene over. Next: “Say what your hero just did” → “A fight or a long scene ended” rolls the timers.", { timeout: 9000 });
+          location.hash = "#/solo";
+        } else renderCombat(mount);
       } }, "End scene"))));
 
   // The initiative order at a glance: one playing card per combatant, the one acting lifted out.
@@ -924,7 +945,7 @@ export async function openLifecycle(kind) {
   const preview = el("ul", {}, ...bundle.steps.map((s) => el("li", { text: s })));
   const ok = await modal({
     title: bundle.title,
-    body: el("div", {}, el("p", { class: "muted", text: "This will apply the whole bundle. You can undo it in one step." }), preview),
+    body: el("div", {}, el("p", { class: "muted", text: "All of the steps below happen at once. You can undo them in one step." }), preview),
     actions: [{ label: "Cancel", value: false, variant: "ghost" }, { label: "Apply", value: true, variant: "primary" }],
   }).promise;
   if (!ok) return;
@@ -948,6 +969,7 @@ export async function openLifecycle(kind) {
       : { label: "Undo", onClick: () => { Store.undo(); showToast("Undone."); } },
   });
   announce(`${bundle.title} applied.`);
+  return true;
 }
 
 /**
