@@ -71,8 +71,8 @@ export function renderHome(mount) {
   mount.append(roster);
 
   if (team) {
-    mount.append(el("section", { class: "card" },
-      el("h3", { text: team.name || "Your team" }),
+    mount.append(el("section", { class: "card team-card" },
+      el("h3", { class: "with-ico" }, el("span", { class: "head-ico", "aria-hidden": "true" }, icon("building", { size: 18 })), team.name || "Your team"),
       team.purpose ? el("p", { text: team.purpose }) : null,
       el("p", { class: "muted small", text: `${team.base?.location || "No base yet"} — ${(team.base?.upgrades || []).map((u) => u.name).join(", ") || "no upgrades"}` }),
       el("div", { class: "row-actions" },
