@@ -149,6 +149,18 @@ export function purchaseCheck({ resources, cost, restricted, streetwise, loan = 
 
 /* ---------------------------------------------------------------- tables */
 
+/**
+ * The D66 danger table for a rolled global-danger category. Matched case-insensitively:
+ * "Extra-dimensional" strips to "Extradimensional", which is not the data's
+ * globalExtraDimensional, so an exact lookup silently missed it on 1 roll in 6. One resolver,
+ * shared by the GM screen and the solo alert, so the two cannot drift apart again.
+ */
+export function globalDangerTable(categoryText) {
+  const want = ("global" + String(categoryText).replace(/[^a-z]/gi, "")).toLowerCase();
+  const key = Object.keys(D.GM_TABLES).find((k) => k.toLowerCase() === want);
+  return key ? D.GM_TABLES[key] : null;
+}
+
 export function rollNamedTable(table) {
   const die = table.die || "D66";
   for (let i = 0; i < 20; i++) {

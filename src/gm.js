@@ -125,12 +125,7 @@ function cityIncident() {
 
 function globalDanger() {
   const cat = R.rollNamedTable(D.GM_TABLES.globalCategory);
-  // Match the key case-insensitively: "Extra-dimensional" strips to "Extradimensional", which
-  // does not equal the data's globalExtraDimensional, so an exact lookup silently dropped the
-  // danger table on 1 category roll in 6 and printed only a category and a complication.
-  const want = ("global" + cat.entry.text.replace(/[^a-z]/gi, "")).toLowerCase();
-  const key = Object.keys(D.GM_TABLES).find((k) => k.toLowerCase() === want);
-  const table = key ? D.GM_TABLES[key] : null;
+  const table = R.globalDangerTable(cat.entry.text);
   const rows = [line("Category", cat)];
   if (table) rows.push(line(table.name, R.rollNamedTable(table)));
   rows.push(line("Complication", R.rollNamedTable(D.GM_TABLES.globalComplications)));

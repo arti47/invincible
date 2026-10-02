@@ -4027,6 +4027,38 @@ const run = async () => {
   ok("action: attacking with nobody else in the scene points at adding one", /Nobody else is in the scene/.test(lone.toast) && /Add an opponent/.test(lone.toast), lone.toast);
   ok("action: the add list offers a home-made opponent and no second copy of the hero", lone.ownOffered && !lone.heroOffered, JSON.stringify(lone));
 
+  // Solo flow round 1 (second pass): the global-danger lookup is shared and complete; the alert
+  // chooser explains its options and can choose for you; each dialog hands over the next step.
+  const alertFlow = await page.evaluate(async () => {
+    const R = await import("/src/rules.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    const cats = R.D.GM_TABLES.globalCategory.entries.map((e) => e.text);
+    const unresolved = cats.filter((c) => !R.globalDangerTable(c));
+    localStorage.removeItem("invincible:solo");
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 340));
+    const btn = (re, root) => Array.from((root || document).querySelectorAll("button")).find((b) => re.test(b.textContent));
+    btn(/Generate crisis alert/, document.getElementById("screen"))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    const opts = Array.from(document.querySelectorAll(".modal .choice"));
+    const first = opts[0]?.textContent || "";
+    const allHinted = opts.length > 1 && opts.every((o) => o.querySelector(".choice-hint"));
+    opts[0]?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const handEvent = !!btn(/Make the event check/, document.querySelector(".modal"));
+    btn(/Make the event check/, document.querySelector(".modal"))?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const st = JSON.parse(localStorage.getItem("invincible:solo"));
+    const handEngage = !!btn(/Take on a crisis/, document.querySelector(".modal"));
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    return { cats: cats.length, unresolved, first, allHinted, handEvent, handEngage, checks: st.eventChecks, crises: (st.crises || []).length };
+  });
+  ok("solo: every global-danger category resolves through the shared resolver", alertFlow.cats === 6 && !alertFlow.unresolved.length, JSON.stringify(alertFlow.unresolved));
+  ok("solo: the alert chooser leads with Pick for me and explains every source", /^Pick for me/.test(alertFlow.first) && alertFlow.allHinted, JSON.stringify(alertFlow));
+  ok("solo: the alert dialog hands over the event check, which then offers to take on a crisis",
+    alertFlow.handEvent && alertFlow.checks >= 1 && alertFlow.handEngage === (alertFlow.crises > 0), JSON.stringify(alertFlow));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
