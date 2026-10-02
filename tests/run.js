@@ -2962,13 +2962,17 @@ const run = async () => {
     rollCtl().click();
     await new Promise((r) => setTimeout(r, 150));
     Array.from(document.querySelectorAll(".modal .choice")).find((c) => /I moved to a new place/.test(c.textContent)).click();
+    await new Promise((r) => setTimeout(r, 200));
+    // No encounter timer running: the move first asks whether one is needed. Answer "No".
+    const encAsk = /Could enemies be around/.test([...document.querySelectorAll(".modal")].pop()?.textContent || "");
+    Array.from(document.querySelectorAll(".modal .choice")).find((c) => /^No/.test(c.textContent.trim()) && !/stop/.test(c.textContent))?.click();
     await new Promise((r) => setTimeout(r, 250));
     const skipHeads = Array.from(document.querySelectorAll(".modal h4")).map((h) => h.textContent);
     document.querySelector(".modal .modal-actions button")?.click();
     localStorage.removeItem("invincible:solo");
 
     return { cardLabels, rollLabels, triggerCount, triggers, encText, choices, before, reportHeads,
-      afterProx: after.timers[0]?.proximity, eventChecks: after.eventChecks, skipHeads };
+      afterProx: after.timers[0]?.proximity, eventChecks: after.eventChecks, skipHeads, encAsk };
   });
   ok("the Solo tab fronts exactly one control that rolls the right checks for you",
     moves.rollLabels.length === 1, moves.rollLabels.join(" | "));
@@ -3010,6 +3014,8 @@ const run = async () => {
     Store.clearCombat();
     document.querySelector("#solo-next .btn.primary")?.click(); await wait(150);
     pick(/A fight broke out/)?.click(); await wait(150);
+    out.allyAsk = /fighting or in danger alongside/.test(top()?.textContent || "");
+    pick(/^NoJust me/)?.click(); await wait(150);
     pick(/Roll one from the book/)?.click(); await wait(300);
     const c = Store.getCombat();
     out.fight = location.hash === "#/combat" && !!c?.active && c.combatants.some((x) => x.side === "adversary");
@@ -3079,6 +3085,8 @@ const run = async () => {
     /\+1 die/.test(moves.reportHeads.join(" ")) && moves.reportHeads.some((h) => /Event check/.test(h))
       && moves.eventChecks === 2,
     moves.reportHeads.join(" | "));
+  ok("a move into a new place with no encounter timer first asks whether one is needed", moves.encAsk === true);
+  ok("a fight with no ally group first asks whether a group is alongside", stepFlow.allyAsk === true, JSON.stringify(stepFlow));
   ok("a move skips the checks that have nothing running",
     !moves.skipHeads.some((h) => /Encounter check/.test(h)) && moves.skipHeads.some((h) => /Crisis timers/.test(h)),
     moves.skipHeads.join(" | "));
@@ -4302,6 +4310,58 @@ const run = async () => {
   ok("rules: a teammate can chip in their Resources dice on a purchase roll", fidelity.poolOffered && fidelity.pool === 4 + 3, JSON.stringify(fidelity));
   ok("rules: Magical Ward resets to 8 after a failed limit and the retry rolls at -2 dice",
     fidelity.ward.rating === 8 && fidelity.ward.remaining === 8 && fidelity.ward.spent === 0 && fidelity.ward.attempts === 1 && /-2/.test(fidelity.wardMods), JSON.stringify(fidelity));
+
+  // Ally and encounter timers: asked for at the natural moment, named when absent, and off-screen
+  // allies checked before a sitting closes (Ch.9).
+  const whoElse = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const KEY = "invincible:solo";
+    const saved = localStorage.getItem(KEY);
+    const top = () => [...document.querySelectorAll(".modal")].pop();
+    const pick = (re) => Array.from(top()?.querySelectorAll(".choice") || []).find((c) => re.test(c.textContent));
+    const out = {};
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    // Engage with an objective already set → the next question is "Who else is in this?"
+    localStorage.setItem(KEY, JSON.stringify({ crisisLevel: 0, alert: "A", alertParts: { headline: "A" }, eventChecks: 1,
+      crises: [{ id: "c1", text: "Bank job", parts: { headline: "Bank job" } }], timers: [], allies: [],
+      objectives: [{ id: "o1", name: "Stop it", status: "manageable", karma: 2 }], encounter: null, mode: "alert", log: [], awaitingSocial: false, resolved: 0 }));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    document.querySelector("#solo-next .btn.primary")?.click(); await wait(150);
+    pick(/^Unsure/)?.click(); await wait(250);
+    out.asked = /Who else is in this/.test(top()?.textContent || "");
+    out.options = Array.from(top()?.querySelectorAll(".choice") || []).length;
+    pick(/^Enemies could be hiding/)?.click(); await wait(200);
+    pick(/^All clear/)?.click(); await wait(250);
+    out.encounterStarted = !!JSON.parse(localStorage.getItem(KEY)).encounter;
+    // Step-4 card names what is not running (allies here) and offers it
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    const nr = document.querySelector("#solo-next .not-running")?.textContent || "";
+    out.notRunningAllies = /Allies:/.test(nr) && !/Encounter:/.test(nr);
+    // Off-screen allies: an unchecked group is offered a roll before the sitting closes
+    const st = JSON.parse(localStorage.getItem(KEY));
+    st.allies = [{ id: "a1", name: "Police officers", status: "unified" }];
+    localStorage.setItem(KEY, JSON.stringify(st));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    Array.from(document.querySelectorAll("#screen button")).find((b) => /Stop for tonight/.test(b.textContent))?.click(); await wait(200);
+    out.offscreenAsk = /Check on Police officers/.test(top()?.textContent || "");
+    pick(/^Roll for them/)?.click(); await wait(250);
+    out.offscreenRolled = /while you were away/.test(top()?.textContent || "");
+    Array.from(top()?.querySelectorAll(".modal-actions button") || []).find((b) => /Continue/.test(b.textContent))?.click(); await wait(200);
+    Array.from(top()?.querySelectorAll(".modal-actions button") || []).find((b) => /Stop here/.test(b.textContent))?.click(); await wait(250);
+    const after = JSON.parse(localStorage.getItem(KEY));
+    out.closed = !!after.closed;
+    out.flagsReset = (after.allies || []).every((a) => !a.checked);
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    if (saved) localStorage.setItem(KEY, saved); else localStorage.removeItem(KEY);
+    location.hash = "#/home"; await wait(150);
+    return out;
+  });
+  ok("solo: engaging a crisis asks who else is in it (just me / a group / hidden enemies)", whoElse.asked && whoElse.options === 3, JSON.stringify(whoElse));
+  ok("solo: choosing hidden enemies starts the encounter timer", whoElse.encounterStarted, JSON.stringify(whoElse));
+  ok("solo: the step-4 card names the timer that is not running, and only that one", whoElse.notRunningAllies, JSON.stringify(whoElse));
+  ok("solo: an off-screen ally group is checked before the sitting closes, then owed again next time",
+    whoElse.offscreenAsk && whoElse.offscreenRolled && whoElse.closed && whoElse.flagsReset, JSON.stringify(whoElse));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:

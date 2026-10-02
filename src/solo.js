@@ -247,6 +247,7 @@ const NEXT_STEP = [
  * headHome(), which is the in-fiction "we are done, go rest" and does clear the board.
  */
 async function stopForTonight(state, mount) {
+  if (!(await checkOffscreenAllies(state))) return;
   const live = (state.timers || []).length;
   // Two genuinely different endings share this control, so every line it writes has to know which
   // one happened. The crisis being RESOLVED is not "paused mid-crisis", and saying so put a
@@ -271,6 +272,7 @@ async function stopForTonight(state, mount) {
   if (!go) return;
   const headline = state.alertParts?.headline || state.alert || "a crisis in progress";
   state.closed = true;
+  resetAllyChecks(state);
   const line = won
     ? `Session closed: crisis resolved, at level ${state.crisisLevel}.`
     : `Session closed: paused mid-crisis at level ${state.crisisLevel}. Still out there: ${headline}.`;
@@ -285,6 +287,7 @@ async function stopForTonight(state, mount) {
 }
 
 async function headHome(state, mount) {
+  if (!(await checkOffscreenAllies(state))) return;
   const c = Store.activeCharacter();
   const reached = (state.objectives || []).filter((o) => o.status === "reached");
   const owed = reached.reduce((n, o) => n + (o.karma || 0), 0);
@@ -324,6 +327,7 @@ async function headHome(state, mount) {
   ].filter(Boolean).join(" ");
 
   state.objectives = (state.objectives || []).filter((o) => o.status !== "reached");
+  resetAllyChecks(state);
   state.alert = "";
   state.crises = [];
   state.eventChecks = 0;
@@ -380,8 +384,48 @@ function nextStepCard(state, mount) {
       i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
       // How a crisis ends was only a header button; at the step where play happens, offer it here.
       i === 3 && state.alert ? el("button", { class: "btn ghost", title: "When the danger is dealt with in the fiction", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
-      el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")));
+      el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")),
+    i === 3 ? notRunning(state, mount) : null);
 }
+
+/** At step 4, name the timers that are NOT running and when each would be — absence by choice, not oversight. */
+function notRunning(state, mount) {
+  const rows = [];
+  if (!liveAllies(state).length) rows.push(el("li", {},
+    el("strong", { text: "Allies: " }), "only if a group is helping you or at risk. ",
+    el("button", { class: "btn tiny ghost", onclick: () => addAllies(state, mount) }, "Add a group")));
+  if (!state.encounter) rows.push(el("li", {},
+    el("strong", { text: "Encounter: " }), "only if enemies may be hiding somewhere you are exploring. ",
+    el("button", { class: "btn tiny ghost", onclick: () => startEncounter(state, mount) }, "Start one")));
+  if (!rows.length) return null;
+  return el("div", { class: "not-running" },
+    el("p", { class: "muted small", text: "Not running — and that is fine unless the story says otherwise:" }),
+    el("ul", { class: "small" }, ...rows));
+}
+
+/**
+ * Ch.9: check on off-screen allies at least once per session. Before a sitting closes, any group
+ * not rolled since the last close is offered one check (no bonus — nothing specific is happening).
+ * Returns false if the player backed out of ending.
+ */
+async function checkOffscreenAllies(state) {
+  const owed = liveAllies(state).filter((a) => !a.checked);
+  if (!owed.length) return true;
+  const pick = await chooseModal(`Check on ${owed.map((a) => a.name.split(" — ")[0]).join(", ")} first?`, [
+    { label: "Roll for them", hint: "Ch.9 checks on allies you left behind at least once per session", value: "roll" },
+    { label: "Skip it", value: "skip" },
+  ]);
+  if (pick === null || pick === undefined) return false;
+  if (pick === "skip") return true;
+  const lines = owed.map((a) => { const r = rollAlly(state, a, 0, false); return el("p", {}, el("strong", { text: `${a.name.split(" — ")[0]}: ` }), r.text); });
+  save(state);
+  await modal({ title: "Your allies, while you were away", body: el("div", {}, ...lines),
+    actions: [{ label: "Continue", variant: "primary" }] }).promise;
+  return true;
+}
+
+/** A sitting has closed: every group is owed a fresh check next time. */
+function resetAllyChecks(state) { for (const a of state.allies || []) a.checked = false; }
 
 /** Guide, don't block: warn when acting out of order, then run the action anyway. */
 function offSequence(state, want, label) {
@@ -527,7 +571,12 @@ async function whatHappened(state, mount) {
 
   // These two hand straight over to the screen that does the work, rather than rolling timers.
   if (move.steps[0] === "roll") { openAttributeGuide(); return; }
-  if (move.steps[0] === "combat") { await startFight(state, mount); return; }
+  if (move.steps[0] === "combat") { await offerMissingTimer(state, mount, "ally"); await startFight(load(), mount); return; }
+  // A move whose timer is not running asks whether it should be, before rolling anything.
+  if (move.steps.includes("encounter") || move.steps.includes("ally")) {
+    await offerMissingTimer(state, mount, move.steps.includes("ally") ? "ally" : "encounter");
+    Object.assign(state, load());
+  }
 
   for (const step of move.steps) {
     if (step === "encounter") {
@@ -1048,6 +1097,44 @@ async function engageCrisis(state, crisis, mount) {
       { title: "Set an objective?", confirmLabel: "Set an objective", cancelLabel: "Not now" });
     if (yes) await addObjective(state, mount);
   }
+  await askWhoElse(state, mount);
+}
+
+/** Live ally groups (anyone left to roll for). */
+const liveAllies = (state) => (state.allies || []).filter((a) => a.status !== "alone");
+
+/**
+ * The ally and encounter timers each have a Ch.9 trigger a first-timer cannot be expected to know:
+ * allies when a GROUP is helping or at risk, the encounter timer when enemies may be hiding in a
+ * place you are exploring. Ask once, when a crisis is engaged — "just me" costs one tap.
+ */
+async function askWhoElse(state, mount) {
+  if (liveAllies(state).length || state.encounter) return;
+  const pick = await chooseModal("Who else is in this?", [
+    { label: "Just me", hint: "No group with you, and no hidden enemies to hunt for. Neither timer is needed.", value: "none" },
+    { label: "A group is helping or at risk", hint: "Police, soldiers, bystanders, hostages → an ally timer tracks how they hold up", value: "allies" },
+    { label: "Enemies could be hiding here and I don't know where", hint: "You are exploring or evading in a place → an encounter timer tracks how close they get", value: "encounter" },
+  ]);
+  if (pick === "allies") await addAllies(state, mount);
+  else if (pick === "encounter") await startEncounter(state, mount);
+}
+
+/**
+ * A move that only matters to a timer that is not running asks one question first, so the player
+ * is offered the timer at the moment the fiction calls for it. "Stop asking" lasts until the next
+ * crisis alert.
+ */
+async function offerMissingTimer(state, mount, kind) {
+  const isAlly = kind === "ally";
+  if (isAlly ? (liveAllies(state).length || state.skipAllyPrompt) : (state.encounter || state.skipEncounterPrompt)) return;
+  const pick = await chooseModal(isAlly ? "Is a group fighting or in danger alongside you?" : "Could enemies be around here that you haven't found yet?", [
+    { label: isAlly ? "Yes — add the group" : "Yes — start an encounter timer",
+      hint: isAlly ? "Their own dice show how they hold up" : "It checks for them each time you move or linger", value: "yes" },
+    { label: "No", hint: isAlly ? "Just me" : "Ordinary travel needs no encounter timer", value: "no" },
+    { label: "No — stop asking this crisis", value: "never" },
+  ]);
+  if (pick === "never") { state[isAlly ? "skipAllyPrompt" : "skipEncounterPrompt"] = true; save(state); }
+  if (pick === "yes") await (isAlly ? addAllies(state, mount) : startEncounter(state, mount));
 }
 
 /* ---------------------------------------------------------------- loop steps 5 & 6 */
@@ -1355,6 +1442,8 @@ async function generateAlert(state, mount) {
   state.eventChecks = 0;
   state.awaitingSocial = false;
   state.crises = [];
+  state.skipAllyPrompt = false;
+  state.skipEncounterPrompt = false;
   addCrisis(state, text, "alert", parts);
   logEvent(state, `New crisis alert: ${text}`);
   // An alert IS the start of a sitting, so the journal opens a session here. Without this every
@@ -1753,6 +1842,7 @@ async function addAllies(state, mount) {
   state.allies.push({ id: uid("ally"), name, status });
   save(state);
   renderSolo(mount);
+  return true;
 }
 
 /** Audit A25: each 6 is 2 damage in a fight; each 1 drops the status one step. */
@@ -1766,6 +1856,7 @@ export function rollAlly(state, ally, bonus, inFight) {
   const ones = faces.filter((f) => f === 1).length;
   const next = Math.min(ladder.length - 1, idx + ones);
   ally.status = ladder[next].key;
+  ally.checked = true;   // Ch.9: check on allies at least once per session — this counts
   const damage = inFight ? sixes * 2 : 0;
   const text = [
     sixes ? `${sixes} success${sixes === 1 ? "" : "es"}${inFight ? ` — ${damage} damage to enemies` : ""}.` : "No successes.",
@@ -2074,6 +2165,7 @@ async function startEncounter(state, mount) {
   logEvent(state, `Encounter timer started at ${encRung(presence).name}.`);
   save(state);
   renderSolo(mount);
+  return true;
 }
 
 /** Steps 2-4, and 5-6 when the presence reaches 'encountered'. */

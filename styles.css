@@ -1109,3 +1109,6 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .gear-verdict { display: inline-block; margin-top: 4px; }
 .chip.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--paper-2)); }
 .task-state { margin-left: 8px; vertical-align: middle; }
+.next-step .not-running { margin-top: 12px; }
+.next-step .not-running ul { margin: 4px 0 0; padding-left: 18px; }
+.next-step .not-running li { margin: 4px 0; }
