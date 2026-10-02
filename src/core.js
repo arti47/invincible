@@ -78,6 +78,11 @@ export function rollTable(table, tries = 12) {
 
 /* ---------------------------------------------------------------- formatting */
 
+/** One die face. The digit stays as text (for logs and assistive tech); CSS draws the pips. */
+export function dieEl(v, i = 0) {
+  return el("span", { class: `die ${v === SUCCESS ? "six" : v === BANE ? "one" : ""}`, "data-v": v, role: "img", "aria-label": `Rolled ${v}`, style: `--i:${i}` }, String(v));
+}
+
 export const dieFace = (v) => (v === SUCCESS ? "★" : v === BANE ? "✖" : String(v));
 export const signed = (n) => (n >= 0 ? `+${n}` : String(n));
 export function plural(n, one, many) { return `${n} ${n === 1 ? one : many || one + "s"}`; }

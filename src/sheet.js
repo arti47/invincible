@@ -1,7 +1,8 @@
 // sheet.js — the live character sheet, persistent resource header and all in-play tracking.
 
-import { el, clear, clamp, uid, STORAGE_PREFIX } from "./core.js";
-import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
+import { el, clear, clamp, uid, dieEl, STORAGE_PREFIX } from "./core.js";
+import { emblem } from "./icons.js";
+import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -22,25 +23,38 @@ export function renderResourceHeader(mount) {
   if (!c) { mount.hidden = true; return; }
   mount.hidden = false;
   const s = Derived.summary(c);
+  const prev = renderResourceHeader.last || {};
   const pill = (label, value, max, kind) => el("button", {
     class: `res-pill ${kind}`, "aria-label": `${label} ${value} of ${max}`,
     onclick: () => openVitalEditor(kind),
-  }, el("span", { class: "res-label", text: label }), el("span", { class: "res-value", "aria-live": "polite", text: `${value}/${max}` }));
+  }, el("span", { class: "res-label", text: label }),
+    el("span", { class: `res-value ${prev[kind] !== undefined && prev[kind] !== value ? "tick" : ""}`, "aria-live": "polite", text: `${value}/${max}` }),
+    el("span", { class: "res-meter", style: `width:${max ? Math.round((100 * value) / max) : 0}%` }));
+  const flat = (label, value, title, extra = "") => el("span", { class: `res-pill flat ${extra}`, title },
+    el("span", { class: "res-label", text: label }), el("span", { class: "res-value", text: String(value) }));
+  renderResourceHeader.last = { health: c.state.health, resolve: c.state.resolve };
 
   mount.append(
-    el("div", { class: "res-bar" },
-      pill("Health", c.state.health, s.maxHealth, "health"),
-      pill("Resolve", c.state.resolve, s.maxResolve, "resolve"),
-      el("span", { class: "res-pill flat", title: "Karma" }, el("span", { class: "res-label", text: "Karma" }), el("span", { class: "res-value", text: String(c.state.karma) })),
-      el("span", { class: "res-pill flat", title: "Reputation" }, el("span", { class: "res-label", text: "Rep" }), el("span", { class: "res-value", text: String(s.reputation) })),
-      el("span", { class: "res-pill flat", title: "Resources" }, el("span", { class: "res-label", text: "Res" }), el("span", { class: "res-value", text: String(s.resources) })),
-      s.armor.value ? el("span", { class: "res-pill flat", title: s.armor.sources.map((x) => x.name).join(", ") }, el("span", { class: "res-label", text: "Armor" }), el("span", { class: "res-value", text: String(s.armor.value) })) : null,
+    el("div", { class: "hud" },
+      el("a", { class: "hud-who", href: "#/sheet", "aria-label": `Open ${c.identity.heroName || "your hero"}` },
+        emblem(c.identity.heroName || c.identity.realName, c.identity.role, { portrait: c.identity.portraitUrl }),
+        el("span", { class: "hud-name", text: c.identity.heroName || c.identity.realName || "Hero" })),
+      el("div", { class: "res-bar" },
+        pill("Health", c.state.health, s.maxHealth, "health"),
+        pill("Resolve", c.state.resolve, s.maxResolve, "resolve"),
+        flat("Karma", c.state.karma, "Karma"),
+        flat("Rep", s.reputation, "Reputation"),
+        flat("Res", s.resources, "Resources", "extra"),
+        s.armor.value ? flat("Armor", s.armor.value, s.armor.sources.map((x) => x.name).join(", "), "extra") : null),
+      // Jot without leaving whatever screen you are on.
+      el("button", { class: "icon-btn res-pill journal", "aria-label": "Write a journal entry", title: "Write a journal entry",
+        onclick: () => quickJournal(c) }, el("span", { class: "res-value", text: "✎" }))),
+    el("div", { class: "hud-flags" },
       c.state.broken ? el("span", { class: "res-pill danger", text: "BROKEN" }) : null,
       c.state.resolve === 0 ? el("span", { class: "res-pill warn", text: "STRESSED OUT" }) : null,
-      c.state.dying?.active ? el("span", { class: "res-pill danger blink", text: "DYING" }) : null,
-      // Jot without leaving whatever screen you are on.
-      el("button", { class: "res-pill", "aria-label": "Write a journal entry", title: "Write a journal entry",
-        onclick: () => quickJournal(c) }, el("span", { class: "res-label", text: "Journal" }), el("span", { class: "res-value", text: "✎" }))));
+      c.state.dying?.active ? el("span", { class: "res-pill danger blink", text: "DYING" }) : null));
+  // Sticky sub-headers (sheet tabs, search bars) sit just under the HUD, whatever its height.
+  requestAnimationFrame(() => document.documentElement.style.setProperty("--hud-h", `${mount.offsetHeight}px`));
 }
 
 /**
@@ -122,6 +136,7 @@ function openCritDialog(crit) {
     entry.dying ? el("p", { class: "bad", text: `You die within ${entry.dying.toLowerCase()} unless someone stabilises you: advanced medical gear and a REASON roll — one attempt only.` }) : null,
     entry.noRally ? el("p", { class: "warn", text: "You cannot rally with this injury." }) : el("p", { class: "muted", text: "You may rally on your turn: a full action and a PRESENCE roll, regaining 1 Health per 6." }),
     el("p", { class: "cite" }, el("a", { href: "#/rules/crits", class: "rules-link" }, "Rules: Critical injuries")));
+  sfx(body, "KRAK!", "krak");
   modal({ title: "Critical injury", body, actions: [{ label: "OK", variant: "primary" }] });
 }
 
@@ -139,28 +154,56 @@ export function renderSheet(mount) {
   }
   const s = Derived.summary(c);
 
-  mount.append(
-    stageCard(),
-    identityCard(c, s),
-    vitalsCard(c, s),
-    attributesCard(c, s),
-    powersCard(c),
-    talentsCard(c),
-    drawbacksCard(c),
-    conditionsCard(c),
-    inventoryCard(c, s),
-    notesCard(c),
-    advancementCard(c));
+  const panes = {
+    overview: [vitalsCard(c, s), attributesCard(c, s), conditionsCard(c), identityCard(c, s)],
+    powers: [powersCard(c)],
+    kit: [talentsCard(c), drawbacksCard(c), inventoryCard(c, s)],
+    notes: [notesCard(c), advancementCard(c)],
+  };
+  const tabs = [["overview", "Overview"], ["powers", "Powers"], ["kit", "Talents & Gear"], ["notes", "Notes"]];
+  if (!panes[sheetTab]) sheetTab = "overview";
+  const paneEls = {};
+  for (const [key] of tabs) paneEls[key] = el("div", { class: "sheet-pane", id: `pane-${key}`, role: "tabpanel", "data-pane": key, hidden: key !== sheetTab }, ...panes[key]);
+  const bar = el("div", { class: "segmented sheet-tabs", role: "tablist", "aria-label": "Hero sheet sections" });
+  for (const [key, label] of tabs) {
+    bar.append(el("button", { class: `chip ${key === sheetTab ? "selected" : ""}`, role: "tab", type: "button",
+      "aria-selected": key === sheetTab ? "true" : "false", "aria-controls": `pane-${key}`,
+      onclick: () => {
+        sheetTab = key;
+        for (const b of bar.children) { const on = b.getAttribute("aria-controls") === `pane-${key}`; b.classList.toggle("selected", on); b.setAttribute("aria-selected", on ? "true" : "false"); }
+        for (const [k, p] of Object.entries(paneEls)) p.hidden = k !== key;
+      } }, label));
+  }
+
+  mount.append(stageCard(), heroHead(c, s), bar, ...tabs.map(([k]) => paneEls[k]));
+}
+
+/** Which sheet section is showing; survives re-renders within the session. */
+let sheetTab = "overview";
+
+/** The trading-card header: emblem or portrait, name, who they are, and both tracks as boxes. */
+function heroHead(c, s) {
+  const rank = R.findRank(c.identity.rank);
+  const track = (label, value, max, kind) => el("div", { class: `track ${kind}`, role: "img", "aria-label": `${label} ${value} of ${max}` },
+    el("span", { class: "track-label", text: label }),
+    el("span", { class: "track-boxes" }, ...Array.from({ length: max }, (_, i) => el("span", { class: `track-box ${i < value ? "on" : ""}` }))),
+    el("span", { class: "track-value", text: `${value}/${max}` }));
+  return el("section", { class: "hero-head" },
+    el("div", { class: "identity-head" },
+      emblem(c.identity.heroName || c.identity.realName, c.identity.role, { portrait: c.identity.portraitUrl }),
+      el("div", { style: "min-width:0;flex:1" },
+        el("h2", { text: c.identity.heroName || "Unnamed hero" }),
+        el("p", { class: "muted", text: [c.identity.realName, c.identity.role, rank?.name].filter(Boolean).join(" · ") }),
+        c.identity.pregen ? el("span", { class: "chip warn", text: "Published stat block" }) : null)),
+    el("div", { class: "tracks" },
+      track("Health", c.state.health, s.maxHealth, "health"),
+      track("Resolve", c.state.resolve, s.maxResolve, "resolve")));
 }
 
 function identityCard(c, s) {
-  const rank = R.findRank(c.identity.rank);
   return el("section", { class: "card" },
-    el("div", { class: "identity-head" },
-      el("div", {},
-        el("h2", { text: c.identity.heroName || "Unnamed hero" }),
-        el("p", { class: "muted", text: [c.identity.realName, c.identity.role, rank?.name].filter(Boolean).join(" · ") })),
-      c.identity.pregen ? el("span", { class: "chip warn", text: "Published stat block" }) : null),
+    el("h3", { text: "Profile" }),
+    helpPanel(["Who your hero is beyond the numbers: archetype, occupation, power source, drive, flaw, personality and the key relationships that feed karma at the end of a session."]),
     el("div", { class: "kv-grid" },
       kv("Archetype", c.identity.archetype || "—"),
       kv("Occupation", c.identity.occupation || "—"),
@@ -480,10 +523,10 @@ export function showAttackResult(c, r, { huge = false, defence = null } = {}) {
   const effective = defence ? defence.remainingSixes : r.sixes;
   const available = Math.max(0, effective - 1);
   const body = el("div", {},
-    el("div", { class: "dice-row" }, ...r.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))),
+    el("div", { class: "dice-row" }, ...r.dice.map((v, i) => dieEl(v, i))),
     defence ? el("div", {},
       el("p", { class: "muted small", text: `${defence.kind === "block" ? "Block" : "Dodge"}: ${defence.roll.sixes} six${defence.roll.sixes === 1 ? "" : "es"} cancelling yours.` }),
-      el("div", { class: "dice-row" }, ...defence.roll.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) })))) : null,
+      el("div", { class: "dice-row" }, ...defence.roll.dice.map((v, i) => dieEl(v, i)))) : null,
     el("p", { class: `outcome ${effective ? "good" : "bad"}`, text: effective ? `Hit — ${r.meta.damage} damage (${r.meta.damageSource})` : defence ? `Stopped — the ${defence.kind} cancelled it` : "Miss" }),
     effective ? el("p", { class: "muted", text: `${available} stunt${available === 1 ? "" : "s"} available. Knockback, Bang Heads and Slam deal half your base STRENGTH (${Roller.stuntDamage(c)}), not Slugfest Damage.` }) : null,
     defence?.note ? el("p", { class: "warn", text: defence.note }) : null,
@@ -515,7 +558,7 @@ async function openBanter(c) {
   if (!res.ok) { showToast(res.reason, { variant: "warn" }); return; }
   modal({ title: "Action banter",
     body: el("div", {},
-      el("div", { class: "dice-row" }, ...res.roll.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))),
+      el("div", { class: "dice-row" }, ...res.roll.dice.map((v, i) => dieEl(v, i))),
       el("p", { text: `You rolled ${res.roll.sixes} successes against ${res.opposing.sixes}.` }),
       el("p", { class: res.stress ? "good" : "bad", text: res.stress ? `The target takes ${res.stress} stress.` : "No effect this round." }),
       el("p", { class: "muted small", text: "One banter per target per round; it never works on huge creatures." })),

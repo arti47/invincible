@@ -1,7 +1,7 @@
 // combat.js — initiative, combatant cards, the generic progress/challenge tracker,
 // and the scene / session / adventure lifecycle engine with confirmation + one-step undo.
 
-import { el, clear, uid, clamp, d6 } from "./core.js";
+import { el, clear, uid, clamp, d6, dieEl } from "./core.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -390,12 +390,12 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext
   const body = el("div", {});
   const draw = () => {
     clear(body);
-    body.append(el("div", { class: "dice-row" }, ...roll.dice.map((v) =>
-      el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+    body.append(el("div", { class: "dice-row" }, ...roll.dice.map((v, i) =>
+      dieEl(v, i))));
     if (defence) {
       body.append(el("p", { class: "muted small", text: `${target.name} ${defence.kind}s: ${defence.roll.sixes} six${defence.roll.sixes === 1 ? "" : "es"} cancelling.` }),
-        el("div", { class: "dice-row" }, ...defence.roll.dice.map((v) =>
-          el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+        el("div", { class: "dice-row" }, ...defence.roll.dice.map((v, i) =>
+          dieEl(v, i))));
     }
     const dmg = damageFor();
     body.append(el("p", { class: `outcome ${effective ? "good" : "bad"}`,
@@ -559,6 +559,13 @@ export function renderCombat(mount) {
         }
       } }, "End scene"))));
 
+  // The initiative order at a glance: one playing card per combatant, the one acting lifted out.
+  mount.append(el("div", { class: "init-rail", role: "list", "aria-label": "Initiative order" },
+    ...combat.combatants.map((cb) => el("div", {
+      class: `init-card ${cb.side} ${cb === up ? "up" : ""} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""}`,
+      role: "listitem", "data-n": cb.card || "—", title: cb.name,
+    }, el("span", { class: "n", text: cb.card ? String(cb.card) : "—" }), el("span", { class: "who", text: cb.name })))));
+
   const list = el("div", { class: "combatants" });
   for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount, cb === up));
   mount.append(list);
@@ -587,6 +594,11 @@ export function attackBlockedReason(combat, cb) {
   return null;
 }
 
+function healthBar(cb) {
+  const pct = cb.maxHealth ? Math.max(0, Math.min(100, Math.round((100 * cb.health) / cb.maxHealth))) : 0;
+  return el("div", { class: `cbt-bar ${pct <= 25 ? "low" : pct <= 55 ? "mid" : ""}`, "aria-hidden": "true" }, el("span", { style: `width:${pct}%` }));
+}
+
 function combatantCard(cb, combat, mount, isUp = false) {
   const isMinion = cb.minionCount > 0;
   const blocked = attackBlockedReason(combat, cb);
@@ -597,6 +609,7 @@ function combatantCard(cb, combat, mount, isUp = false) {
       isUp ? el("span", { class: "chip", text: "Acts now" }) : null,
       cb.acted ? el("span", { class: "chip muted", text: "Acted" }) : null,
       cb.huge ? el("span", { class: "chip warn", text: "Huge" }) : null),
+    healthBar(cb),
     el("div", { class: "cbt-stats" },
       el("span", { text: isMinion ? `Minions ${cb.health}/${cb.maxHealth}` : `Health ${cb.health}/${cb.maxHealth}` }),
       el("span", { text: `Resolve ${cb.resolve}/${cb.maxResolve}` }),
@@ -863,7 +876,7 @@ async function contributeToTask(task, mount) {
   announce(`${res.progress} progress. ${t.remaining} remaining.`);
   modal({ title: task.name,
     body: el("div", {},
-      el("div", { class: "dice-row" }, ...res.roll.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))),
+      el("div", { class: "dice-row" }, ...res.roll.dice.map((v, i) => dieEl(v, i))),
       el("p", { class: res.progress ? "good" : "bad", text: res.progress ? `${res.progress} point(s) removed from the Challenge rating.` : "No progress this attempt." }),
       el("p", { text: `${t.remaining} of ${t.rating} remaining.` }),
       t.remaining === 0 ? el("p", { class: "good", text: "Challenge overcome!" }) : null,

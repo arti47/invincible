@@ -1,6 +1,7 @@
 // ui.js — themed modal / toast / confirm / prompt primitives. No native dialogs anywhere.
 
 import { el, $, clear } from "./core.js";
+import { icon } from "./icons.js";
 
 let openModals = 0;
 let lastFocus = null;
@@ -60,6 +61,22 @@ export function modal({ title, body, actions = [], dismissible = true, size = ""
 
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop && dismissible) close(null); });
   document.addEventListener("keydown", onKey, true);
+  // Bottom sheets on a phone: drag the header down to dismiss.
+  if (dismissible) {
+    const head = dialog.querySelector(".modal-head");
+    let y0 = null;
+    head.addEventListener("touchstart", (e) => { y0 = e.touches[0].clientY; }, { passive: true });
+    head.addEventListener("touchmove", (e) => {
+      if (y0 === null) return;
+      const dy = Math.max(0, e.touches[0].clientY - y0);
+      dialog.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    head.addEventListener("touchend", (e) => {
+      const dy = y0 === null ? 0 : e.changedTouches[0].clientY - y0;
+      y0 = null; dialog.style.transform = "";
+      if (dy > 90) close(null);
+    });
+  }
   backdrop.append(dialog);
   document.body.append(backdrop);
   openModals++;
@@ -156,14 +173,30 @@ export function selectField(label, options, value, onChange, { placeholder = nul
 }
 
 /**
- * Collapsed-by-default explainer for a panel: what it is for and how to drive it.
- * Every major panel carries one so nothing on screen is unexplained.
+ * What a panel is for, without spending a line of the screen on it. The default title renders as
+ * an ⓘ in the panel's top-right corner; a custom title (a real question, such as "When does a
+ * fight actually start?") stays visible as a link. Either opens the text in a bottom sheet.
  */
 export function helpPanel(body, { title = "What is this panel for?" } = {}) {
   const lines = Array.isArray(body) ? body : [body];
-  return el("details", { class: "help" },
-    el("summary", { text: title }),
-    ...lines.map((t) => el("p", { class: "small", text: t })));
+  const open = () => modal({ title, size: "help-sheet",
+    body: el("div", {}, ...lines.map((t) => el("p", { text: t }))),
+    actions: [{ label: "Got it", variant: "primary" }] });
+  if (title === "What is this panel for?") {
+    return el("button", { class: "help-i", type: "button", "aria-label": title, title, "aria-haspopup": "dialog", onclick: open }, icon("info", { size: 18 }));
+  }
+  return el("button", { class: "help-link", type: "button", "aria-haspopup": "dialog", onclick: open }, icon("info", { size: 16 }), el("span", { text: title }));
+}
+
+/**
+ * Comic onomatopoeia over a result — decorative only (aria-hidden), shown on the moments that
+ * matter: stunts bought, a critical injury, a hero broken. Off when motion is reduced.
+ */
+export function sfx(host, word, kind = "") {
+  if (!host || document.body.classList.contains("no-motion")) return;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  host.classList.add("roll-result");
+  host.prepend(el("span", { class: `sfx ${kind}`, "aria-hidden": "true", text: word }));
 }
 
 /** Announce to screen readers without opening anything. */

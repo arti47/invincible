@@ -13,7 +13,12 @@ import * as Journal from "./journal.js";
 import { setLearnTab } from "./learn.js";
 import { openAttributeGuide, askAttributeScore } from "./sheet.js";
 import * as Combat from "./combat.js";
+
+import { icon } from "./icons.js";
 import { STORAGE_PREFIX } from "./core.js";
+
+/** append, skipping the null/false children a conditional leaves behind (DOM append prints "null"). */
+const put = (node, ...kids) => node.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
 
 const KEY = `${STORAGE_PREFIX}solo`;
 
@@ -86,7 +91,7 @@ export function soloStageCard() {
   if (!running) {
     // Cold, or between sessions. Say what carried over, then offer the one control that starts play.
     const last = lastClosing(state);
-    card.append(
+    put(card, 
       el("p", { class: "next-step-eyebrow", text: "Now" }),
       el("h2", { text: last ? "Ready for the next session" : "Ready to play" }),
       last
@@ -109,7 +114,7 @@ export function soloStageCard() {
   const live = (state.timers || []).length;
   const bits = [];
   if (state.alertParts?.headline || state.alert) bits.push(state.alertParts?.headline || state.alert);
-  card.append(
+  put(card, 
     el("p", { class: "next-step-eyebrow", text: `In play — step ${step + 1} of 6` }),
     el("h2", { text: next ? next.label : "Continue" }),
     bits.length ? el("p", { class: "lede", text: bits[0] }) : null,
@@ -158,6 +163,37 @@ function stepStrip(state) {
       class: `solo-step ${i === cur ? "current" : ""} ${i < cur ? "done" : ""}`,
       "aria-current": i === cur ? "step" : null,
     }, el("span", { class: "solo-step-n", "aria-hidden": "true", text: String(i + 1) }), el("span", { class: "solo-step-t", text }))));
+}
+
+/** The dot strip shows where you are; the current step's words sit under it at full width. */
+function stepNow(state) {
+  const cur = currentStep(state);
+  return el("p", { class: "solo-current-text", "aria-hidden": "true", text: `${cur + 1}. ${S.SOLO_SETUP.loop[cur]}` });
+}
+
+/** The crisis level as a gauge: eleven cells, coloured by the phase each one belongs to. */
+function crisisGauge(level) {
+  return el("span", { class: "crisis-gauge", role: "img", "aria-label": `Crisis level ${level} of 10` },
+    ...Array.from({ length: 11 }, (_, i) => el("span", { class: `${phaseFor(i).key} ${i <= level ? "on" : ""} ${i === level ? "cur" : ""}` })));
+}
+
+/** Oracles live in a drawer: one tap away from anywhere on the tab, never in the way. */
+let oracleOpen = false;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && oracleOpen && !document.querySelector(".modal-backdrop")) setOracleOpen(false);
+});
+function setOracleOpen(open) {
+  oracleOpen = open;
+  const d = document.querySelector("#solo-oracles");
+  const scrim = document.querySelector("#oracle-scrim");
+  if (d) {
+    d.classList.toggle("open", open);
+    d.setAttribute("aria-hidden", open ? "false" : "true");
+    d.setAttribute("role", open ? "dialog" : "region");
+    if (open) d.setAttribute("aria-modal", "true"); else d.removeAttribute("aria-modal");
+  }
+  if (scrim) scrim.hidden = !open;
+  if (open && d) d.querySelector("button.btn, .chip")?.focus();
 }
 
 /**
@@ -383,7 +419,7 @@ function recoveryCard(state, mount) {
   const row = el("div", { class: "row-actions" });
   if (stressed) row.append(el("button", { class: "btn primary", onclick: () => rallyOnMemory(state, mount) }, "Rally on a memory (PRESENCE)"));
   if (broken) row.append(el("a", { class: "btn", href: "#/sheet" }, "Rally or stabilise on the sheet"));
-  card.append(row);
+  put(card, row);
   return card;
 }
 
@@ -611,8 +647,10 @@ export function renderSolo(mount) {
     el("h2", { text: "Crisis Mode" }),
     el("p", { class: "muted small", text: "Solo play without a GM. Keep at least one timer running at all times." }),
     stepStrip(state),
+    stepNow(state),
     el("div", { class: "crisis-level" },
       el("span", { class: "crisis-label", text: "Crisis level" }),
+      crisisGauge(state.crisisLevel),
       el("button", { class: "icon-btn", "aria-label": "Lower crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel - 1, 0, 10); save(state); renderSolo(mount); } }, "−"),
       el("strong", { class: `crisis-value ${phase.key}`, "aria-live": "polite", text: `${state.crisisLevel} — ${phase.name}` }),
       el("button", { class: "icon-btn", "aria-label": "Raise crisis level", onclick: () => { state.crisisLevel = clamp(state.crisisLevel + 1, 0, 10); save(state); renderSolo(mount); } }, "+")),
@@ -645,6 +683,9 @@ export function renderSolo(mount) {
   mount.append(crisesCard(state, mount));
   mount.append(allTimersCard(state, mount));
   mount.append(oraclesCard(state, mount));
+  mount.append(el("div", { class: "drawer-scrim", id: "oracle-scrim", hidden: !oracleOpen, onclick: () => setOracleOpen(false) }));
+  mount.append(el("button", { class: "oracle-fab", type: "button", "aria-haspopup": "dialog", "aria-controls": "solo-oracles",
+    onclick: () => setOracleOpen(!oracleOpen) }, icon("oracle", { size: 20 }), "Oracles"));
   mount.append(referenceCard(state, mount));
   mount.append(logCard(state, mount));
 }
@@ -665,7 +706,7 @@ function logCard(state, mount) {
     ]));
 
   if (!state.log.length) {
-    card.append(el("p", { class: "muted small", text: "Nothing logged yet. Every roll you make on this tab lands here." }));
+    put(card, el("p", { class: "muted small", text: "Nothing logged yet. Every roll you make on this tab lands here." }));
     return card;
   }
 
@@ -682,7 +723,7 @@ function logCard(state, mount) {
         el("button", { class: "btn tiny ghost", onclick: () => editEntry(state, id, mount) }, "Edit"),
         el("button", { class: "btn tiny ghost", onclick: () => removeEntry(state, id, mount) }, "Remove"))));
   }
-  card.append(list);
+  put(card, list);
 
   const row = el("div", { class: "row-actions" });
   if (state.log.length > 12) {
@@ -691,7 +732,7 @@ function logCard(state, mount) {
   }
   row.append(el("button", { class: "btn", onclick: () => addLogNote(state, mount) }, "Add an entry"));
   row.append(el("button", { class: "btn danger", onclick: () => clearLog(state, mount) }, "Clear the log"));
-  card.append(row);
+  put(card, row);
   return card;
 }
 
@@ -776,10 +817,10 @@ function allTimersCard(state, mount) {
       ? el("p", { class: "warn small", text: "Nothing is running. Engage a crisis, or start a timer below." })
       : null);
   // Loop step 3's own order: "a crisis timer, plus any ally, objective or encounter timers".
-  card.append(timersCard(state, mount));
-  card.append(alliesCard(state, mount));
-  card.append(objectivesCard(state, mount));
-  card.append(encounterCard(state, mount));
+  put(card, timersCard(state, mount));
+  put(card, alliesCard(state, mount));
+  put(card, objectivesCard(state, mount));
+  put(card, encounterCard(state, mount));
   return card;
 }
 
@@ -790,7 +831,8 @@ function allTimersCard(state, mount) {
  * which previously sat in a reference block with no stated trigger.
  */
 function oraclesCard(state, mount) {
-  const card = el("section", { class: "card", id: "solo-oracles" },
+  const card = el("section", { class: `card drawer ${oracleOpen ? "open" : ""}`, id: "solo-oracles", role: oracleOpen ? "dialog" : "region", "aria-modal": oracleOpen ? "true" : null, "aria-label": "Ask the oracles", "aria-hidden": oracleOpen ? "false" : "true" },
+    el("button", { class: "icon-btn drawer-close", "aria-label": "Close the oracles", onclick: () => setOracleOpen(false) }, icon("close", { size: 20 })),
     el("h3", { text: "Ask the oracles" }),
     helpPanel([
       "Use these whenever you would otherwise have asked the GM something.",
@@ -800,7 +842,7 @@ function oraclesCard(state, mount) {
     ]));
 
   // The answer stays on the tab: a modal you have dismissed is no use half a scene later.
-  card.append(state.lastOracle
+  put(card, state.lastOracle
     ? el("div", { class: "oracle-answer" },
       el("span", { class: "oracle-kind", text: state.lastOracle.kind }),
       el("p", { class: "lede", text: state.lastOracle.text }),
@@ -815,12 +857,12 @@ function oraclesCard(state, mount) {
     return g;
   };
 
-  card.append(group("Answer a question", "For anything you would have asked the GM outright.",
+  put(card, group("Answer a question", "For anything you would have asked the GM outright.",
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => askBinary(state, mount) }, "Ask yes / no"),
       el("button", { class: "btn", onclick: () => askComplex(state, mount) }, "Complex answer"))));
 
-  card.append(group("Find out what happens", "When you do not know what the situation does next.",
+  put(card, group("Find out what happens", "When you do not know what the situation does next.",
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => joltCrisisEvent(state, mount) }, "Crisis event"),
       el("button", { class: "btn", onclick: () => rollOpportunityEvent(state, mount) }, "Opportunity")),
@@ -831,7 +873,7 @@ function oraclesCard(state, mount) {
     row.append(el("button", { class: "chip", onclick: () => describePlace(state, mount, key) },
       S.LOCATION_ENGINES[key].name.replace(" Engine", "")));
   }
-  card.append(group("Describe a place", "Roll the engine matching the scale you need.", row));
+  put(card, group("Describe a place", "Roll the engine matching the scale you need.", row));
   return card;
 }
 
@@ -890,19 +932,19 @@ function crisisBody(c) {
 
 function crisesCard(state, mount) {
   const card = el("section", { class: "card", id: "solo-crises" }, el("h3", { text: `Crises (${(state.crises || []).length})` }));
-  card.append(helpPanel([
+  put(card, helpPanel([
     "Every danger you could engage right now. The crisis alert seeds the first one; each event check that fires adds another.",
     "Step 3 of the loop is choosing one. Engage a crisis to turn it into a running crisis timer — the timer counts down to it happening.",
     "You do not have to take them in order. Ignoring a crisis is a legitimate choice; it stays on the list until you engage or drop it.",
   ]));
   if (!(state.crises || []).length) {
-    card.append(el("p", { class: "muted small", text: state.alert
+    put(card, el("p", { class: "muted small", text: state.alert
       ? "Nothing pending. Make an event check to turn up a new crisis, or start a timer directly."
       : "Generate a crisis alert to seed the first crisis." }));
     return card;
   }
   for (const c of state.crises) {
-    card.append(el("div", { class: "timer crisis" },
+    put(card, el("div", { class: "timer crisis" },
       el("div", { class: "crisis-main" },
         el("span", { class: "crisis-source", text: c.source === "alert" ? "From the alert" : "From an event check" }),
         crisisBody(c)),
@@ -1249,6 +1291,7 @@ function timerRow({ name, ladder, index, diceLabel, meaning, tone, note, actions
   const pips = el("span", { class: `pips ${tone}`, "aria-hidden": "true" });
   ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= index ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
   return el("div", { class: `timer ${tone}` },
+    el("span", { class: "clock", "aria-hidden": "true", style: `--p:${steps ? Math.round((100 * index) / steps) : 100};--seg:${Math.max(1, steps)}` }),
     el("div", { class: "timer-main" },
       el("strong", { class: "timer-name", text: name }),
       el("div", { class: "timer-track" }, pips,
@@ -1271,7 +1314,7 @@ function timersCard(state, mount) {
     const ladder = S.CRISIS_TIMER.ladder;
     const idx = Math.max(0, ladder.findIndex((l) => l.key === t.proximity));
     const left = ladder.length - 1 - idx;
-    card.append(timerRow({
+    put(card, timerRow({
       name: t.name,
       ladder, index: idx, tone: left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
       diceLabel: `roll ${count(ladder[idx].dice, "die", "dice")}`,
@@ -1285,15 +1328,15 @@ function timersCard(state, mount) {
       ],
     }));
   }
-  if (!state.timers.length) card.append(el("p", { class: "warn small", text: "No timer running. Always keep at least one." }));
+  if (!state.timers.length) put(card, el("p", { class: "warn small", text: "No timer running. Always keep at least one." }));
   const mode = S.MOVEMENT_MODES.find((m) => m.key === state.mode) || S.MOVEMENT_MODES[0];
-  card.append(el("p", { class: "muted small", text: mode.crisis === 0
+  put(card, el("p", { class: "muted small", text: mode.crisis === 0
     ? `Moving ${mode.name.replace(" (default)", "").toLowerCase()}: these checks roll as printed.`
     : `Moving ${mode.name.toLowerCase()} adds ${mode.crisis > 0 ? "+1 die to" : "-1 die from"} every check here.` }));
   const row = el("div", { class: "row-actions" });
   if (state.timers.length > 1) row.append(el("button", { class: "btn", onclick: () => checkAllTimers(state, mount) }, "Time passes — check every timer"));
   row.append(el("button", { class: currentStep(state) === 2 ? "btn primary" : "btn", onclick: () => addTimer(state, mount) }, "Start a crisis timer"));
-  card.append(row);
+  put(card, row);
   return card;
 }
 
@@ -1427,7 +1470,7 @@ function objectivesCard(state, mount) {
     const phase = phaseFor(state.crisisLevel);
     const pen = phase.key === "medium" ? -1 : phase.key === "high" ? -2 : 0;
     const dice = Math.max(1, ladder[idx].dice + pen);
-    card.append(timerRow({
+    put(card, timerRow({
       name: o.name,
       ladder, index: idx, tone: left === 0 ? "t-done" : "t-good",
       diceLabel: left === 0 ? `worth ${o.karma} karma` : `roll ${count(dice, "die", "dice")}${pen ? ` (${pen} for ${phase.name.toLowerCase()})` : ""}`,
@@ -1442,8 +1485,8 @@ function objectivesCard(state, mount) {
       ],
     }));
   }
-  card.append(el("p", { class: "muted small", text: S.OBJECTIVE_TIMER.rules[0] }));
-  card.append(el("button", { class: "btn", onclick: () => addObjective(state, mount) }, "Set an objective"));
+  put(card, el("p", { class: "muted small", text: S.OBJECTIVE_TIMER.rules[0] }));
+  put(card, el("button", { class: "btn", onclick: () => addObjective(state, mount) }, "Set an objective"));
   return card;
 }
 
@@ -1550,7 +1593,7 @@ function alliesCard(state, mount) {
     const idx = Math.max(0, ladder.findIndex((l) => l.key === a.status));
     const left = ladder.length - 1 - idx;
     const gone = ladder[idx].dice === 0;
-    card.append(timerRow({
+    put(card, timerRow({
       name: a.name,
       ladder, index: idx, tone: gone ? "t-gone" : left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
       diceLabel: gone ? "nobody left" : `roll ${count(ladder[idx].dice, "die", "dice")}`,
@@ -1565,8 +1608,8 @@ function alliesCard(state, mount) {
       ],
     }));
   }
-  if (!state.allies.length) card.append(el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
-  card.append(el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
+  if (!state.allies.length) put(card, el("p", { class: "muted small", text: "No allies yet? The group generator rolls one from the Ch.6 minion profiles." }));
+  put(card, el("button", { class: "btn", onclick: () => addAllies(state, mount) }, "Add an ally group"));
   return card;
 }
 
@@ -1772,16 +1815,16 @@ function encounterCard(state, mount) {
     : null);
 
   if (!state.encounter) {
-    card.append(el("p", { class: "muted small", text: "No encounter timer running — nothing is stalking you. Start one when your hero enters somewhere dangerous on foot." }));
-    card.append(el("details", { class: "help" }, el("summary", { text: "When does a fight actually start?" }),
+    put(card, el("p", { class: "muted small", text: "No encounter timer running — nothing is stalking you. Start one when your hero enters somewhere dangerous on foot." }));
+    put(card, el("details", { class: "help" }, el("summary", { text: "When does a fight actually start?" }),
       el("p", { class: "small", text: "Three ways, and only three. (1) An encounter timer reaches Encountered and you neither avoid nor escape it — the panel walks you to Draw initiative. (2) You choose to attack something the fiction has already put in front of you — draw initiative from the Action tab. (3) A crisis timer fires into a fight, because that is what you said it would trigger." }),
       el("p", { class: "small", text: "You never roll to see whether combat happens. Combat happens because the encounter sequence delivered an enemy, or because you decided to swing first." })));
-    card.append(el("div", { class: "row-actions" },
+    put(card, el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => startEncounter(state, mount) }, "Start encounter timer"),
       el("button", { class: "btn ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place")));
     const p0 = placeBlock();
-    if (p0) card.append(p0);
-    if (sequence) card.append(sequence);
+    if (p0) put(card, p0);
+    if (sequence) put(card, sequence);
     return card;
   }
 
@@ -1796,16 +1839,16 @@ function encounterCard(state, mount) {
     const left = ladder.length - 1 - idx;
     const pips = el("span", { class: `pips ${left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool"}`, "aria-hidden": "true" });
     ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= idx ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
-    card.append(el("div", { class: "timer-track" }, pips,
+    put(card, el("div", { class: "timer-track" }, pips,
       el("span", { class: "timer-status", text: `${rung.name}${rung.dice ? ` · roll ${count(dice, "die", "dice")}` : ""}` })));
-    card.append(el("p", { class: "timer-meaning", text: left === 0
+    put(card, el("p", { class: "timer-meaning", text: left === 0
       ? "Something is here. Work through the steps below."
       : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer.` }));
   }
-  card.append(movementPicker(state, mount));
+  put(card, movementPicker(state, mount));
   {
     const i = sequenceIndex(state);
-    card.append(el("p", { class: "step-marker" },
+    put(card, el("p", { class: "step-marker" },
       el("span", { class: "step-n", text: `Step ${i + 1}/12` }),
       el("span", { class: "step-name", text: STEP_NAMES[i] }),
       el("button", { class: "step-more", onclick: () => showSequence(state) }, "see all 12")));
@@ -1851,17 +1894,17 @@ function encounterCard(state, mount) {
     row.append(el("button", { class: "btn primary", onclick: () => advanceTime(state, mount) }, "Advance time — check crisis timers"));
   }
 
-  card.append(row);
-  if (avoidance) card.append(avoidance);
-  card.append(el("div", { class: "row-actions minor" },
+  put(card, row);
+  if (avoidance) put(card, avoidance);
+  put(card, el("div", { class: "row-actions minor" },
     el("button", { class: "btn tiny ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
     el("button", { class: "btn tiny ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Stop the encounter timer")));
 
   const p = placeBlock();
-  if (p) card.append(p);
+  if (p) put(card, p);
 
   if (enc.detail) {
-    card.append(el("div", { class: "oracle-answer" },
+    put(card, el("div", { class: "oracle-answer" },
       el("span", { class: "oracle-kind", text: enc.detail.kind }),
       el("p", { class: "lede", text: enc.detail.text }),
       enc.detail.note ? el("p", { class: "muted small", text: enc.detail.note }) : null));
@@ -2304,12 +2347,12 @@ async function searchZone(state, mount) {
 function referenceCard(state, mount) {
   const card = el("section", { class: "card" }, el("h3", { text: "Reference" }),
     helpPanel(["Oracles for describing where you are when there is no GM to tell you.", "Roll the engine matching the scale you need; the Atmosphere engine is mixed in automatically to colour the result.", "Bonus-6 effects, solo combat reminders and power guidance live here too."]));
-  card.append(el("details", {}, el("summary", { text: "Bonus 6 effects (choose one per roll)" }),
+  put(card, el("details", {}, el("summary", { text: "Bonus 6 effects (choose one per roll)" }),
     ...S.BONUS_SIX_EFFECTS.map((b) => el("p", { class: "small" }, el("strong", { text: `${b.name}: ` }), b.effect))));
-  card.append(el("details", {}, el("summary", { text: "Solo combat and recovery reminders" }),
+  put(card, el("details", {}, el("summary", { text: "Solo combat and recovery reminders" }),
     ...S.SOLO_COMBAT.map((t) => el("p", { class: "small", text: t })),
     ...S.SOLO_SETUP.recovery.map((t) => el("p", { class: "small good", text: t }))));
-  card.append(el("details", {}, el("summary", { text: "Crisis Event Engine (D66 focus, 2D6 + crisis level)" }),
+  put(card, el("details", {}, el("summary", { text: "Crisis Event Engine (D66 focus, 2D6 + crisis level)" }),
     el("p", { class: "small", text: S.CRISIS_EVENT_ENGINE.note }),
     el("div", { class: "table-scroll" }, el("table", { class: "data-table" },
       el("tr", {}, el("th", { text: "D66" }), el("th", { text: "Focus" }),
@@ -2317,14 +2360,14 @@ function referenceCard(state, mount) {
       ...S.CRISIS_EVENT_ENGINE.entries.map((e) => el("tr", {},
         el("td", { text: String(e.roll) }), el("td", { text: e.focus }),
         ...e.details.map((d) => el("td", { text: d }))))))));
-  card.append(el("details", {}, el("summary", { text: "Opportunity Event Engine (D66)" }),
+  put(card, el("details", {}, el("summary", { text: "Opportunity Event Engine (D66)" }),
     el("p", { class: "small", text: "A positive twist or helpful asset. Prompted by 11-12 on the event check, or whenever a FATE response points at a positive turn. Keep these rare; one may count as a milestone that triggers an objective check." }),
     el("div", { class: "table-scroll" }, el("table", { class: "data-table" },
       el("tr", {}, el("th", { text: "D66" }), el("th", { text: "Opportunity" })),
       ...S.OPPORTUNITY_ENGINE.entries.map((e) => el("tr", {},
         el("td", { text: e.range[0] === e.range[1] ? String(e.range[0]) : `${e.range[0]}-${e.range[1]}` }),
         el("td", { text: e.text })))))));
-  card.append(el("details", {}, el("summary", { text: "Using powers without a GM" }),
+  put(card, el("details", {}, el("summary", { text: "Using powers without a GM" }),
     ...S.SOLO_POWER_USE.map((t) => el("p", { class: "small", text: t }))));
   return card;
 }

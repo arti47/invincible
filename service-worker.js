@@ -1,13 +1,17 @@
 // service-worker.js — network-first with an offline app-shell cache.
 // Bump CACHE_VERSION on ANY change to a shipped file.
 
-const CACHE_VERSION = "v57";
+const CACHE_VERSION = "v58";
 const CACHE_NAME = `invincible-player-${CACHE_VERSION}`;
 
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
+  "./fonts/bangers.woff2",
+  "./fonts/atkinson-400-normal.woff2",
+  "./fonts/atkinson-400-italic.woff2",
+  "./fonts/atkinson-700-normal.woff2",
   "./manifest.json",
   "./icon.svg",
   "./icon-192.png",
@@ -23,6 +27,7 @@ const APP_SHELL = [
   "./firebase-config.js",
   "./src/main.js",
   "./src/core.js",
+  "./src/icons.js",
   "./src/ui.js",
   "./src/rules.js",
   "./src/derived.js",

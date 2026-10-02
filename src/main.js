@@ -27,6 +27,7 @@ function boot() {
     });
   }
 
+  document.addEventListener("settings-changed", () => applyTheme());
   lockZoom();
   registerServiceWorker();
   window.__invincibleReady = true;

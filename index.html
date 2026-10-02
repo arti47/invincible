@@ -6,7 +6,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="theme-color" content="#f2c200">
+  <meta name="theme-color" content="#ffd400">
   <meta name="description" content="Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying.">
   <title>Invincible Player</title>
   <link rel="manifest" href="./manifest.json">
@@ -14,6 +14,8 @@
   <link rel="icon" href="./icon-192.png" sizes="192x192" type="image/png">
   <!-- iOS ignores SVG here and falls back to a black tile, so the touch icon must be a PNG. -->
   <link rel="apple-touch-icon" sizes="180x180" href="./icon-180.png">
+  <link rel="preload" href="./fonts/bangers.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./fonts/atkinson-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -21,10 +23,10 @@
 
   <header class="app-header">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true">◆</span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 1.5 14.3 8l6.7-2.4-3.9 5.9 5.4 3.6-6.8.4.9 6.9L12 17.6 7.4 22.4l.9-6.9-6.8-.4 5.4-3.6L3 5.6 9.7 8 12 1.5Z" fill="#121018"/><path d="M12 6.5 13.2 10l3.6-1.3-2.1 3.2 2.9 1.9-3.7.2.5 3.7L12 15.1l-2.4 2.6.5-3.7-3.7-.2 2.9-1.9L7.2 8.7 10.8 10 12 6.5Z" fill="#fffaee"/></svg></span>
       <span class="brand-name">Invincible <em>Player</em></span>
     </div>
-    <button id="theme-toggle" class="icon-btn" aria-label="Change theme">◐</button>
+    <button id="theme-toggle" class="icon-btn" aria-label="Change theme" title="Change theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></svg></button>
   </header>
 
   <div id="resource-header" class="resource-header" hidden></div>

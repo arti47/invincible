@@ -146,7 +146,7 @@ export async function runProbe(ok, section, page, base) {
       for (const card of document.querySelectorAll("#screen .card")) {
         const heading = card.querySelector("h1,h2,h3,h4");
         if (!heading) { out.push("(card with no heading)"); continue; }
-        const explains = card.querySelector("p, details, .muted, .lede, .help");
+        const explains = card.querySelector("p, details, .muted, .lede, .help, .help-i, .help-link");
         if (!explains) out.push(heading.textContent.trim());
       }
       return out;

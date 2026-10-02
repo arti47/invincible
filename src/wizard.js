@@ -35,6 +35,9 @@ function render() {
   const budget = creationBudget(draft);
   host.append(
     el("div", { class: "wizard" },
+      el("p", { class: "stage-label", text: `Step ${step + 1} of ${STEPS.length} — ${STEPS[step]}` }),
+      el("div", { class: "wizard-progress", role: "progressbar", "aria-valuemin": "1", "aria-valuemax": String(STEPS.length), "aria-valuenow": String(step + 1), "aria-label": "Creation progress" },
+        el("span", { style: `width:${Math.round((100 * (step + 1)) / STEPS.length)}%` })),
       el("div", { class: "wizard-steps", role: "list" },
         ...STEPS.map((s, i) => el("button", {
           class: `wizard-step ${i === step ? "current" : ""} ${i < step ? "done" : ""}`,

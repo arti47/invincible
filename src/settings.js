@@ -17,6 +17,7 @@ export const TOGGLES = [
   { key: "soloMode", name: "Solo play (Crisis Mode)", desc: "Adds the Crisis Mode assistant: event checks, response engines and all four timer types." },
   { key: "familyFriendly", name: "Family-friendly critical injuries", desc: "Treats every critical injury result of 9 or higher as Cracked skull — an option offered by the rulebook." },
   { key: "manualDice", name: "Manual dice entry", desc: "Lets you type the faces you rolled with physical dice instead of rolling digitally." },
+  { key: "noMotion", name: "Reduce motion", desc: "Turns off dice tumbles, comic sound-effect bursts and panel slide-ins." },
   { key: "advancedAutomation", name: "Advanced automation", desc: "Auto-applies fire intensity, ongoing conditions and per-scene flags during combat." },
 ];
 
@@ -32,6 +33,7 @@ export const Settings = {
   familyFriendly() { return this.enabled("familyFriendly"); },
   manualDice() { return this.enabled("manualDice"); },
   advancedAutomation() { return this.enabled("advancedAutomation"); },
+  noMotion() { return this.enabled("noMotion"); },
 
   // Theme: "system" (default) | "light" | "dark"
   theme() { return read("theme") || "system"; },
@@ -43,6 +45,7 @@ export const Settings = {
 };
 
 export function applyTheme() {
+  document.body?.classList.toggle("no-motion", Settings.noMotion());
   const t = Settings.theme();
   const root = document.documentElement;
   if (t === "system") root.removeAttribute("data-theme");

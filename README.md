@@ -85,5 +85,8 @@ licensing is your responsibility; openly licensed material (an SRD, or ORC/CC-li
 is the safe basis for anything public. *Invincible — Superhero Roleplaying* is the property of
 its publishers; this project is not affiliated with or endorsed by them.
 
+The fonts in `fonts/` — Bangers and Atkinson Hyperlegible — are licensed under the SIL Open Font
+License 1.1; their licence texts ship beside them.
+
 `CLAUDE.md` is the project's canonical specification: the completed system profile, the data
 extraction ledger, the build roadmap, the rules-accuracy audit and the changelog.
