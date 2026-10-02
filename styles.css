@@ -765,7 +765,8 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .timer-meaning { margin: 0; font-size: .86rem; color: var(--muted); }
 .clock { --p: 0; --c: var(--accent-2); flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%; border: 3px solid var(--line);
   background: conic-gradient(var(--c) calc(var(--p) * 1%), var(--panel) 0); position: relative; }
-.clock::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: repeating-conic-gradient(var(--line) 0 2deg, transparent 2deg calc(360deg / var(--seg, 6))); -webkit-mask: radial-gradient(circle, transparent 0 0, #000 0); opacity: .9; }
+.clock::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: repeating-conic-gradient(var(--line) 0 3deg, transparent 3deg calc(360deg / var(--seg, 6))); -webkit-mask: radial-gradient(circle, transparent 0 58%, #000 60%); mask: radial-gradient(circle, transparent 0 58%, #000 60%); }
+.clock::before { content: ""; position: absolute; inset: 34%; border-radius: 50%; background: var(--line); }
 .timer.t-cool .clock { --c: var(--accent-2); } .timer.t-warm .clock { --c: var(--warn); } .timer.t-hot .clock { --c: var(--danger); }
 .timer.t-good .clock { --c: var(--good); } .timer.t-done .clock { --c: var(--accent); } .timer.t-gone .clock { --c: var(--muted); }
 .pips { display: inline-flex; gap: 3px; align-items: center; }
@@ -944,7 +945,7 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 }
 
 /* ================================================================ graphics: watermarks, empty art, type badges */
-.card-mark { position: absolute; right: 16px; bottom: 12px; z-index: 0; pointer-events: none; color: var(--ink); opacity: .06; transform: rotate(-12deg); }
+.card-mark { position: absolute !important; right: 16px; bottom: 12px; z-index: 0; pointer-events: none; color: var(--ink); opacity: .06; transform: rotate(-12deg); }
 .card-mark svg { width: 104px; height: 104px; }
 :where(.card > *:not(.card-mark)) { position: relative; z-index: 1; }
 .card > .help-i { z-index: 2; }
@@ -981,3 +982,13 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .npc-row[data-group="Minions"] .npc-avatar { background: var(--warn); color: #121018; }
 .npc-row[data-group="Creatures"] .npc-avatar { background: var(--good); color: #fff; }
 .npc-row[data-group="Allies"] .npc-avatar, .npc-row[data-group="Heroes"] .npc-avatar { background: var(--accent); color: #121018; }
+
+/* ================================================================ graphics: solo */
+.group-head { display: flex; align-items: center; gap: .45rem; }
+.group-head > .ico { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: #121018; color: var(--accent); }
+.group-head > .ico svg { width: 18px; height: 18px; }
+.step-big { position: absolute !important; right: .8rem; top: .2rem; z-index: 0 !important; font: 400 7rem/1 var(--font-display); color: transparent;
+  -webkit-text-stroke: 3px var(--accent); opacity: .55; pointer-events: none; transform: rotate(-6deg); }
+.card.next-step > .help-i ~ .step-big { right: 3.4rem; }
+.timer.crisis::before { content: ""; flex: 0 0 34px; height: 34px; border-radius: 6px; background: var(--danger)
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3 22 20H2L12 3Z'/%3E%3Cpath d='M12 10v5'/%3E%3Ccircle cx='12' cy='17.6' r='1' fill='white'/%3E%3C/svg%3E") center/22px no-repeat; }

@@ -347,6 +347,7 @@ function nextStepCard(state, mount) {
   const i = currentStep(state);
   const step = NEXT_STEP[i];
   return el("section", { class: "card next-step", id: "solo-next" },
+    el("span", { class: "step-big", "aria-hidden": "true", text: String(i + 1) }),
     el("p", { class: "next-step-eyebrow", text: `Step ${i + 1} of 6 — do this next` }),
     el("h2", { text: step.label }),
     el("p", { class: "next-step-why", text: step.why }),
@@ -586,7 +587,8 @@ function whatHappenedCard(state, mount) {
     duplicated ? null : el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it"),
       el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?")),
-    el("details", { class: "help", open: duplicated }, el("summary", { text: "Which timer fires when?" }),
+    // When the card's own title already asks the question, its summary would print it twice.
+    el("details", { class: "help", open: duplicated }, el("summary", { class: duplicated ? "sr-only" : null, text: "Which timer fires when?" }),
       el("div", { class: "tablewrap" },
         el("table", { class: "data-table" },
           el("tr", {}, el("th", { text: "Timer" }), el("th", { text: "Check it when" })),
@@ -688,6 +690,19 @@ export function renderSolo(mount) {
     onclick: () => setOracleOpen(!oracleOpen) }, icon("oracle", { size: 20 }), "Oracles"));
   mount.append(referenceCard(state, mount));
   mount.append(logCard(state, mount));
+  dressHeads(mount);
+}
+
+/** An icon beside each group heading, so the timers and oracles read at a glance. */
+const HEAD_ICONS = {
+  "Crisis timers": "clock", Allies: "minions", Objectives: "target", "Encounter timer": "sensory",
+  "Answer a question": "question", "Find out what happens": "hazard", "Describe a place": "map",
+};
+function dressHeads(mount) {
+  for (const h of mount.querySelectorAll(".group-head")) {
+    const name = HEAD_ICONS[h.textContent.trim()];
+    if (name && !h.querySelector(".ico")) h.prepend(icon(name, { size: 20 }));
+  }
 }
 
 /**
