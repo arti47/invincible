@@ -1104,3 +1104,7 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .head-ico.small-ico svg { width: 14px; height: 14px; }
 .tool-link { font-weight: 700; }
 #solo-encounter.flash, .timer-group.flash { animation: card-flash 1.4s ease-out; border-radius: var(--radius); }
+
+/* Gear catalogue: can this hero get it? */
+.gear-verdict { display: inline-block; margin-top: 4px; }
+.chip.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--paper-2)); }

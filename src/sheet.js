@@ -705,20 +705,35 @@ async function openGearCatalogue(c) {
   const list = el("div", { class: "gear-list" });
   const body = el("div", {}, search, list);
   const m = modal({ title: "Gear", body, size: "wide", actions: [{ label: "Close", variant: "ghost" }] });
+  // Each row says up front whether this hero can get it, so a first-timer is not left tapping
+  // items one by one to find out (§3.16: higher Resources automatic, equal a roll, lower a loan).
+  const res = Derived.resources(c);
+  const streetwise = R.hasTalent(c, "Streetwise");
+  const verdict = (item) => {
+    if (!item.cost) return { text: "Free to add", cls: "good" };
+    const chk = R.purchaseCheck({ resources: res, cost: item.cost, restricted: !!item.restricted, streetwise });
+    return { automatic: { text: "You can afford it", cls: "good" }, roll: { text: "Needs a lucky roll", cls: "" },
+      unaffordable: { text: "Needs a loan", cls: "warn" }, restricted: { text: "Needs Streetwise", cls: "warn" } }[chk.mode]
+      || { text: "", cls: "" };
+  };
   const draw = () => {
     clear(list);
     const q = search.value.trim().toLowerCase();
+    let shown = 0;
     for (const item of items) {
       if (q && !item.name.toLowerCase().includes(q) && !item.category.toLowerCase().includes(q)) continue;
+      shown++;
+      const v = verdict(item);
       list.append(el("button", { class: "gear-row", onclick: () => { m.close(); attemptPurchase(c, item); } },
         el("div", {}, el("strong", { text: item.name }),
           el("p", { class: "muted small", text: [item.category, item.cost ? `Cost ${item.cost}` : null, item.restricted ? "Restricted" : null,
             item.damage ? `Damage ${item.damage}` : null, item.armor ? `Armor ${item.armor}` : null,
             item.durability !== undefined ? `Durability ${item.durability}` : null,
             (item.features || []).join(", ") || null, item.note || null].filter(Boolean).join(" · ") }),
-          null),
+          v.text ? el("span", { class: `chip tiny gear-verdict ${v.cls}`, text: v.text }) : null),
         el("span", { class: "tap-hint", text: "Buy ▸" })));
     }
+    if (!shown) list.append(el("p", { class: "muted", text: `Nothing matches "${search.value}". Try a shorter word, or clear the search to see everything.` }));
   };
   search.addEventListener("input", draw);
   draw();
@@ -728,13 +743,25 @@ async function attemptPurchase(c, item) {
   if (!item.cost) { addItem(c, item); showToast(`${item.name} added.`); return; }
   const res = Derived.resources(c);
   const check = R.purchaseCheck({ resources: res, cost: item.cost, restricted: !!item.restricted, streetwise: R.hasTalent(c, "Streetwise") });
+  // Offer only the loans that are legal for this hero AND reach the Cost; a button that can only
+  // refuse is a dead end.
+  const loans = check.mode === "unaffordable" ? [1, 2].filter((l) => {
+    const k = R.purchaseCheck({ resources: res, cost: item.cost, restricted: !!item.restricted, streetwise: R.hasTalent(c, "Streetwise"), loan: l });
+    return k.allowed;
+  }) : [];
+  const biggest = R.purchaseCheck({ resources: res, cost: item.cost, restricted: false, streetwise: R.hasTalent(c, "Streetwise"), loan: 2 });
+  const noLoan = check.mode === "unaffordable" && !loans.length
+    ? (biggest.mode === "noLoan" ? biggest.reason : "Even the largest loan (+2) does not reach this Cost — it is out of reach for now.")
+    : null;
   const body = el("div", {},
     el("p", { text: `${item.name} — Cost ${item.cost}. Your Resources: ${res}.` }),
     el("p", { class: check.allowed ? "muted" : "warn", text: check.reason }),
+    loans.length ? el("p", { class: "muted small", text: "A loan adds to what you can spend now, but drops your Resources one step for a few weeks (+1) or a few months (+2). If the loan only matches the Cost you still roll." }) : null,
+    noLoan ? el("p", { class: "warn small", text: noLoan }) : null,
     el("p", { class: "cite" }, el("a", { href: "#/rules/resources", class: "rules-link" }, "Rules: Resources and purchases")));
   const actions = [{ label: "Cancel", value: null, variant: "ghost" }];
   if (check.allowed) actions.push({ label: check.mode === "automatic" ? "Take it" : "Roll Resources", variant: "primary", value: "buy" });
-  else if (check.mode === "unaffordable") actions.push({ label: "Try a loan (+1)", variant: "warn", value: "loan1" }, { label: "Loan (+2)", variant: "warn", value: "loan2" });
+  else for (const l of loans) actions.push({ label: l === 1 ? "Borrow (+1, a few weeks)" : "Borrow more (+2, a few months)", variant: "warn", value: `loan${l}` });
   const choice = await modal({ title: "Purchase", body, actions }).promise;
   if (!choice) return;
   const loan = choice === "loan1" ? 1 : choice === "loan2" ? 2 : 0;
@@ -890,6 +917,10 @@ export function openKarma(c) {
     const ch = Store.activeCharacter();
     body.append(
       el("p", { class: "stat-line", text: `Karma: ${ch.state.karma}${ch.state.session.spendUnlocked ? " · spending unlocked" : " · spending locked until the session ends"}` }),
+      // Say how to unlock it, in the words of the mode being played.
+      ch.state.session.spendUnlocked ? "" : el("p", { class: "muted small", text: Settings.soloMode()
+        ? "Karma is spent between sessions. In Crisis Mode that means Head home on the Solo screen once a crisis is resolved."
+        : "Karma is spent between sessions. Use End session on Home when tonight's game is over." }),
       el("h4", { class: "section", text: "Spend karma" }),
       el("div", { class: "chiprow column" },
         spendButton("Attribute step (up to rank max)", D.KARMA.costs.attributeStep, "attribute"),
