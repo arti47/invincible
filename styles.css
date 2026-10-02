@@ -1108,3 +1108,4 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 /* Gear catalogue: can this hero get it? */
 .gear-verdict { display: inline-block; margin-top: 4px; }
 .chip.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--paper-2)); }
+.task-state { margin-left: 8px; vertical-align: middle; }

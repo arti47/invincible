@@ -1,7 +1,7 @@
 // service-worker.js — network-first with an offline app-shell cache.
 // Bump CACHE_VERSION on ANY change to a shipped file.
 
-const CACHE_VERSION = "v77";
+const CACHE_VERSION = "v78";
 const CACHE_NAME = `invincible-player-${CACHE_VERSION}`;
 
 const APP_SHELL = [
