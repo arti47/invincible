@@ -3550,6 +3550,27 @@ const run = async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   ok("wide screens: the nav is a rail, long lists flow into columns, the roster stays one column", wide.rail === "column" && wide.listCols >= 2 && wide.rosterCols === 1, JSON.stringify(wide));
 
+  const r6 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const before = JSON.stringify(Store.activeCharacter().state);
+    Store.updateCharacter((ch) => { ch.state.health = 0; ch.state.broken = true; });
+    location.hash = "#/sheet"; await wait(250);
+    const broken = !!document.querySelector("#screen .hero-head.is-broken");
+    Store.updateCharacter((ch) => { ch.state = JSON.parse(before); });
+    await wait(150);
+    const healed = !document.querySelector("#screen .hero-head.is-broken");
+    const { showRollResult } = await import("/src/power-automation.js");
+    const { roll } = await import("/src/roller.js");
+    showRollResult(Store.activeCharacter(), roll(Store.activeCharacter(), "fighting", "Mark check"));
+    const out = [...document.querySelectorAll(".modal .outcome")].pop();
+    const mark = out ? getComputedStyle(out, "::before").content !== "none" : false;
+    [...document.querySelectorAll(".modal")].pop()?.querySelector(".modal-actions .btn.primary")?.click();
+    return { broken, healed, mark };
+  });
+  ok("a broken hero's card shows it, and recovers when healed", r6.broken && r6.healed, JSON.stringify(r6));
+  ok("a roll's outcome carries its mark", r6.mark);
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };
