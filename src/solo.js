@@ -11,7 +11,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import * as Journal from "./journal.js";
 import { setLearnTab } from "./learn.js";
-import { openAttributeGuide, askAttributeScore } from "./sheet.js";
+import { openAttributeGuide, askAttributeScore, openKarma } from "./sheet.js";
 import * as Combat from "./combat.js";
 
 import { icon } from "./icons.js";
@@ -325,15 +325,20 @@ async function headHome(state, mount) {
 
   // Say what the session was, and what is waiting. "Ending well" is the part that makes the next
   // sitting startable; a toast that vanishes is not a record.
-  await modal({
+  const hero = Store.activeCharacter();
+  const canSpend = !!(hero && hero.state.karma > 0);
+  const closed = await modal({
     title: "Session closed",
     body: el("div", {},
       el("p", { class: "lede", text: recap.charAt(0).toUpperCase() + recap.slice(1) + "." }),
       hook ? el("p", { class: "warn", text: hook }) : el("p", { class: "muted small", text: "Nothing is left hanging — the next session starts clean." }),
       el("p", { class: "muted small", text: "Karma spending is open now, between sessions. When you sit down again, Home will pick up from here." })),
-    actions: [{ label: "Done", variant: "primary" }],
+    actions: canSpend
+      ? [{ label: "Later", value: false, variant: "ghost" }, { label: `Spend karma (${hero.state.karma})`, value: "spend", variant: "primary" }]
+      : [{ label: "Done", variant: "primary" }],
   }).promise;
   renderSolo(mount);
+  if (closed === "spend") openKarma(Store.activeCharacter());
 }
 
 /** Scroll the relevant panel into view and flash it, for steps whose action lives further down. */

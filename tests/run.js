@@ -3969,6 +3969,36 @@ const run = async () => {
   ok("ending: stopping mid-crisis still leaves the next-session foothold",
     stopping.closed === true);
 
+  // Head home says karma spending is open; it must also hand the player the control that spends it.
+  const homeSpend = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    let c = Store.activeCharacter();
+    if (!c) { c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    Store.updateCharacter((ch) => { ch.state.karma = 12; }, { id: c.id });
+    localStorage.setItem("invincible:solo", JSON.stringify({
+      crisisLevel: 2, alert: null, alertParts: null, crises: [], timers: [], allies: [],
+      objectives: [{ name: "Shut the reactor", status: "reached", karma: 2 }],
+      encounter: null, mode: "alert", log: [], eventChecks: 0, awaitingSocial: false, resolved: 1 }));
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 150));
+    location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 340));
+    const btn = (re, root = document) => Array.from(root.querySelectorAll("button")).find((b) => re.test(b.textContent));
+    btn(/^Head home/, document.getElementById("screen"))?.click();
+    await new Promise((r) => setTimeout(r, 200));
+    btn(/Rest and recover/, document.querySelector(".modal") || document)?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const spend = btn(/Spend karma/, document.querySelector(".modal") || document);
+    const label = spend?.textContent || "";
+    spend?.click();
+    await new Promise((r) => setTimeout(r, 300));
+    const karmaOpen = !!document.querySelector(".modal .karma-panel");
+    const unlocked = /spending unlocked/.test(document.querySelector(".modal .karma-panel")?.textContent || "");
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    return { hero: true, label, karmaOpen, unlocked };
+  });
+  ok("ending: Session closed offers to spend karma straight away, already unlocked",
+    homeSpend.hero && /Spend karma \(14\)/.test(homeSpend.label) && homeSpend.karmaOpen && homeSpend.unlocked,
+    JSON.stringify(homeSpend));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
