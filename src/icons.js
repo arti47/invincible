@@ -6,6 +6,28 @@
 import { el } from "./core.js";
 
 const P = {
+  // power types (Ch.3)
+  attack: '<path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V10m0-1V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5V6.5a1.5 1.5 0 0 1 3 0V12c0 4-2.5 7-6 7-2.7 0-4.4-1.5-5.3-3.4L3.4 12.4a1.5 1.5 0 0 1 2.6-1.5L7 12.5"/>',
+  control: '<path d="M12 12a2 2 0 1 0 2 2 4 4 0 1 0-4-4 6 6 0 1 0 6 6"/><path d="M19 4l-2.5 2.5M21 9h-3"/>',
+  defense: '<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="M12 7v10M8 11h8"/>',
+  modification: '<path d="M7 3c0 6 10 6 10 12s-10 3-10 6M17 3c0 6-10 6-10 12s10 3 10 6"/><path d="M8.5 7h7M8.5 17h7"/>',
+  movement: '<path d="M3 12h11M3 7h7M3 17h7"/><path d="m14 6 7 6-7 6Z" fill="currentColor"/>',
+  sensory: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+  // conditions (Ch.3/4)
+  stunned: '<circle cx="12" cy="14" r="5"/><path d="m5 4 .7 1.5L7.3 6l-1.6.6L5 8l-.6-1.4L3 6l1.4-.5L5 4Zm7-2 .7 1.5 1.6.5-1.6.6L12 6l-.6-1.4L10 4l1.4-.5L12 2Zm7 2 .7 1.5 1.6.5-1.6.6L19 8l-.6-1.4L17 6l1.4-.5L19 4Z" fill="currentColor"/>',
+  afflicted: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11Z"/><path d="M9.5 14.5h5M12 12v5"/>',
+  immobilised: '<rect x="3" y="9" width="8" height="6" rx="3"/><rect x="13" y="9" width="8" height="6" rx="3"/><path d="M9 12h6"/>',
+  onFire: '<path d="M12 21c-4 0-6.5-2.7-6.5-6.3 0-3.7 3.3-5.8 4-9.7 2.6 1.6 3.7 3.9 3.5 6 .9-.6 1.6-1.6 1.8-2.8 2 1.8 3.7 4.2 3.7 6.6 0 3.5-2.6 6.2-6.5 6.2Z"/>',
+  blinded: '<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><path d="M4 20 20 4"/>',
+  controlled: '<path d="M12 12m-1 0a1 1 0 1 0 2 0 3 3 0 1 0-6 0 5 5 0 1 0 10 0 7 7 0 1 0-14 0"/>',
+  darkness: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" fill="currentColor"/>',
+  storm: '<path d="M7 16a4.5 4.5 0 1 1 1-8.9A5.5 5.5 0 0 1 18.5 9 3.5 3.5 0 0 1 18 16"/><path d="m13 12-3 5h4l-2 4" />',
+  lowGravity: '<circle cx="12" cy="15" r="3"/><path d="M12 10V3m-3 3 3-3 3 3"/>',
+  highGravity: '<circle cx="12" cy="7" r="3"/><path d="M12 12v9m-3-3 3 3 3-3"/>',
+  // compendium groups
+  minions: '<circle cx="6" cy="8" r="2.4"/><circle cx="12" cy="7" r="2.4"/><circle cx="18" cy="8" r="2.4"/><path d="M2 18c.4-2.8 2-4.3 4-4.3s3.6 1.5 4 4.3M8 17c.4-2.8 2-4.3 4-4.3s3.6 1.5 4 4.3M14 18c.4-2.8 2-4.3 4-4.3s3.6 1.5 4 4.3"/>',
+  creature: '<circle cx="6" cy="9" r="2"/><circle cx="10" cy="5.5" r="2"/><circle cx="14" cy="5.5" r="2"/><circle cx="18" cy="9" r="2"/><path d="M12 11c3 0 6 4.5 6 7 0 2-1.6 2.6-3 2.2-1.2-.3-2-.9-3-.9s-1.8.6-3 .9c-1.4.4-3-.2-3-2.2 0-2.5 3-7 6-7Z"/>',
+  adversary: '<path d="M12 3c-4.4 0-8 3.2-8 7.5 0 2.5 1.2 4.5 3 5.8V20h10v-3.7c1.8-1.3 3-3.3 3-5.8C20 6.2 16.4 3 12 3Z"/><circle cx="9" cy="11" r="1.8" fill="currentColor"/><circle cx="15" cy="11" r="1.8" fill="currentColor"/><path d="M10 20v-2.5M14 20v-2.5"/>',
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/>',
   hero: '<path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m12 8 1.3 2.7 3 .4-2.2 2.1.5 3L12 14.8 9.4 16.2l.5-3-2.2-2.1 3-.4L12 8Z" fill="currentColor" stroke="none"/>',
   play: '<path d="M13.5 2.5 5 13.5h6l-1.5 8 8.5-11h-6l1.5-8Z" fill="currentColor"/>',
@@ -28,6 +50,14 @@ const P = {
 };
 
 /** An inline SVG icon. Decorative by default; label it with the surrounding control. */
+/** Which icon stands for a power type, a condition key or a compendium group. */
+const ALIAS = { "NPC profiles": "npcs", Minions: "minions", Creatures: "creature", Adversaries: "adversary", Allies: "hero", Heroes: "hero", Hero: "hero" };
+export function iconFor(key) {
+  if (!key) return null;
+  const k = ALIAS[key] || String(key).charAt(0).toLowerCase() + String(key).slice(1);
+  return P[k] ? k : null;
+}
+
 export function icon(name, { size = 24, label = null } = {}) {
   const span = el("span", { class: `ico ico-${name}`, "aria-hidden": label ? null : "true", role: label ? "img" : null, "aria-label": label });
   span.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${P[name] || P.burst}</svg>`;
