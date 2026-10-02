@@ -356,6 +356,9 @@ function nextStepCard(state, mount) {
     el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => step.run(state, mount) }, step.label),
       // Step 4 is "play the scene", which is exactly where "but what do I roll?" stops people.
+      // An encounter mid-sequence is waiting on the player; say so here, where they are looking.
+      i === 3 && state.encounter && state.encounter.phase && state.encounter.phase !== "moving"
+        ? el("button", { class: "btn warn", onclick: () => focusCard(state, mount, "solo-encounter") }, "The encounter needs you — go to it") : null,
       i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
       // How a crisis ends was only a header button; at the step where play happens, offer it here.
       i === 3 && state.alert ? el("button", { class: "btn ghost", title: "When the danger is dealt with in the fiction", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,

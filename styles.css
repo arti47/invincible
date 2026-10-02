@@ -1103,3 +1103,4 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .head-ico.small-ico { width: 24px; height: 24px; flex-basis: 24px; }
 .head-ico.small-ico svg { width: 14px; height: 14px; }
 .tool-link { font-weight: 700; }
+#solo-encounter.flash, .timer-group.flash { animation: card-flash 1.4s ease-out; border-radius: var(--radius); }

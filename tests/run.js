@@ -3054,6 +3054,27 @@ const run = async () => {
   });
   ok("resolving a crisis clears its headline, so Home never shows it as live", r1b.cleared);
   ok("engaging a crisis with no objective asks for one (the only source of solo karma)", r1b.asks);
+
+  const r2b = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const KEY = "invincible:solo";
+    const saved = localStorage.getItem(KEY);
+    const st = JSON.parse(saved || "{}");
+    st.alert = "A"; st.eventChecks = 1; st.crises = []; st.awaitingSocial = false; st.resolved = 0;
+    st.timers = [{ id: "t1", name: "T", proximity: "distant" }];
+    st.encounter = { presence: "near", phase: "revealed" };
+    localStorage.setItem(KEY, JSON.stringify(st));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    const btn = Array.from(document.querySelectorAll("#solo-next button")).find((b) => /encounter needs you/.test(b.textContent));
+    st.encounter.phase = "moving";
+    localStorage.setItem(KEY, JSON.stringify(st));
+    location.hash = "#/home"; location.hash = "#/solo"; await wait(250);
+    const quiet = !Array.from(document.querySelectorAll("#solo-next button")).some((b) => /encounter needs you/.test(b.textContent));
+    if (saved) localStorage.setItem(KEY, saved); else localStorage.removeItem(KEY);
+    location.hash = "#/home"; await wait(150);
+    return { offered: !!btn, quiet };
+  });
+  ok("a waiting encounter step is flagged on the step-4 card, and only then", r2b.offered && r2b.quiet, JSON.stringify(r2b));
   ok("a finished fight rolls the crisis timers at +1 and then an event check",
     /\+1 die/.test(moves.reportHeads.join(" ")) && moves.reportHeads.some((h) => /Event check/.test(h))
       && moves.eventChecks === 2,
