@@ -3456,6 +3456,28 @@ const run = async () => {
   ok("empty states carry an illustration", art.emptyArt);
   ok("decorative graphics are hidden from screen readers", art.markHidden);
 
+  const soloArt = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    Settings.set("soloMode", true); location.hash = "#/home"; location.hash = "#/solo"; await wait(300);
+    const heads = Array.from(document.querySelectorAll("#screen .group-head"));
+    const out = {
+      heads: heads.length, dressed: heads.filter((h) => h.querySelector(".ico svg")).length,
+      stepBig: document.querySelector("#solo-next .step-big")?.getAttribute("aria-hidden") === "true",
+      dupSummaries: Array.from(document.querySelectorAll("#screen .card")).filter((c) => {
+        const t = c.querySelector(":scope > h3")?.textContent; const sm = c.querySelector("summary:not(.sr-only)");
+        return t && sm && sm.textContent === t;
+      }).length,
+    };
+    Settings.set("soloMode", false);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; await wait(200);
+    return out;
+  });
+  ok("every solo group heading carries its icon", soloArt.heads >= 4 && soloArt.dressed === soloArt.heads, `${soloArt.dressed}/${soloArt.heads}`);
+  ok("the next-step card shows its step as a decorative numeral", soloArt.stepBig);
+  ok("no card prints its own title twice", soloArt.dupSummaries === 0, String(soloArt.dupSummaries));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

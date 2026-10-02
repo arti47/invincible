@@ -6,6 +6,12 @@
 import { el } from "./core.js";
 
 const P = {
+  clock: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6M12 2v3"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/>',
+  map: '<path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/>',
+  hazard: '<path d="M12 3 22 20H2L12 3Z"/><path d="M12 10v5"/><circle cx="12" cy="17.6" r="1.1" fill="currentColor"/>',
+  question: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7v.5"/><circle cx="12" cy="17" r="1.1" fill="currentColor"/>',
+  log: '<path d="M6 3h12v18H6z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
   // power types (Ch.3)
   attack: '<path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V10m0-1V5.5a1.5 1.5 0 0 1 3 0V10m0-1.5V6.5a1.5 1.5 0 0 1 3 0V12c0 4-2.5 7-6 7-2.7 0-4.4-1.5-5.3-3.4L3.4 12.4a1.5 1.5 0 0 1 2.6-1.5L7 12.5"/>',
   control: '<path d="M12 12a2 2 0 1 0 2 2 4 4 0 1 0-4-4 6 6 0 1 0 6 6"/><path d="M19 4l-2.5 2.5M21 9h-3"/>',
