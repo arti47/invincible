@@ -45,6 +45,19 @@ function setOracle(state, kind, text, detail = "") {
 
 let undoSnapshot = null;
 function snapshot(state, label) { undoSnapshot = { label, data: JSON.stringify(state) }; }
+/**
+ * Every "remove this" on the board (ignore a crisis, stop a timer, drop an objective or an ally
+ * group, stop the encounter) was instant and permanent — one mis-tap lost a timer's progress or an
+ * objective's karma. One path: snapshot, apply, and offer Undo in the toast.
+ */
+function discard(state, mount, message, mutate) {
+  snapshot(state, message);
+  mutate();
+  save(state);
+  renderSolo(mount);
+  showToast(message, { action: { label: "Undo", onClick: () => undoSolo(mount) } });
+}
+
 function undoSolo(mount) {
   if (!undoSnapshot) return false;
   save(JSON.parse(undoSnapshot.data));
@@ -994,11 +1007,10 @@ function crisesCard(state, mount) {
         crisisBody(c)),
       el("div", { class: "chosen-actions" },
         el("button", { class: currentStep(state) === 2 ? "btn tiny primary" : "btn tiny", onclick: () => engageCrisis(state, c, mount) }, "Engage"),
-        el("button", { class: "btn tiny ghost", onclick: () => {
+        el("button", { class: "btn tiny ghost", onclick: () => discard(state, mount, "Crisis ignored.", () => {
           state.crises = state.crises.filter((x) => x.id !== c.id);
           logEvent(state, `Crisis ignored: ${c.text}`);
-          save(state); renderSolo(mount);
-        } }, "Ignore"))));
+        }) }, "Ignore"))));
   }
   return card;
 }
@@ -1412,7 +1424,7 @@ function timersCard(state, mount) {
       note: t.detail || null,
       actions: [
         el("button", { class: "btn tiny primary", onclick: () => checkTimer(state, t, mount) }, "Check"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.timers = state.timers.filter((x) => x.id !== t.id); logEvent(state, `Timer stopped: ${t.name}`); save(state); renderSolo(mount); } }, "Stop"),
+        el("button", { class: "btn tiny ghost", onclick: () => discard(state, mount, "Timer stopped.", () => { state.timers = state.timers.filter((x) => x.id !== t.id); logEvent(state, `Timer stopped: ${t.name}`); }) }, "Stop"),
       ],
     }));
   }
@@ -1571,7 +1583,7 @@ function objectivesCard(state, mount) {
         left === 0
           ? el("button", { class: "btn tiny primary", onclick: () => completeObjective(state, o, mount) }, "Claim karma")
           : el("button", { class: "btn tiny primary", onclick: () => objectiveCheck(state, o, mount) }, "Progress"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.objectives = state.objectives.filter((x) => x.id !== o.id); save(state); renderSolo(mount); } }, "Drop"),
+        el("button", { class: "btn tiny ghost", onclick: () => discard(state, mount, "Objective dropped.", () => { state.objectives = state.objectives.filter((x) => x.id !== o.id); }) }, "Drop"),
       ],
     }));
   }
@@ -1701,7 +1713,7 @@ function alliesCard(state, mount) {
       actions: [
         gone ? null : el("button", { class: "btn tiny primary", onclick: () => allyCheck(state, a, mount, false) }, "Check"),
         gone ? null : el("button", { class: "btn tiny", onclick: () => allyCheck(state, a, mount, true) }, "Fight"),
-        el("button", { class: "btn tiny ghost", onclick: () => { state.allies = state.allies.filter((x) => x.id !== a.id); save(state); renderSolo(mount); } }, "Drop"),
+        el("button", { class: "btn tiny ghost", onclick: () => discard(state, mount, "Ally group dropped.", () => { state.allies = state.allies.filter((x) => x.id !== a.id); }) }, "Drop"),
       ],
     }));
   }
@@ -2023,7 +2035,7 @@ function encounterCard(state, mount) {
   if (avoidance) put(card, avoidance);
   put(card, el("div", { class: "row-actions minor" },
     el("button", { class: "btn tiny ghost", onclick: () => describePlace(state, mount, "facility") }, "Describe this place"),
-    el("button", { class: "btn tiny ghost", onclick: () => { state.encounter = null; save(state); renderSolo(mount); } }, "Stop the encounter timer")));
+    el("button", { class: "btn tiny ghost", onclick: () => discard(state, mount, "Encounter timer stopped.", () => { state.encounter = null; }) }, "Stop the encounter timer")));
 
   const p = placeBlock();
   if (p) put(card, p);

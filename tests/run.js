@@ -4195,6 +4195,41 @@ const run = async () => {
   ok("challenges: a challenge past its limit says the failure happens", tasksUi.outOfTime, JSON.stringify(tasksUi));
   ok("challenges: dropping one can be undone from the toast", tasksUi.afterDrop === 1 && tasksUi.afterUndo === 2, JSON.stringify(tasksUi));
 
+  // Removing things from the board is undoable: a crisis, a timer, an objective, an ally group.
+  const undoables = await page.evaluate(async () => {
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", true);
+    const base = {
+      crisisLevel: 2, alert: "x", alertParts: { headline: "x" },
+      crises: [{ id: "c1", text: "A crisis", parts: { headline: "A crisis" }, source: "event" }],
+      timers: [{ id: "t1", kind: "crisis", name: "Clock", proximity: "soon" }],
+      allies: [{ id: "a1", name: "Police", status: "unified" }],
+      objectives: [{ id: "o1", name: "Goal", status: "manageable", karma: 2 }],
+      encounter: null, mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, resolved: 0 };
+    const out = {};
+    for (const [key, label, field] of [["crisis", "Ignore", "crises"], ["timer", "Stop", "timers"], ["objective", "Drop", "objectives"], ["ally", "Drop", "allies"]]) {
+      localStorage.setItem("invincible:solo", JSON.stringify(base));
+      location.hash = "#/home"; await new Promise((r) => setTimeout(r, 100));
+      location.hash = "#/solo"; await new Promise((r) => setTimeout(r, 300));
+      const scope = { crisis: ".timer.crisis", timer: ".timer-group", objective: ".timer-group", ally: ".timer-group" }[key];
+      const holder = key === "objective" ? Array.from(document.querySelectorAll("#screen .timer-group")).find((g) => /Goal/.test(g.textContent))
+        : key === "ally" ? Array.from(document.querySelectorAll("#screen .timer-group")).find((g) => /Police/.test(g.textContent))
+        : document.querySelector(`#screen ${scope}`);
+      const b = Array.from(holder?.querySelectorAll("button") || []).find((x) => x.textContent.trim() === label);
+      b?.click();
+      await new Promise((r) => setTimeout(r, 150));
+      const gone = (JSON.parse(localStorage.getItem("invincible:solo"))[field] || []).length;
+      Array.from(document.querySelectorAll(".toast button")).find((x) => /Undo/.test(x.textContent))?.click();
+      await new Promise((r) => setTimeout(r, 150));
+      const back = (JSON.parse(localStorage.getItem("invincible:solo"))[field] || []).length;
+      document.querySelectorAll(".toast").forEach((t) => t.remove());
+      out[key] = { found: !!b, gone, back };
+    }
+    return out;
+  });
+  ok("solo: ignoring a crisis, stopping a timer, dropping an objective or an ally group can each be undone",
+    Object.values(undoables).every((v) => v.found && v.gone === 0 && v.back === 1), JSON.stringify(undoables));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

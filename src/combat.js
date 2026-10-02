@@ -695,7 +695,11 @@ function combatantCard(cb, combat, mount, isUp = false) {
       // Damage arrives out of turn, so this one stays live whatever the initiative says.
       el("button", { class: "btn tiny ghost", onclick: () => damageCombatant(cb, combat, mount) }, "Damage"),
       el("button", { class: "btn tiny", onclick: () => { cb.acted = !cb.acted; save(combat); renderCombat(mount); } }, cb.acted ? "Un-act" : "Acted"),
-      el("button", { class: "btn tiny ghost", onclick: () => { combat.combatants = combat.combatants.filter((x) => x.id !== cb.id); save(combat); renderCombat(mount); } }, "Remove")));
+      el("button", { class: "btn tiny ghost", onclick: () => {
+        const before = JSON.parse(JSON.stringify(combat));
+        combat.combatants = combat.combatants.filter((x) => x.id !== cb.id); save(combat); renderCombat(mount);
+        showToast(`${cb.name} removed.`, { action: { label: "Undo", onClick: () => { save(before); renderCombat(mount); } } });
+      } }, "Remove")));
 }
 
 async function damageCombatant(cb, combat, mount) {
