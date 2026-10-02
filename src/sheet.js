@@ -697,6 +697,12 @@ function inventoryCard(c, s) {
     el("h3", { text: "Gear" }),
     helpPanel(["What you are carrying. This game has no encumbrance — the GM simply disallows the absurd.", "Buying compares your Resources against an item's Cost: higher buys it outright, equal needs a roll of at least one 6, lower needs a loan.", "Restricted items need the Streetwise talent no matter how wealthy you are."]),
     el("p", { class: "stat-line", text: `Resources ${s.resources} — ${D.STANDARD_OF_LIVING[s.resources]}` }),
+    c.state.loan ? el("div", { class: "loan-line" },
+      el("p", { class: "warn small", text: `Repaying a loan: Resources are 1 step lower for ${c.state.loan.steps === 2 ? "a few months" : "a few weeks"}.` }),
+      el("button", { class: "btn tiny", onclick: () => {
+        Store.updateCharacter((ch) => { ch.state.loan = null; }, { id: c.id });
+        showToast("Loan over — Resources back up a step.", { variant: "good" });
+      } }, "That time has passed — end the loan")) : null,
     list,
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => openGearCatalogue(c) }, "Buy / add gear"),
@@ -769,7 +775,11 @@ async function attemptPurchase(c, item) {
   const choice = await modal({ title: "Purchase", body, actions }).promise;
   if (!choice) return;
   const loan = choice === "loan1" ? 1 : choice === "loan2" ? 2 : 0;
-  const result = Roller.purchase(c, item, { loan });
+  // A roll is needed when Resources (with any loan) only equal the Cost; others may add dice then.
+  const rolling = R.purchaseCheck({ resources: res, cost: item.cost, restricted: !!item.restricted, streetwise: R.hasTalent(c, "Streetwise"), loan }).mode === "roll";
+  const pooledDice = rolling ? await askPooledDice(c) : 0;
+  if (pooledDice === null) return;
+  const result = Roller.purchase(c, item, { loan, pooledDice });
   if (!result.ok) { showToast(result.reason, { variant: "warn" }); return; }
   if (result.success) { addItem(c, item); showToast(`${item.name} acquired.`, { variant: "good" }); if (loan) applyLoan(c, loan); return; }
   const tryBarter = await confirmModal("The purchase failed. Make one PRESENCE roll to barter?", { title: "Barter?", confirmLabel: "Barter" });
@@ -780,11 +790,28 @@ async function attemptPurchase(c, item) {
 }
 
 function applyLoan(c, loan) {
-  Store.updateCharacter((ch) => {
-    ch.identity.resourcesBase = Math.max(1, (ch.identity.resourcesBase ?? Derived.resources(ch)) - 1);
-    ch.state.restFlags.loan = { steps: loan, at: Date.now() };
-  }, { id: c.id });
-  showToast(`Loan taken: Resources drop 1 step for ${loan === 1 ? "a few weeks" : "a few months"}.`, { variant: "warn", timeout: 6000 });
+  // The step is recorded as a loan, not written into the base, so it can end (state.loan).
+  Store.updateCharacter((ch) => { ch.state.loan = { steps: loan, at: Date.now() }; }, { id: c.id });
+  showToast(`Loan taken: Resources drop 1 step for ${loan === 1 ? "a few weeks" : "a few months"}. End it on the Hero tab when that time has passed.`, { variant: "warn", timeout: 7000 });
+}
+
+/** Ask who is chipping in: other heroes add dice equal to their own Resources (Ch.4 pooling rule). */
+async function askPooledDice(c) {
+  const others = Store.listCharacters().filter((x) => x.id !== c.id);
+  const pick = await chooseModal("Is anyone chipping in?", [
+    { label: "Just me", hint: "Roll your own Resources dice", value: "none" },
+    ...others.map((o) => ({ label: `With ${o.identity.heroName || o.identity.realName || "a teammate"}`, hint: `+${Derived.resources(o)} dice (their Resources)`, value: `hero:${o.id}` })),
+    { label: "Someone else chips in", hint: "An ally or contact adds dice equal to their Resources", value: "other" },
+  ]);
+  if (pick === null || pick === undefined) return null;
+  if (pick === "none") return 0;
+  if (pick === "other") {
+    const n = Number(await promptModal("How many dice do they add? (their Resources score)", { title: "Chipping in", value: "2",
+      hints: ["Their Resources score, from 1 (destitute) to 8 (opulent)."] }));
+    return Number.isFinite(n) && n > 0 ? Math.min(8, Math.floor(n)) : 0;
+  }
+  const o = others.find((x) => `hero:${x.id}` === pick);
+  return o ? Derived.resources(o) : 0;
 }
 
 function addItem(c, item) {

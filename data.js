@@ -1383,6 +1383,9 @@ export const CHALLENGES = [
       { name: "Override the System", desc: "Bypass and shut it down (REASON)." },
       { name: "Short Out the Console", desc: "Overload it with BLAST (AGILITY) or MATTER CONTROL (REASON)." }] },
   { name: "Magical Ward", tagline: "The spell must be broken!", rating: 9, limit: "3 rounds",
+    // Mechanical reading of the detail line below: a failed limit resets the rating to 8, and each
+    // later attempt takes a further -2 dice until the ward is left alone for a few hours.
+    retry: { rating: 8, penalty: 2 },
     detail: "Once a hero enters the ward's zone, and at the start of each following round, it retaliates with a Massive BLAST (Spectacular AGILITY 8, Damage 5, Range 0, Burst Effect). Failing the limit resets the rating to 8, and later attempts take a cumulative -2 dice unless the ward is left alone for a few hours.",
     objectives: [
       { name: "Dispel Magic", desc: "NULLIFICATION or SORCERY (PRESENCE)." },
