@@ -1,6 +1,7 @@
 // screens.js — home, rules library, compendium, roll log, settings & about.
 
-import { el, clear, dieFace } from "./core.js";
+import { el, clear, dieFace, dieEl } from "./core.js";
+import { emblem } from "./icons.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -33,38 +34,41 @@ export function renderHome(mount) {
 
   // With an empty roster, learning the game comes before building a hero for it.
   if (!chars.length) {
-    mount.append(el("section", { class: "card" },
+    mount.append(el("section", { class: "card masthead" },
       el("h1", { text: "Invincible Player" }),
       el("h3", { text: "New to the game?" }),
-      el("p", { class: "muted small", text: "A step-by-step tutorial for first-time players — dice, fights, damage and karma — plus one for solo play with no GM." }),
+      el("p", { class: "muted", text: "A step-by-step tutorial for first-time players — dice, fights, damage and karma — plus one for solo play with no GM." }),
       el("div", { class: "row-actions" },
-        el("a", { class: "btn primary", href: "#/learn" }, "Start the tutorial"))));
+        el("a", { class: "btn primary big", href: "#/learn" }, "Start the tutorial"))));
   }
 
-  mount.append(el("section", { class: "card hero-card" },
-    chars.length ? el("h1", { text: "Invincible Player" }) : el("h2", { text: "Make a hero" }),
-    el("p", { class: "muted", text: "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying." }),
-    el("div", { class: "row-actions" },
-      el("a", { class: `btn ${chars.length ? "primary" : ""}`, href: "#/create" }, c ? "Create another hero" : "Create your hero"),
-      el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
-      el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team"))));
-
+  // The roster: who you play, then the three ways to get another hero.
+  const roster = el("section", { class: "card hero-card" },
+    el("h2", { text: chars.length ? "Your heroes" : "Make a hero" }),
+    el("p", { class: "muted", text: "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying." }));
   if (chars.length) {
     const list = el("div", { class: "char-list" });
     for (const ch of chars) {
       const s = Derived.summary(ch);
       list.append(el("div", { class: `char-row ${ch.id === c?.id ? "active" : ""}` },
         el("button", { class: "char-pick", onclick: () => { Store.setActiveCharacter(ch.id); location.hash = "#/sheet"; } },
-          el("strong", { text: ch.identity.heroName || ch.identity.realName || "Unnamed" }),
-          el("span", { class: "muted small", text: `${R.findRank(ch.identity.rank)?.name} · H ${ch.state.health}/${s.maxHealth} · R ${ch.state.resolve}/${s.maxResolve} · Karma ${ch.state.karma}` })),
-        el("button", { class: "btn tiny danger", onclick: async () => {
+          emblem(ch.identity.heroName || ch.identity.realName, ch.identity.role, { portrait: ch.identity.portraitUrl }),
+          el("span", { class: "char-text" },
+            el("strong", { text: ch.identity.heroName || ch.identity.realName || "Unnamed" }),
+            el("span", { class: "muted small", text: `${R.findRank(ch.identity.rank)?.name} · H ${ch.state.health}/${s.maxHealth} · R ${ch.state.resolve}/${s.maxResolve} · Karma ${ch.state.karma}` }))),
+        el("button", { class: "btn tiny danger", "aria-label": `Delete ${ch.identity.heroName || "this hero"}`, onclick: async () => {
           if (await confirmModal(`Delete ${ch.identity.heroName || "this hero"}? This cannot be undone.`, { title: "Delete hero", variant: "danger", confirmLabel: "Delete" })) {
             Store.deleteCharacter(ch.id); renderHome(mount);
           }
         } }, "Delete")));
     }
-    mount.append(el("section", { class: "card" }, el("h3", { text: "Your heroes" }), list));
+    roster.append(list);
   }
+  roster.append(el("div", { class: "row-actions" },
+    el("a", { class: `btn ${chars.length ? "" : "primary"}`, href: "#/create" }, c ? "Create another hero" : "Create your hero"),
+    el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
+    el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team")));
+  mount.append(roster);
 
   if (team) {
     mount.append(el("section", { class: "card" },
@@ -110,7 +114,7 @@ async function openPregens() {
 
 export function renderRules(mount, anchor) {
   clear(mount);
-  const search = el("input", { class: "input", type: "search", placeholder: "Search the rules…", "aria-label": "Search the rules" });
+  const search = el("input", { class: "input sticky-search", type: "search", placeholder: "Search the rules…", "aria-label": "Search the rules" });
   const results = el("div", { class: "rules-list" });
   const draw = () => {
     clear(results);
@@ -251,13 +255,25 @@ function detailsTable(title, rows) {
 export function renderCompendium(mount) {
   clear(mount);
   const all = R.compendium();
-  const search = el("input", { class: "input", type: "search", placeholder: "Search NPCs, creatures, adversaries and heroes…" });
+  const search = el("input", { class: "input sticky-search", type: "search", placeholder: "Search NPCs, creatures, adversaries and heroes…", "aria-label": "Search the compendium" });
   const list = el("div", { class: "npc-list" });
+  // One group at a time reads faster than eleven thousand pixels of everything.
+  const groupNames = ["All", ...new Set(all.map((n) => n.group))];
+  const filter = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Show" });
+  const drawFilter = () => {
+    clear(filter);
+    for (const g of groupNames) {
+      filter.append(el("button", { class: `chip ${compendiumGroup === g ? "selected" : ""}`, role: "radio", type: "button",
+        "aria-checked": compendiumGroup === g ? "true" : "false",
+        onclick: () => { compendiumGroup = g; drawFilter(); draw(); } }, g));
+    }
+  };
   const draw = () => {
     clear(list);
     const q = search.value.trim().toLowerCase();
     const groups = {};
     for (const n of all) {
+      if (compendiumGroup !== "All" && n.group !== compendiumGroup) continue;
       if (q && !n.name.toLowerCase().includes(q) && !(n.desc || n.descriptor || "").toLowerCase().includes(q)) continue;
       (groups[n.group] = groups[n.group] || []).push(n);
     }
@@ -274,12 +290,14 @@ export function renderCompendium(mount) {
     }
   };
   search.addEventListener("input", draw);
+  drawFilter();
   draw();
   mount.append(el("section", { class: "card" },
     el("h2", { text: "Compendium" }),
     el("p", { class: "muted small", text: "Stock NPC profiles, animals, published adversaries and playable heroes." }),
-    search, list));
+    search, filter, list));
 }
+let compendiumGroup = "All";
 
 /* ---------------------------------------------------------------- roll log */
 
@@ -351,7 +369,7 @@ function journalHeader(mount, chars, scope, open) {
   });
   card.append(search);
 
-  const filters = el("div", { class: "chiprow" });
+  const filters = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Show" });
   const chip = (label, kinds) => {
     const on = JSON.stringify(journalView.kinds) === JSON.stringify(kinds);
     return el("button", { class: `chip selectable ${on ? "selected" : ""}`,
@@ -471,8 +489,8 @@ function entryRow(e, mount, { compact = false } = {}) {
   row.append(main);
 
   if (e.kind === "roll" && e.detail?.dice?.length) {
-    row.append(el("div", { class: "dice-row small" }, ...e.detail.dice.map((v) =>
-      el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) }))));
+    row.append(el("div", { class: "dice-row small" }, ...e.detail.dice.map((v, i) =>
+      dieEl(v, i))));
   }
   if (e.note) row.append(el("p", { class: "jr-note", text: e.note }));
 
@@ -595,48 +613,52 @@ function exportMarkdown(characterId, sessionId = null) {
 export function renderSettings(mount) {
   clear(mount);
   const card = el("section", { class: "card" }, el("h2", { text: "Settings" }));
+  const group = (title, ...kids) => {
+    card.append(el("h3", { class: "section", text: title }));
+    const g = el("div", { class: `settings-group ${title === "Mission data" ? "danger-zone" : ""}` }, ...kids.filter(Boolean));
+    card.append(g);
+    return g;
+  };
 
-  card.append(el("h3", { class: "section", text: "Theme" }));
-  const themeRow = el("div", { class: "chiprow" });
+  const themeRow = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Theme" });
   for (const t of ["system", "light", "dark"]) {
-    themeRow.append(el("button", { class: `chip selectable ${Settings.theme() === t ? "selected" : ""}`,
+    themeRow.append(el("button", { class: `chip selectable ${Settings.theme() === t ? "selected" : ""}`, role: "radio",
+      "aria-checked": Settings.theme() === t ? "true" : "false",
       onclick: () => { Settings.setTheme(t); renderSettings(mount); } }, t === "system" ? "Follow system" : t));
   }
-  card.append(themeRow);
+  group("Theme", themeRow);
 
-  card.append(el("h3", { class: "section", text: "Features" }));
+  const features = group("Features");
   for (const t of TOGGLES) {
-    const input = el("input", { type: "checkbox", checked: Settings.enabled(t.key), onchange: (e) => {
+    const input = el("input", { type: "checkbox", role: "switch", checked: Settings.enabled(t.key), onchange: (e) => {
       Settings.set(t.key, e.target.checked);
       showToast(`${t.name} ${e.target.checked ? "on" : "off"}.`);
       document.dispatchEvent(new CustomEvent("nav-refresh"));
     } });
-    card.append(el("label", { class: "toggle-row" }, input,
+    features.append(el("label", { class: "toggle-row" }, input,
       el("span", {}, el("strong", { text: t.name }), el("span", { class: "muted small", text: t.desc }))));
   }
 
-  card.append(el("h3", { class: "section", text: "Backup" }));
-  card.append(el("div", { class: "row-actions" },
+  group("Backup", el("div", { class: "row-actions" },
     el("button", { class: "btn", onclick: exportJson }, "Export JSON"),
     el("button", { class: "btn", onclick: () => importJson(mount) }, "Import JSON"),
     el("button", { class: "btn ghost", onclick: copyJson }, "Copy to clipboard")));
 
-  card.append(el("h3", { class: "section", text: "Mission data" }));
-  card.append(el("p", { class: "muted small", text: "Clears the running action scene, challenges, the solo crisis board and the roll log, and resets every hero's scene and session flags. Heroes, the team, karma and advancement are kept." }));
-  card.append(el("div", { class: "row-actions" },
-    el("button", { class: "btn danger", onclick: () => wipeMission(mount) }, "Wipe all mission data")));
+  group("Mission data",
+    el("p", { class: "muted small", text: "Clears the running action scene, challenges, the solo crisis board and the roll log, and resets every hero's scene and session flags. Heroes, the team, karma and advancement are kept." }),
+    el("div", { class: "row-actions" },
+      el("button", { class: "btn danger", onclick: () => wipeMission(mount) }, "Wipe all mission data")));
 
-  card.append(el("h3", { class: "section", text: "Multiplayer" }));
-  card.append(Sync.renderSyncPanel());
+  group("Multiplayer", Sync.renderSyncPanel());
 
-  card.append(el("h3", { class: "section", text: "About" }));
-  card.append(el("p", { class: "muted small", text: "A personal play aid for Invincible — Superhero Roleplaying, built from the core rules. Mechanics only; all effect text is paraphrased. No setting or adventure content." }));
-  card.append(el("details", {}, el("summary", { text: "House aids (not official rules)" }),
-    el("ul", {}, ...D.HOUSE_AIDS.map((h) => el("li", { text: h })))));
-  card.append(el("details", {}, el("summary", { text: "Known source gaps" }),
-    el("ul", {},
-      el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
-      el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));
+  group("About",
+    el("p", { class: "muted small", text: "A personal play aid for Invincible — Superhero Roleplaying, built from the core rules. Mechanics only; all effect text is paraphrased. No setting or adventure content." }),
+    el("details", {}, el("summary", { text: "House aids (not official rules)" }),
+      el("ul", {}, ...D.HOUSE_AIDS.map((h) => el("li", { text: h })))),
+    el("details", {}, el("summary", { text: "Known source gaps" }),
+      el("ul", {},
+        el("li", { text: "The social hooks table is missing rows 25–41; rolls there are re-rolled." }),
+        el("li", { text: "The Crisis Mode timer table's proximity labels were partly truncated; the app follows the surrounding rules text." }))));
   mount.append(card);
 }
 

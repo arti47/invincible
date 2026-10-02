@@ -32,7 +32,7 @@ function findChromium() {
   return candidates[0] || "chromium";
 }
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png" };
 
 let passed = 0, failed = 0;
 const failures = [];
@@ -1400,12 +1400,24 @@ const run = async () => {
   await page.waitForTimeout(250);
   ok("choosing a crisis is loop step 3", crisis.step === 2, String(crisis.step));
 
-  const helpUi = await page.evaluate(() => {
-    const h = Array.from(document.querySelectorAll("#screen details.help"));
-    return { count: h.length, allCollapsed: h.every((d) => !d.open) };
+  // Panel help is an ⓘ in the corner that opens a sheet — it costs no vertical space at rest.
+  const helpUi = await page.evaluate(async () => {
+    const h = Array.from(document.querySelectorAll("#screen .help-i"));
+    const named = h.every((b) => (b.getAttribute("aria-label") || "").length > 0);
+    const absolute = h.every((b) => getComputedStyle(b).position === "absolute");
+    const before = document.querySelectorAll(".modal").length;
+    h[0]?.click();
+    await new Promise((r) => setTimeout(r, 60));
+    const all = document.querySelectorAll(".modal");
+    const sheet = all[all.length - 1];
+    const opened = all.length === before + 1 && sheet.querySelectorAll(".modal-body p").length > 0;
+    sheet?.querySelector(".modal-actions .btn")?.click();
+    return { count: h.length, named, absolute, opened, closed: document.querySelectorAll(".modal").length === before };
   });
-  ok("solo panels carry help accordions", helpUi.count >= 5, String(helpUi.count));
-  ok("help accordions default to collapsed", helpUi.allCollapsed);
+  ok("solo panels carry an ⓘ explainer", helpUi.count >= 5, String(helpUi.count));
+  ok("every ⓘ has a spoken name", helpUi.named);
+  ok("the ⓘ sits in the panel corner, taking no line of its own", helpUi.absolute);
+  ok("tapping ⓘ opens the panel's explanation in a sheet, and it closes", helpUi.opened && helpUi.closed);
 
   /* ---------------------------------------------------------------- end-to-end play flow */
   section("First Session Playable — end-to-end");
@@ -1681,8 +1693,11 @@ const run = async () => {
     document.dispatchEvent(new CustomEvent("nav-refresh"));
     await new Promise((r) => setTimeout(r, 200));
     const nav = Array.from(document.querySelectorAll("#bottom-nav .nav-item")).map((a) => a.getAttribute("data-path"));
+    location.hash = "#/more";
+    await new Promise((x) => setTimeout(x, 220));
+    nav.push(...Array.from(document.querySelectorAll("#screen .more-tile")).map((a) => a.getAttribute("data-path")));
     const out = {};
-    for (const r of ["home", "sheet", "combat", "rules", "compendium", "solo", "gm", "learn", "journal", "log", "settings", "create"]) {
+    for (const r of ["home", "sheet", "combat", "rules", "compendium", "solo", "gm", "learn", "journal", "log", "settings", "create", "more"]) {
       location.hash = `#/${r}`;
       await new Promise((x) => setTimeout(x, 220));
       out[r] = document.querySelectorAll("#screen *").length;
@@ -1691,7 +1706,7 @@ const run = async () => {
   });
   ok("every route renders a real screen",
     Object.values(routes.out).every((n) => n > 3), JSON.stringify(routes.out));
-  ok("the nav reaches everything that is not opened from a card",
+  ok("the nav and the More screen reach everything that is not opened from a card",
     ["home", "sheet", "combat", "rules", "compendium", "solo", "gm", "journal", "settings"].every((r) => routes.nav.includes(r)),
     routes.nav.join(", "));
 
@@ -3256,7 +3271,7 @@ const run = async () => {
   }
   await page.setViewportSize({ width: 390, height: 844 });
 
-  // Nav must fit with every optional tab enabled — Solo + GM push it to nine items.
+  // Five tabs and the Roll button, whatever is switched on: Solo and GM live behind Play and More.
   const navFit = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
     Settings.set("soloMode", true);
@@ -3267,19 +3282,81 @@ const run = async () => {
     const items = Array.from(nav.querySelectorAll(".nav-item"));
     const out = {
       count: items.length,
-      compact: nav.classList.contains("compact"),
+      labels: items.map((a) => a.textContent.trim()),
+      playIsSolo: !!nav.querySelector('.nav-item[data-tab="play"][data-path="solo"]'),
+      minFont: Math.min(...items.map((a) => parseFloat(getComputedStyle(a.querySelector(".nav-label")).fontSize))),
       overflow: nav.scrollWidth - nav.clientWidth,
       clipped: items.filter((a) => a.getBoundingClientRect().right > nav.getBoundingClientRect().right + 1).length,
+      fab: !!document.querySelector(".fab"),
+      icons: items.every((a) => a.querySelector(".nav-icon svg")),
     };
     Settings.set("soloMode", false);      // restore: the gating section below asserts the defaults
     Settings.set("gmScreen", false);
     document.dispatchEvent(new CustomEvent("nav-refresh"));
+    out.playIsAction = !!nav.querySelector('.nav-item[data-tab="play"][data-path="combat"]');
     return out;
   });
-  ok("nav holds nine tabs with Solo and GM on", navFit.count === 9, String(navFit.count));
-  ok("nav switches to compact past six tabs", navFit.compact);
+  ok("nav holds exactly five tabs with Solo and GM on", navFit.count === 5, navFit.labels.join(", "));
+  ok("Play is the solo board in Crisis Mode and the action scene otherwise", navFit.playIsSolo && navFit.playIsAction);
+  ok("nav labels stay readable (≥11px)", navFit.minFont >= 11, String(navFit.minFont));
+  ok("nav icons are drawn SVG, not platform glyphs", navFit.icons);
+  ok("the Roll button floats over the nav", navFit.fab);
   ok("nav does not overflow its own width", navFit.overflow <= 0, `${navFit.overflow}px`);
   ok("no nav item is clipped off the bar", navFit.clipped === 0, String(navFit.clipped));
+
+  /* ---------------------------------------------------------------- design system */
+  // The overhaul's contract: no stray "null", the sheet in four sections, dice drawn as faces,
+  // the fonts shipped and precached so the comic type survives offline.
+  const design = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const P = await import("/data-pregens.js");
+    const { Settings } = await import("/src/settings.js");
+    if (!Store.activeCharacter()) { const c = Store.saveCharacter(W.pregenToCharacter(P.PREGENS[0])); Store.setActiveCharacter(c.id); }
+    const stray = [];
+    for (const solo of [false, true]) {
+      Settings.set("soloMode", solo);
+      for (const r of ["home", "sheet", "combat", "solo", "journal", "more"]) {
+        if (r === "solo" && !solo) continue;
+        location.hash = `#/${r}`;
+        await new Promise((x) => setTimeout(x, 180));
+        const walker = document.createTreeWalker(document.querySelector("#screen"), NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) if (/^(null|undefined)$/.test(n.textContent.trim())) stray.push(`${r}${solo ? " (solo)" : ""}`);
+      }
+    }
+    Settings.set("soloMode", false);
+    location.hash = "#/sheet";
+    await new Promise((x) => setTimeout(x, 200));
+    const tabs = Array.from(document.querySelectorAll("#screen .sheet-tabs [role=tab]"));
+    const visible = (id) => !document.querySelector(`#${id}`).hidden;
+    const before = visible("pane-overview") && !visible("pane-powers");
+    tabs.find((t) => t.textContent === "Powers")?.click();
+    const after = !visible("pane-overview") && visible("pane-powers");
+    tabs[0]?.click();
+    const karmaInDom = Array.from(document.querySelectorAll("#screen button")).some((b) => b.textContent === "Karma & advancement");
+    const { showRollResult } = await import("/src/power-automation.js");
+    const { roll } = await import("/src/roller.js");
+    const c = Store.activeCharacter();
+    showRollResult(c, roll(c, "fighting", "Design check"));
+    const dice = Array.from(document.querySelectorAll(".modal .die"));
+    const diceOk = dice.length > 0 && dice.every((d) => d.dataset.v === d.textContent && /^[1-6]$/.test(d.textContent));
+    document.querySelector(".modal-actions .btn.primary")?.click();
+    const css = Array.from(document.styleSheets).flatMap((sh) => { try { return Array.from(sh.cssRules); } catch { return []; } });
+    const faces = css.filter((r) => r instanceof CSSFontFaceRule).map((r) => r.style.getPropertyValue("font-family").replace(/"/g, ""));
+    const sw = await (await fetch("/service-worker.js")).text();
+    const fontsCached = ["bangers.woff2", "atkinson-400-normal.woff2", "atkinson-700-normal.woff2"].every((f) => sw.includes(`./fonts/${f}`));
+    const fontsServed = (await Promise.all(["bangers", "atkinson-400-normal"].map((f) => fetch(`/fonts/${f}.woff2`).then((r) => r.ok)))).every(Boolean);
+    const emblem = !!document.querySelector("#resource-header .emblem svg") && !!document.querySelector("#screen .hero-head .emblem svg");
+    return { stray, tabs: tabs.map((t) => t.textContent), before, after, karmaInDom, diceOk, faces, fontsCached, fontsServed, emblem };
+  });
+  ok("no screen prints a literal null or undefined", design.stray.length === 0, design.stray.join(", "));
+  ok("the hero sheet is four sections", design.tabs.join("|") === "Overview|Powers|Talents & Gear|Notes", design.tabs.join("|"));
+  ok("a section tab shows its pane and hides the others", design.before && design.after);
+  ok("hidden sections stay in the document (karma is still reachable)", design.karmaInDom);
+  ok("dice render as faces that still carry their number", design.diceOk);
+  ok("the display and text faces are declared", design.faces.includes("Bangers") && design.faces.includes("Atkinson"), design.faces.join(", "));
+  ok("the fonts are shipped and precached for offline play", design.fontsCached && design.fontsServed);
+  ok("a hero without a portrait gets a drawn emblem in the HUD and the sheet", design.emblem);
 
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
@@ -3353,14 +3430,17 @@ const run = async () => {
     document.dispatchEvent(new CustomEvent("nav-refresh"));
     await new Promise((r) => setTimeout(r, 100));
     const after = document.querySelectorAll('.nav-item[data-path="solo"]').length;
+    location.hash = "#/more";
+    await new Promise((r) => setTimeout(r, 150));
+    const gmBefore = document.querySelectorAll('.more-tile[data-path="gm"]').length;
     Settings.set("gmScreen", true);
     document.dispatchEvent(new CustomEvent("nav-refresh"));
-    await new Promise((r) => setTimeout(r, 100));
-    const gm = document.querySelectorAll('.nav-item[data-path="gm"]').length;
+    await new Promise((r) => setTimeout(r, 150));
+    const gm = document.querySelectorAll('.more-tile[data-path="gm"]').length - gmBefore;
     return { before, after, gm };
   });
   ok("solo tab hidden by default and shown when enabled", gating.before === 0 && gating.after === 1);
-  ok("GM tab appears when enabled", gating.gm === 1);
+  ok("GM appears on the More screen when enabled", gating.gm === 1);
 
   for (const tab of ["solo", "gm"]) {
     await page.evaluate((t) => { location.hash = `#/${t}`; }, tab);

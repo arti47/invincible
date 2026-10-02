@@ -2,7 +2,7 @@
 // Every demo runs on a disposable copy of TUTORIAL_HERO. Nothing here touches the player's
 // characters, and no demo roll is written to the shared roll log.
 
-import { el, clear, d6, d66, roll2d6, pool, countSixes, countOnes, tableLookup } from "./core.js";
+import { el, clear, dieEl, d6, d66, roll2d6, pool, countSixes, countOnes, tableLookup } from "./core.js";
 import { showToast, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -41,8 +41,8 @@ export function renderLearn(mount) {
   mount.append(el("section", { class: "card" },
     el("h2", { text: "Learn" }),
     el("p", { class: "muted small", text: "Step-by-step tutorials with worked examples. The demo buttons roll real dice on an example hero — your own characters are never touched." }),
-    el("div", { class: "chiprow" }, ...TUTORIAL_INDEX.map((t) => el("button", {
-      class: `chip selectable ${activeTab === t.key ? "selected" : ""}`,
+    el("div", { class: "segmented", role: "tablist", "aria-label": "Tutorials" }, ...TUTORIAL_INDEX.map((t) => el("button", {
+      class: `chip selectable ${activeTab === t.key ? "selected" : ""}`, role: "tab", "aria-selected": activeTab === t.key ? "true" : "false",
       onclick: () => { activeTab = t.key; renderLearn(mount); },
     }, t.name))),
     el("p", { class: "muted small", text: TUTORIAL_INDEX.find((t) => t.key === activeTab).desc })));
@@ -120,7 +120,7 @@ function chapterCard(ch, open, hero, mount) {
 /* ---------------------------------------------------------------- demos */
 
 const dice = (faces) => el("div", { class: "dice-row" },
-  ...faces.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) })));
+  ...faces.map((v, i) => dieEl(v, i)));
 
 function say(out, ...nodes) { clear(out); out.append(...nodes.filter(Boolean)); }
 

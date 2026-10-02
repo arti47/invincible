@@ -1,8 +1,8 @@
 // power-automation.js — "tap to use" resolution for powers and mechanically-loaded talents.
 // Deducts stress, rolls the right attribute, and reports the printed effect for the chosen level.
 
-import { el, clamp } from "./core.js";
-import { modal, showToast, announce, chooseModal } from "./ui.js";
+import { el, clamp, dieEl } from "./core.js";
+import { modal, showToast, announce, chooseModal, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -200,7 +200,7 @@ export async function askManualFaces() {
 /** Shared result panel used by the roller, sheet and combat screens. */
 export function showRollResult(character, r, { damage = null, power = null, onPushed } = {}) {
   const diceRow = el("div", { class: "dice-row", "aria-label": `Dice: ${r.dice.join(", ")}` },
-    ...r.dice.map((v) => el("span", { class: `die ${v === 6 ? "six" : v === 1 ? "one" : ""}`, text: String(v) })));
+    ...r.dice.map((v, i) => dieEl(v, i)));
   const outcome = Roller.describeOutcome(r);
   const body = el("div", { class: "roll-result" },
     el("p", { class: "roll-pool", text: `${r.label} — pool ${r.pool}${r.mods.length ? ` (${r.mods.map((m) => `${m.label} ${m.value > 0 ? "+" : ""}${m.value}`).join(", ")})` : ""}` }),
@@ -210,6 +210,7 @@ export function showRollResult(character, r, { damage = null, power = null, onPu
     r.sixes > 1 ? el("p", { class: "muted", text: `${r.sixes - 1} stunt${r.sixes - 1 === 1 ? "" : "s"} available.` }) : null,
     power ? el("p", { class: "cite" }, el("a", { href: "#/rules/powers", class: "rules-link" }, "Rules: Using powers")) : null);
 
+  if (r.sixes > 1) sfx(body, "POW!");
   const pushCheck = Roller.canPush(character, r);
   // A control that silently disappears reads as a missing feature, not a rule. Say why.
   if (!pushCheck.ok && pushCheck.reason) {
