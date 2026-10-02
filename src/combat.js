@@ -868,17 +868,30 @@ export function renderTasks(mount) {
     helpPanel(["A challenge is an obstacle with a rating and a time limit rather than an enemy to hit.", "Every 6 anyone rolls removes 1 point from the rating. Clear it to 0 inside the limit and you succeed; run out of time and the stated failure happens.", "Handling an objective always needs a roll, even if a power would obviously solve it."]),
     el("p", { class: "muted small", text: "Every 6 rolled removes 1 point from the Challenge rating. Handling an objective always needs a roll, even with a power." }));
   for (const t of tasks) {
-    section.append(el("div", { class: "task" },
+    // Say where the challenge stands — a bare "0 of 6 remaining" or "4 spent" against a limit of
+    // 3 left the player to notice it was over (§3.13: clear it inside the limit, or the failure).
+    const limit = parseInt(t.timeLimit, 10);
+    const done = t.remaining === 0;
+    const outOfTime = !done && Number.isFinite(limit) && t.timeSpent >= limit;
+    section.append(el("div", { class: `task ${done ? "done" : ""} ${outOfTime ? "late" : ""}` },
       el("div", {},
         el("strong", { text: t.name }),
+        done ? el("span", { class: "chip tiny good task-state", text: "Overcome" }) : null,
+        outOfTime ? el("span", { class: "chip tiny warn task-state", text: "Out of time — the failure happens" }) : null,
         el("p", { class: "muted small", text: `${t.remaining} of ${t.rating} remaining · limit ${t.timeLimit} · ${t.timeSpent} spent` }),
         t.detail ? el("p", { class: "small", text: t.detail }) : null,
         (t.objectives || []).length ? el("details", {}, el("summary", { text: "Objectives" }),
           ...t.objectives.map((o) => el("p", { class: "small" }, el("strong", { text: `${o.name}: ` }), o.desc))) : null),
       el("div", { class: "chosen-actions" },
-        el("button", { class: "btn tiny primary", onclick: () => contributeToTask(t, mount) }, "Roll"),
-        el("button", { class: "btn tiny ghost", onclick: () => { t.timeSpent += 1; Store.saveTasks(tasks); renderRefresh(mount); } }, "Advance time"),
-        el("button", { class: "btn tiny danger", onclick: () => { Store.saveTasks(tasks.filter((x) => x.id !== t.id)); renderRefresh(mount); } }, "Drop"))));
+        done ? null : el("button", { class: "btn tiny primary", onclick: () => contributeToTask(t, mount) }, "Roll"),
+        done ? null : el("button", { class: "btn tiny ghost", onclick: () => { t.timeSpent += 1; Store.saveTasks(tasks); renderRefresh(mount); } }, "Advance time"),
+        // Dropping was instant and permanent; it now keeps a copy the toast can put back.
+        el("button", { class: "btn tiny danger", onclick: () => {
+          const before = Store.getTasks();
+          Store.saveTasks(tasks.filter((x) => x.id !== t.id));
+          renderRefresh(mount);
+          showToast(`${t.name} dropped.`, { action: { label: "Undo", onClick: () => { Store.saveTasks(before); renderRefresh(mount); } } });
+        } }, done ? "Clear" : "Drop"))));
   }
   section.append(el("div", { class: "row-actions" },
     el("button", { class: "btn", onclick: () => openChallengePicker(mount) }, "Add a challenge"),

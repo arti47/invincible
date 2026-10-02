@@ -4164,6 +4164,37 @@ const run = async () => {
   ok("wizard: a validation problem links to the step that fixes it", wizFix.n > 0 && /Step 3 of 9/.test(wizFix.now), JSON.stringify(wizFix));
   ok("wizard: a missing power source points at the Power sources step, not Powers", !wizFix.srcFix || /step 5: Power sources/.test(wizFix.srcFix), wizFix.srcFix);
 
+  // A challenge row states its outcome, and dropping one can be undone.
+  const tasksUi = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const { Settings } = await import("/src/settings.js");
+    Settings.set("soloMode", false);
+    Store.clearCombat();
+    const keep = Store.getTasks();
+    Store.saveTasks([
+      { id: "t1", name: "Won", rating: 4, remaining: 0, timeLimit: "3 rounds", timeSpent: 1, objectives: [], contributors: [] },
+      { id: "t2", name: "Late", rating: 6, remaining: 3, timeLimit: "3 rounds", timeSpent: 3, objectives: [], contributors: [] }]);
+    location.hash = "#/home"; await new Promise((r) => setTimeout(r, 120));
+    location.hash = "#/combat"; await new Promise((r) => setTimeout(r, 300));
+    const rows = Array.from(document.querySelectorAll("#screen .task"));
+    const won = rows.find((r) => /Won/.test(r.textContent)), late = rows.find((r) => /Late/.test(r.textContent));
+    const out = {
+      overcome: /Overcome/.test(won?.textContent || ""), wonRoll: !!Array.from(won?.querySelectorAll("button") || []).find((b) => b.textContent === "Roll"),
+      outOfTime: /Out of time/.test(late?.textContent || ""),
+    };
+    Array.from(late.querySelectorAll("button")).find((b) => b.textContent === "Drop").click();
+    await new Promise((r) => setTimeout(r, 200));
+    out.afterDrop = Store.getTasks().length;
+    Array.from(document.querySelectorAll(".toast button")).find((b) => /Undo/.test(b.textContent))?.click();
+    out.afterUndo = Store.getTasks().length;
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    Store.saveTasks(keep);
+    return out;
+  });
+  ok("challenges: a cleared challenge says Overcome and stops offering a roll", tasksUi.overcome && !tasksUi.wonRoll, JSON.stringify(tasksUi));
+  ok("challenges: a challenge past its limit says the failure happens", tasksUi.outOfTime, JSON.stringify(tasksUi));
+  ok("challenges: dropping one can be undone from the toast", tasksUi.afterDrop === 1 && tasksUi.afterUndo === 2, JSON.stringify(tasksUi));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
