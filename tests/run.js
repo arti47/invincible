@@ -3403,9 +3403,35 @@ const run = async () => {
   ok("Play is the solo board in Crisis Mode and the action scene otherwise", navFit.playIsSolo && navFit.playIsAction);
   ok("nav labels stay readable (≥11px)", navFit.minFont >= 11, String(navFit.minFont));
   ok("nav icons are drawn SVG, not platform glyphs", navFit.icons);
-  ok("the Roll button floats over the nav", navFit.fab);
+  ok("the Roll button rises out of the nav", navFit.fab);
   ok("nav does not overflow its own width", navFit.overflow <= 0, `${navFit.overflow}px`);
   ok("no nav item is clipped off the bar", navFit.clipped === 0, String(navFit.clipped));
+
+  // The Roll button must never sit on a tab. It was pinned at 50% of the viewport while its slot is
+  // third of six, so it covered Play. Measure the overlap, and hit-test each tab's own centre.
+  const prevVp = page.viewportSize();
+  const fabFit = [];
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 780 });
+    fabFit.push(await page.evaluate(async (w) => {
+      const Store = await import("/src/store.js");
+      if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+      document.dispatchEvent(new CustomEvent("nav-refresh"));
+      location.hash = "#/home"; await new Promise((r) => setTimeout(r, 200));
+      const fab = document.querySelector(".fab");
+      const f = fab?.getBoundingClientRect();
+      const items = Array.from(document.querySelectorAll("#bottom-nav .nav-item"));
+      const overlaps = items.filter((a) => { const r = a.getBoundingClientRect();
+        return f && f.left < r.right && f.right > r.left && f.top < r.bottom && f.bottom > r.top; }).map((a) => a.textContent.trim());
+      const blocked = items.filter((a) => { const r = a.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !a.contains(hit); }).map((a) => a.textContent.trim());
+      return { w, inNav: !!fab?.closest("#bottom-nav"), visible: !!fab && !fab.hidden && f.width > 0, overlaps, blocked };
+    }, width));
+  }
+  if (prevVp) await page.setViewportSize(prevVp);
+  ok("the Roll button sits in the nav's own slot and covers no tab at 360px and 390px",
+    fabFit.every((r) => r.inNav && r.visible && !r.overlaps.length && !r.blocked.length), JSON.stringify(fabFit));
 
   /* ---------------------------------------------------------------- design system */
   // The overhaul's contract: no stray "null", the sheet in four sections, dice drawn as faces,
