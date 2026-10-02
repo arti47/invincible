@@ -1,7 +1,7 @@
 // screens.js — home, rules library, compendium, roll log, settings & about.
 
 import { el, clear, dieFace, dieEl } from "./core.js";
-import { emblem } from "./icons.js";
+import { emblem, icon, iconFor } from "./icons.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -284,8 +284,9 @@ export function renderCompendium(mount) {
       if (group === "Creatures") list.append(el("p", { class: "muted small", text: CREATURE_NOTE }));
       if (group === "Adversaries") list.append(el("p", { class: "muted small", text: ADVERSARY_NOTE }));
       for (const n of items) {
-        list.append(el("button", { class: "npc-row", onclick: () => showNPC(n) },
-          el("div", {}, el("strong", { text: n.name }), el("p", { class: "muted small", text: n.desc || n.descriptor || "" })),
+        list.append(el("button", { class: "npc-row", "data-group": n.group, onclick: () => showNPC(n) },
+          el("span", { class: "npc-avatar" }, icon(iconFor(n.group) || "npcs", { size: 22 })),
+          el("div", { class: "npc-main" }, el("strong", { text: n.name }), el("p", { class: "muted small", text: n.desc || n.descriptor || "" })),
           el("span", { class: "tap-hint", text: "▸" })));
       }
     }

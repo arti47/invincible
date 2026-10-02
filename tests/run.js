@@ -3431,6 +3431,31 @@ const run = async () => {
   ok("tutorial 'In the app' pointers are links to the screen they describe", links.tutLinks >= 3, String(links.tutLinks));
   ok("no screen names a tab that no longer exists", links.stale.length === 0, links.stale.join(", "));
 
+  /* Graphics: dressing never displaces content or breaks a sticky control. */
+  const art = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    location.hash = "#/compendium"; await wait(250);
+    const search = document.querySelector("#screen .sticky-search");
+    const cs = search && getComputedStyle(search);
+    const out = { searchSticky: cs?.position === "sticky" && search.offsetHeight > 30,
+      mark: !!document.querySelector("#screen > .card .card-mark svg"),
+      avatars: document.querySelectorAll("#screen .npc-row .npc-avatar svg").length };
+    location.hash = "#/sheet"; await wait(250);
+    out.ptypes = Array.from(document.querySelectorAll("#screen .power-row[data-type] .ptype svg")).length;
+    out.powers = document.querySelectorAll("#screen .power-row").length;
+    out.condIcons = document.querySelectorAll("#screen .cond-chip svg").length;
+    location.hash = "#/combat"; await wait(250);
+    out.emptyArt = !document.querySelector("#screen .empty") || !!document.querySelector("#screen .empty .empty-art svg");
+    out.markHidden = Array.from(document.querySelectorAll(".card-mark, .empty-art")).every((m) => m.getAttribute("aria-hidden") === "true");
+    return out;
+  });
+  ok("a sticky search survives the panel dressing", art.searchSticky);
+  ok("the first panel carries the route's watermark, and NPC rows an avatar", art.mark && art.avatars > 5, JSON.stringify(art));
+  ok("every power shows its type badge", art.powers > 0 && art.ptypes === art.powers, `${art.ptypes}/${art.powers}`);
+  ok("condition toggles carry their icon", art.condIcons >= 8, String(art.condIcons));
+  ok("empty states carry an illustration", art.emptyArt);
+  ok("decorative graphics are hidden from screen readers", art.markHidden);
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

@@ -942,3 +942,42 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ================================================================ graphics: watermarks, empty art, type badges */
+.card-mark { position: absolute; right: 16px; bottom: 12px; z-index: 0; pointer-events: none; color: var(--ink); opacity: .06; transform: rotate(-12deg); }
+.card-mark svg { width: 104px; height: 104px; }
+:where(.card > *:not(.card-mark)) { position: relative; z-index: 1; }
+.card > .help-i { z-index: 2; }
+.empty-art { position: relative; display: grid; place-items: center; width: 120px; height: 120px; margin: 0 auto .6rem; color: var(--accent); filter: drop-shadow(3px 3px 0 var(--shadow-c)); animation: sfx-pop .5s var(--ease) both; }
+.empty-art > .ico svg { width: 120px; height: 120px; stroke: #121018; stroke-width: 1; }
+.empty-ico { position: absolute; inset: 0; display: grid; place-items: center; color: #121018; }
+.empty-ico svg { width: 44px; height: 44px; }
+
+/* power-type badges: one colour per type */
+.power-row { justify-content: flex-start; }
+.power-main { flex: 1; min-width: 0; }
+.ptype { --pt: var(--accent-2); flex: 0 0 52px; display: flex; flex-direction: column; align-items: center; gap: 2px; align-self: stretch; justify-content: center;
+  border-radius: var(--radius); background: color-mix(in srgb, var(--pt) 16%, transparent); color: var(--pt); border: 2px solid var(--pt); padding: .25rem 0; }
+.ptype-name { font: 700 .55rem/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); }
+.power-row[data-type="Attack"] .ptype { --pt: var(--danger); }
+.power-row[data-type="Control"] .ptype { --pt: var(--magenta); }
+.power-row[data-type="Defense"] .ptype { --pt: var(--accent-2); }
+.power-row[data-type="Modification"] .ptype { --pt: var(--good); }
+.power-row[data-type="Movement"] .ptype { --pt: var(--warn); }
+.power-row[data-type="Sensory"] .ptype { --pt: #7a3cff; }
+.power-row[data-type] { border-left: 6px solid var(--pt, var(--line)); }
+.power-row[data-type="Attack"] { --pt: var(--danger); } .power-row[data-type="Control"] { --pt: var(--magenta); }
+.power-row[data-type="Defense"] { --pt: var(--accent-2); } .power-row[data-type="Modification"] { --pt: var(--good); }
+.power-row[data-type="Movement"] { --pt: var(--warn); } .power-row[data-type="Sensory"] { --pt: #7a3cff; }
+.cond-chip .ico { display: inline-grid; margin-right: .1rem; }
+.cond-chip .ico svg { width: 16px; height: 16px; }
+
+/* compendium avatars */
+.npc-avatar { flex: 0 0 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--line); background: var(--chipbg); color: var(--ink); }
+.npc-avatar svg { width: 22px; height: 22px; }
+.npc-row { justify-content: flex-start; }
+.npc-main { flex: 1; min-width: 0; }
+.npc-row[data-group="Adversaries"] .npc-avatar { background: var(--danger); color: #fff; border-color: var(--danger); }
+.npc-row[data-group="Minions"] .npc-avatar { background: var(--warn); color: #121018; }
+.npc-row[data-group="Creatures"] .npc-avatar { background: var(--good); color: #fff; }
+.npc-row[data-group="Allies"] .npc-avatar, .npc-row[data-group="Heroes"] .npc-avatar { background: var(--accent); color: #121018; }

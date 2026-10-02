@@ -1,7 +1,7 @@
 // sheet.js — the live character sheet, persistent resource header and all in-play tracking.
 
 import { el, clear, clamp, uid, dieEl, STORAGE_PREFIX } from "./core.js";
-import { emblem } from "./icons.js";
+import { emblem, icon, iconFor } from "./icons.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -583,8 +583,9 @@ function powersCard(c) {
   const list = el("div", { class: "power-list" });
   for (const p of c.powers || []) {
     const def = R.findPower(p.name);
-    list.append(el("button", { class: "power-row", onclick: () => usePower(c, p) },
-      el("div", {},
+    list.append(el("button", { class: "power-row", "data-type": def?.type || "", onclick: () => usePower(c, p) },
+      def?.type ? el("span", { class: "ptype", title: def.type }, icon(iconFor(def.type), { size: 22 }), el("span", { class: "ptype-name", text: def.type })) : null,
+      el("div", { class: "power-main" },
         el("strong", { text: R.powerDisplayName(p) }),
         def ? el("p", { class: "muted small", text: def.summary.slice(0, 140) + (def.summary.length > 140 ? "…" : "") }) : el("p", { class: "warn small", text: p.note || "Not in the rules library." }),
         (p.boosts || []).length ? el("p", { class: "small", text: `Boosts: ${p.boosts.join(", ")}` }) : null,
@@ -638,10 +639,10 @@ function conditionsCard(c) {
   for (const cond of D.CONDITIONS) {
     if (cond.key === "broken" || cond.key === "stressedOut") continue;
     const on = !!c.state.conditions[cond.key];
-    grid.append(el("button", { class: `chip selectable ${on ? "selected warn" : ""}`, title: cond.desc, onclick: () => {
+    grid.append(el("button", { class: `chip selectable cond-chip ${on ? "selected warn" : ""}`, title: cond.desc, onclick: () => {
       Store.updateCharacter((ch) => { ch.state.conditions[cond.key] = !on; });
       showToast(on ? `${cond.name} cleared.` : `${cond.name}: ${cond.desc}`, { timeout: 5000 });
-    } }, cond.name));
+    } }, iconFor(cond.key) ? icon(iconFor(cond.key), { size: 16 }) : null, cond.name));
   }
   const pen = Derived.conditionPenalty(c);
   return el("section", { class: "card" },

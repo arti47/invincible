@@ -10,6 +10,7 @@ import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
 import * as Sync from "./sync.js";
 import * as Combat from "./combat.js";
+import { icon, iconFor } from "./icons.js";
 
 export function renderGM(mount) {
   clear(mount);
@@ -202,8 +203,9 @@ function adversaryPanel() {
     for (const n of all) {
       if (gmGroup !== "All" && n.group !== gmGroup && !q) continue;
       if (q && !n.name.toLowerCase().includes(q) && !(n.desc || n.descriptor || "").toLowerCase().includes(q)) continue;
-      list.append(el("button", { class: "npc-row", onclick: () => showNPC(n) },
-        el("div", {}, el("strong", { text: n.name }),
+      list.append(el("button", { class: "npc-row", "data-group": n.group, onclick: () => showNPC(n) },
+        el("span", { class: "npc-avatar" }, icon(iconFor(n.group) || "npcs", { size: 22 })),
+        el("div", { class: "npc-main" }, el("strong", { text: n.name }),
           el("p", { class: "muted small", text: `${n.group} · ${n.desc || n.descriptor || ""}` })),
         el("span", { class: "tap-hint", text: "▸" })));
     }

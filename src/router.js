@@ -40,6 +40,11 @@ export function initRouter(screenMount, navMount) {
   mount = screenMount;
   navHost = navMount;
   window.addEventListener("hashchange", route);
+  // Screens re-render themselves in place; keep their dressing when they do.
+  new MutationObserver(() => {
+    const def = ROUTES.find((r) => r.path === currentPath()) || ROUTES[0];
+    decorate(mount, def);
+  }).observe(mount, { childList: true });
   document.addEventListener("store-changed", () => { if (currentPath() !== "create") route(); });
   document.addEventListener("nav-refresh", () => { renderNav(); route(); });
   renderNav();
@@ -72,10 +77,27 @@ export function route() {
   }
   const header = $("#resource-header");
   if (header) Sheet.renderResourceHeader(header);
+  decorate(mount, def);
   document.body.dataset.route = def.path;
   updateNavState(def.path);
   updateFab();
   document.title = `${def.label} · Invincible Player`;
+}
+
+/**
+ * Comic dressing that carries no content: the route's icon as a faint watermark in the first
+ * panel's corner, and a starburst illustration over every empty state.
+ */
+function decorate(mount, def) {
+  const first = mount.querySelector(":scope > .card, :scope > section.card");
+  if (first && !first.querySelector(":scope > .card-mark")) {
+    first.append(el("span", { class: "card-mark", "aria-hidden": "true" }, icon(def.icon, { size: 120 })));
+  }
+  for (const e of mount.querySelectorAll(".empty")) {
+    if (e.querySelector(":scope > .empty-art")) continue;
+    e.prepend(el("span", { class: "empty-art", "aria-hidden": "true" },
+      icon("burst", { size: 120 }), el("span", { class: "empty-ico" }, icon(def.icon, { size: 44 }))));
+  }
 }
 
 function navLink(r, cls = "nav-item", label = r.label) {
