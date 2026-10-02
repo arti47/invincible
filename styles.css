@@ -1044,3 +1044,13 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .attr-use-pool::before { content: ""; display: inline-block; width: 15px; height: 15px; margin-right: .3rem; vertical-align: -2px;
   background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='4' fill='none' stroke='black' stroke-width='2.4'/%3E%3Ccircle cx='8.3' cy='8.3' r='1.7'/%3E%3Ccircle cx='15.7' cy='15.7' r='1.7'/%3E%3Ccircle cx='12' cy='12' r='1.7'/%3E%3C/svg%3E") center/contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='4' fill='none' stroke='black' stroke-width='2.4'/%3E%3Ccircle cx='8.3' cy='8.3' r='1.7'/%3E%3Ccircle cx='15.7' cy='15.7' r='1.7'/%3E%3Ccircle cx='12' cy='12' r='1.7'/%3E%3C/svg%3E") center/contain no-repeat; }
+
+/* ================================================================ wide-screen density */
+@media (min-width: 900px) {
+  /* inside a half-width column a two-up roster squeezes names into three lines */
+  .screen.cols .char-list { grid-template-columns: 1fr; }
+  /* long reference lists flow into columns instead of 1100px-wide rows */
+  .npc-list, .gear-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: .5rem .7rem; }
+  .npc-list > :not(.npc-row):not(.gear-row) { grid-column: 1 / -1; }
+  .glossary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
