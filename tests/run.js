@@ -3613,6 +3613,26 @@ const run = async () => {
   ok("toasts lead with a tone glyph and keep their words", r8.toastIco);
   ok("the attack-kind chooser shows an icon per kind", r8.kinds === 4, String(r8.kinds));
 
+  const r9 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    location.hash = "#/rules"; await wait(250);
+    const tools = Array.from(document.querySelectorAll("#screen .rule-entry .tool-link")).map((a) => a.getAttribute("href"));
+    const routesOk = tools.every((h) => ["#/combat", "#/sheet", "#/home"].includes(h));
+    location.hash = "#/compendium"; await wait(250);
+    const minionRow = Array.from(document.querySelectorAll("#screen .npc-row")).find((r) => r.dataset.group === "Minions");
+    minionRow?.click(); await wait(100);
+    const m = [...document.querySelectorAll(".modal")].pop();
+    const minionLink = !!m?.querySelector('a[href="#/rules/minions"]');
+    m?.querySelector(".modal-actions .btn")?.click();
+    location.hash = "#/settings"; await wait(250);
+    const setIcons = document.querySelectorAll("#screen h3.section .head-ico svg").length;
+    location.hash = "#/home"; await wait(150);
+    return { tools: tools.length, routesOk, minionLink, setIcons };
+  });
+  ok("rule entries link to the screen that plays them", r9.tools >= 15 && r9.routesOk, JSON.stringify(r9));
+  ok("a minion stat block links to the minion rules", r9.minionLink);
+  ok("Settings groups are headed by icons", r9.setIcons >= 6, String(r9.setIcons));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };

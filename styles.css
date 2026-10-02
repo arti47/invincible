@@ -1100,3 +1100,6 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .choice.has-ico { display: grid; grid-template-columns: 40px 1fr; column-gap: .65rem; align-items: center; }
 .choice.has-ico .choice-ico { grid-row: 1 / span 2; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #121018; color: var(--accent); }
 .choice.has-ico .choice-label, .choice.has-ico .choice-hint { grid-column: 2; }
+.head-ico.small-ico { width: 24px; height: 24px; flex-basis: 24px; }
+.head-ico.small-ico svg { width: 14px; height: 14px; }
+.tool-link { font-weight: 700; }
