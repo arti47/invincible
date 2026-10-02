@@ -3534,6 +3534,22 @@ const run = async () => {
   ok("the wizard's power list is headed by type icons", r4.typed === 6, String(r4.typed));
   ok("rule entries carry their chapter as a chip", r4.chips > 10, String(r4.chips));
 
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const wide = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    location.hash = "#/home"; await wait(250);
+    const roster = document.querySelector("#screen .char-list");
+    const rosterCols = roster ? getComputedStyle(roster).gridTemplateColumns.split(" ").length : 1;
+    location.hash = "#/compendium"; await wait(250);
+    const list = document.querySelector("#screen .npc-list");
+    const listCols = list ? getComputedStyle(list).gridTemplateColumns.split(" ").length : 1;
+    const rail = getComputedStyle(document.querySelector("#bottom-nav")).flexDirection;
+    location.hash = "#/home"; await wait(150);
+    return { rosterCols, listCols, rail };
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  ok("wide screens: the nav is a rail, long lists flow into columns, the roster stays one column", wide.rail === "column" && wide.listCols >= 2 && wide.rosterCols === 1, JSON.stringify(wide));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };
