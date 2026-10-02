@@ -76,7 +76,9 @@ function peekSheet(c) {
   const s = Derived.summary(c);
   modal({ title: c.identity.heroName || "Hero", size: "wide",
     body: el("div", {},
-      el("p", { class: "stat-line", text: D.ATTRIBUTES.map((a) => `${a.short} ${s.attributes[a.key]}`).join(" · ") }),
+      el("div", { class: "stat-tiles", role: "img", "aria-label": D.ATTRIBUTES.map((a) => `${a.short} ${s.attributes[a.key]}`).join(" · ") },
+        ...D.ATTRIBUTES.map((a) => el("span", { class: "stat-tile" },
+          el("span", { class: "stat-abbr", text: a.short }), el("span", { class: "stat-val", text: String(s.attributes[a.key]) })))),
       el("p", { class: "stat-line", text: `Health ${c.state.health}/${s.maxHealth} · Resolve ${c.state.resolve}/${s.maxResolve} · Slugfest ${s.slugfest} · Armor ${s.armor.value}` }),
       el("h4", { class: "section", text: "Powers" }),
       el("ul", {}, ...(c.powers || []).map((p) => el("li", { text: R.powerDisplayName(p) }))),
@@ -228,7 +230,9 @@ function altBlock(n) {
   ].filter(Boolean).join(" · ");
   return el("div", { class: "alt-block" },
     el("h4", { class: "section", text: "Alternate form — reduced scores" }),
-    n.altAttrs ? el("p", { class: "stat-line", text: D.ATTRIBUTES.map((a) => `${a.short} ${n.altAttrs[a.key]}`).join(" · ") }) : null,
+    n.altAttrs ? el("div", { class: "stat-tiles", role: "img", "aria-label": D.ATTRIBUTES.map((a) => `${a.short} ${n.altAttrs[a.key]}`).join(" · ") },
+      ...D.ATTRIBUTES.map((a) => el("span", { class: "stat-tile" },
+        el("span", { class: "stat-abbr", text: a.short }), el("span", { class: "stat-val", text: String(n.altAttrs[a.key] ?? "—") })))) : null,
     line ? el("p", { class: "stat-line", text: line }) : null,
     el("p", { class: "muted small", text: "In this form the powers listed below do not apply." }));
 }
@@ -239,7 +243,10 @@ export function showNPC(n) {
     body: el("div", {},
       el("p", { class: "muted", text: n.desc || n.descriptor || "" }),
       n.asOf ? el("p", { class: "muted small", text: `As of: ${n.asOf}` }) : null,
-      attrLine ? el("p", { class: "stat-line", text: attrLine }) : null,
+      // The six scores as a stat strip; the same line stays readable to a screen reader.
+      attrLine ? el("div", { class: "stat-tiles", role: "img", "aria-label": attrLine },
+        ...D.ATTRIBUTES.map((a) => el("span", { class: "stat-tile" },
+          el("span", { class: "stat-abbr", text: a.short }), el("span", { class: "stat-val", text: String(n.attrs[a.key] ?? "—") })))) : null,
       el("p", { class: "stat-line", text: [
         n.health !== undefined ? `Health ${n.health}` : null,
         n.resolve !== undefined ? `Resolve ${n.resolve}` : null,
