@@ -107,7 +107,9 @@ function heroCard(hero) {
       TUTORIAL_HERO.note,
       "She is not in your roster and nothing you do here changes her.",
     ]),
-    el("p", { class: "stat-line", text: D.ATTRIBUTES.map((a) => `${a.short} ${hero.attributes[a.key]}`).join(" · ") }),
+    el("div", { class: "stat-tiles", role: "img", "aria-label": D.ATTRIBUTES.map((a) => `${a.short} ${hero.attributes[a.key]}`).join(" · ") },
+      ...D.ATTRIBUTES.map((a) => el("span", { class: "stat-tile" },
+        el("span", { class: "stat-abbr", text: a.short }), el("span", { class: "stat-val", text: String(hero.attributes[a.key]) })))),
     el("p", { class: "stat-line", text: `Health ${s.maxHealth} · Resolve ${s.maxResolve} · Slugfest ${s.slugfest} · Armor ${s.armor.value} · ${R.findRank(hero.identity.rank).name}` }),
     el("p", { class: "stat-line", text: `Powers: ${hero.powers.map((p) => R.powerDisplayName(p)).join(", ")} · Talents: ${hero.talents.map((t) => t.name).join(", ")}` }));
 }

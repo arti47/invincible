@@ -172,17 +172,19 @@ function stepRank() {
       el("p", { class: "muted small", text: `+${D.SOLO_BUILD.extraAttributePoints} attribute points and +${D.SOLO_BUILD.extraFreeTalents} free talent. ${D.SOLO_BUILD.rankNote}` }),
       el("p", { class: "muted small", text: `${D.SOLO_BUILD.powerNote} Favour ${D.SOLO_BUILD.favourPowers.join(", ")}; avoid ${D.SOLO_BUILD.avoidPowers.join(", ")}. Talents: ${D.SOLO_BUILD.talentPicks.join(", ")}.` }),
       el("p", { class: "muted small", text: D.SOLO_BUILD.karmaNote }))));
-  for (const rank of D.RANKS) {
+  D.RANKS.forEach((rank, tier) => {
     wrap.append(el("button", {
-      class: `card selectable ${draft.identity.rank === rank.key ? "selected" : ""}`,
+      class: `card selectable rank-card tier-${tier + 1} ${draft.identity.rank === rank.key ? "selected" : ""}`,
       onclick: () => { draft.identity.rank = rank.key; render(); },
     },
+      // Power tier as stars: one per step up the rank ladder.
+      el("span", { class: "rank-stars", "aria-hidden": "true" }, ...Array.from({ length: tier + 1 }, () => icon("burst", { size: 18 }))),
       el("h3", { text: rank.name }),
       el("p", { text: rank.desc }),
       el("p", { class: "stat-line", text: `${rank.points} attribute points · max ${rank.attrMax} · ${rank.powers} powers · Reputation ${rank.reputation} · ${rank.baseUpgrades} base upgrade${rank.baseUpgrades === 1 ? "" : "s"}` }),
       // What a rank actually plays like: the trouble it faces, and the vehicles it may run (T-31).
       el("p", { class: "muted small", text: `Typically faces: ${(rank.situations || []).join(", ")}.` })));
-  }
+  });
   return wrap;
 }
 

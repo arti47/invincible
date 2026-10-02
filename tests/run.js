@@ -3571,6 +3571,23 @@ const run = async () => {
   ok("a broken hero's card shows it, and recovers when healed", r6.broken && r6.healed, JSON.stringify(r6));
   ok("a roll's outcome carries its mark", r6.mark);
 
+  const r7 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    location.hash = "#/more"; await wait(220);
+    const tiles = Array.from(document.querySelectorAll("#screen .more-tile .nav-icon"));
+    const colours = new Set(tiles.map((t) => getComputedStyle(t).backgroundColor));
+    location.hash = "#/create"; await wait(220);
+    document.querySelectorAll(".wizard-step")[0]?.click(); await wait(120);
+    const stars = Array.from(document.querySelectorAll("#screen .rank-card .rank-stars")).map((r) => r.querySelectorAll("svg").length);
+    location.hash = "#/learn"; await wait(220);
+    const heroTiles = document.querySelectorAll("#screen .stat-tiles .stat-tile").length;
+    location.hash = "#/home"; await wait(150);
+    return { colours: colours.size, stars, heroTiles };
+  });
+  ok("More tiles are colour-coded by destination", r7.colours >= 5, String(r7.colours));
+  ok("rank cards show their tier as 1–4 stars", r7.stars.join(",") === "1,2,3,4", r7.stars.join(","));
+  ok("the tutorial's example hero shows its scores as tiles", r7.heroTiles === 6, String(r7.heroTiles));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };
