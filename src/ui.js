@@ -89,7 +89,9 @@ export function modal({ title, body, actions = [], dismissible = true, size = ""
 export function showToast(message, { variant = "", timeout = 3200, action } = {}) {
   let host = $("#toasts");
   if (!host) { host = el("div", { id: "toasts", class: "toasts", "aria-live": "polite" }); document.body.append(host); }
-  const t = el("div", { class: `toast ${variant}` }, el("span", { text: message }));
+  // A glyph per tone, so good / warning / danger read before the words do.
+  const glyph = { good: "check", warn: "alert", danger: "close" }[variant] || "info";
+  const t = el("div", { class: `toast ${variant}` }, el("span", { class: "toast-ico", "aria-hidden": "true" }, icon(glyph, { size: 16 })), el("span", { text: message }));
   if (action) t.append(el("button", { class: "toast-action", onclick: () => { action.onClick(); t.remove(); } }, action.label));
   host.append(t);
   if (timeout) setTimeout(() => t.remove(), timeout);
@@ -138,12 +140,13 @@ export async function promptModal(message, { title = "Enter a value", value = ""
   return m.promise;
 }
 
-/** A list-of-choices modal. options: [{label, value, hint}] */
+/** A list-of-choices modal. options: [{label, value, hint, icon?}] — icon names an icons.js glyph. */
 export async function chooseModal(title, options, { allowCancel = true } = {}) {
   const list = el("div", { class: "choice-list" });
   const m = modal({ title, body: list, actions: allowCancel ? [{ label: "Cancel", value: null, variant: "ghost" }] : [] });
   options.forEach((o) => {
-    list.append(el("button", { class: "choice", onclick: () => m.close(o.value) },
+    list.append(el("button", { class: `choice ${o.icon ? "has-ico" : ""}`, onclick: () => m.close(o.value) },
+      o.icon ? el("span", { class: "choice-ico", "aria-hidden": "true" }, icon(o.icon, { size: 20 })) : null,
       el("span", { class: "choice-label", text: o.label }),
       o.hint ? el("span", { class: "choice-hint", text: o.hint }) : null));
   });

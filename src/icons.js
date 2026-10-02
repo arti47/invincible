@@ -6,6 +6,8 @@
 import { el } from "./core.js";
 
 const P = {
+  check: '<path d="m4 12.5 5 5L20 6.5"/>',
+  alert: '<path d="M12 4v10"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/>',
   pen: '<path d="M4 20l1-4L16 5l3 3L8 19l-4 1Z"/><path d="m14 7 3 3"/>',
   ground: '<path d="M2 18h20"/><path d="M5 18v-3l3-2 3 2v3M14 18v-6h5v6"/>',
   building: '<path d="M5 21V5l7-2v18M12 8h7v13"/><path d="M8 8h1M8 12h1M8 16h1M15 12h1M15 16h1"/><path d="M2 21h20"/>',

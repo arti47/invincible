@@ -1090,3 +1090,13 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .with-ico { display: flex; align-items: center; gap: .5rem; }
 .head-ico { display: inline-grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 50%; background: #121018; color: var(--accent); }
 .head-ico svg { width: 18px; height: 18px; }
+
+/* ================================================================ round 8: dialogs */
+.toast-ico { flex: 0 0 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: #121018; color: #fffaee; }
+.toast.good .toast-ico { background: var(--good); color: #fff; }
+.toast.warn .toast-ico { background: #d26400; color: #fff; }
+.toast.danger .toast-ico { background: #cc0a22; color: #fff; }
+.toast-ico svg { width: 15px; height: 15px; stroke-width: 3; }
+.choice.has-ico { display: grid; grid-template-columns: 40px 1fr; column-gap: .65rem; align-items: center; }
+.choice.has-ico .choice-ico { grid-row: 1 / span 2; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #121018; color: var(--accent); }
+.choice.has-ico .choice-label, .choice.has-ico .choice-hint { grid-column: 2; }
