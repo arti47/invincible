@@ -13,7 +13,7 @@ function write(k, v) {
 }
 
 export const TOGGLES = [
-  { key: "gmScreen", name: "GM screen", desc: "Adds a GM tab with a party panel, adversary drop-ins and every rollable table." },
+  { key: "gmScreen", name: "GM screen", desc: "Adds a GM screen (under More) with a party panel, adversary drop-ins and every rollable table." },
   { key: "soloMode", name: "Solo play (Crisis Mode)", desc: "Adds the Crisis Mode assistant: event checks, response engines and all four timer types." },
   { key: "familyFriendly", name: "Family-friendly critical injuries", desc: "Treats every critical injury result of 9 or higher as Cracked skull — an option offered by the rulebook." },
   { key: "manualDice", name: "Manual dice entry", desc: "Lets you type the faces you rolled with physical dice instead of rolling digitally." },

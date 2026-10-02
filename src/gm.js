@@ -9,6 +9,7 @@ import * as Store from "./store.js";
 import { NPC_PROFILES, CREATURES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
 import * as Sync from "./sync.js";
+import * as Combat from "./combat.js";
 
 export function renderGM(mount) {
   clear(mount);
@@ -26,7 +27,7 @@ function partyPanel() {
   const chars = Store.listCharacters();
   const team = Store.getTeam();
   const card = el("section", { class: "card" }, el("h3", { text: "Party" }),
-    helpPanel(["Every hero saved on this device, at a glance — vitals, karma, Reputation and armor.", "Peek opens a read-only summary of a hero's attributes, powers, talents and drawbacks."]));
+    helpPanel(["Every hero saved on this device, at a glance — vitals, karma, Reputation and armor.", "Peek opens a read-only summary of a hero's attributes, powers, talents and drawbacks; Open sheet makes that hero active and takes you to their sheet."]));
   if (!chars.length) card.append(el("p", { class: "muted", text: "No heroes on this device yet." }));
   for (const c of chars) {
     const s = Derived.summary(c);
@@ -40,7 +41,9 @@ function partyPanel() {
         el("span", { text: `Karma ${c.state.karma}` }),
         el("span", { text: `Rep ${s.reputation}` }),
         s.armor.value ? el("span", { text: `Armor ${s.armor.value}` }) : null),
-      el("button", { class: "btn tiny ghost", onclick: () => peekSheet(c) }, "Peek")));
+      el("div", { class: "chosen-actions" },
+        el("button", { class: "btn tiny ghost", onclick: () => peekSheet(c) }, "Peek"),
+        el("button", { class: "btn tiny", onclick: () => { Store.setActiveCharacter(c.id); location.hash = "#/sheet"; } }, "Open sheet"))));
   }
   if (team) {
     card.append(el("div", { class: "party-row" },
@@ -256,5 +259,26 @@ export function showNPC(n) {
       (n.drawbacks || []).length ? el("div", {}, el("h4", { class: "section", text: "Drawbacks" }), el("ul", {}, ...n.drawbacks.map((d) => el("li", { text: d })))) : null,
       (n.special || []).length ? el("div", {}, el("h4", { class: "section", text: "Special abilities" }), el("ul", {}, ...n.special.map((d) => el("li", { text: d })))) : null,
       (n.gear || []).length ? el("p", {}, el("strong", { text: "Gear: " }), n.gear.join(", ")) : null),
-    actions: [{ label: "Close", variant: "ghost" }] });
+    actions: [
+      { label: "Close", variant: "ghost" },
+      // A stat block you are reading is usually one you are about to fight: put it on the board.
+      { label: Store.getCombat()?.active ? "Add to the action scene" : "Start a scene with it", variant: "primary", onClick: () => { addToScene(n); } },
+    ] });
+}
+
+/** Drop a compendium entry onto the action scene (starting one if none is running) and go there. */
+async function addToScene(n) {
+  let count = 1;
+  if (n.minion) {
+    count = Number(await promptModal("How many minions in the group?", { title: n.name, value: "5",
+      hints: ["A minion group is one combatant whose Health equals the number of minions — each point of damage takes one down."] })) || 0;
+    if (!count) return;
+  }
+  const combat = Combat.startActionScene();
+  const profile = n.group === "Creatures" ? { ...n, slugfest: n.slugfest ?? 2 } : n;
+  const cb = Combat.combatantFromProfile(profile, { count });
+  if (["Allies", "Heroes", "Hero"].includes(n.group)) cb.side = "ally";
+  Combat.joinCombat(combat, cb);
+  showToast(`${cb.name} joins the action scene (card #${cb.card}).`, { variant: "good" });
+  location.hash = "#/combat";
 }

@@ -80,7 +80,7 @@ ${h2("1 · How to use this guide")}
 ${p(`Crisis Mode is the rulebook's solo mode: it replaces the Game Master with dice oracles and a set of timers. This guide walks the whole procedure in the order you actually play it, and shows the app's controls at each point. Every worked example follows one hero through one complete crisis, from the first alert to going home.`)}
 ${p(`<span class="nb">The dice in this guide are real.</span> Each roll was made by the app's own solo engines while this document was generated, using the same code the app runs during play. Nothing was chosen to look tidy — where a roll went badly, the example carries on with the bad result.`)}
 ${box("Before you start", ul([
-  "Turn on <span class=\"nb\">Settings → Solo play (Crisis Mode)</span>. A <span class=\"nb\">Solo</span> tab appears in the bottom bar.",
+  "Turn on <span class=\"nb\">Settings → Solo play (Crisis Mode)</span>. The <span class=\"nb\">Play</span> tab then opens it.",
   "Build a hero on the <span class=\"nb\">Home</span> tab if you have not already. Tick the solo box on the wizard's rank step so the allowance below is applied.",
   "Keep the <span class=\"nb\">Action</span> tab handy — that is where fights are run when one starts.",
 ])) }
@@ -93,7 +93,7 @@ ${rule("The app applies the extra points and the extra free talent automatically
   /* ---------------------------------------------------------------- 2. the loop */
   sections.push(`
 ${h2("2 · The loop")}
-${p("Solo play is a six-step loop. The Solo tab prints it as a numbered strip and highlights the step you are on; the card at the top of the tab always names the single next action.")}
+${p("Solo play is a six-step loop. The Solo screen prints it as a numbered strip and highlights the step you are on; the card at the top of the screen always names the single next action.")}
 ${table(["Step", "What it is", "The app control"], [
   ["1", esc(tables.loop[0]), "<span class=\"nb\">Generate crisis alert</span>"],
   ["2", esc(tables.loop[1]), "<span class=\"nb\">Event check</span>"],
@@ -277,10 +277,10 @@ ${p(`Later, unsure what the freighter's crew do next, Backdraft takes the jolt: 
 ${h2("10 · Combat")}
 ${box("A fight starts in exactly three ways", ol([
   "An <span class=\"nb\">encounter timer</span> reaches Encountered and you neither avoid nor escape it. The Encounter panel walks you to <span class=\"nb\">Draw initiative</span>.",
-  "You <span class=\"nb\">choose to attack</span> something the fiction has already put in front of you — start an action scene on the Action tab.",
+  "You <span class=\"nb\">choose to attack</span> something the fiction has already put in front of you — start an action scene on the Action screen.",
   "A <span class=\"nb\">crisis timer fires into a fight</span>, because that is what you named it as triggering.",
 ]))}
-${p("Combat itself is the ordinary combat system — the Action tab runs it. Initiative is a card 1–10 per combatant per round, lowest first. On your turn you have one full action plus one quick action, or two quick actions.")}
+${p("Combat itself is the ordinary combat system — the Action screen runs it. Initiative is a card 1–10 per combatant per round, lowest first. On your turn you have one full action plus one quick action, or two quick actions.")}
 ${p("The app deals the cards, marks whose turn it is, and gates attacking on turn order. Attacking spends your full action and ends your turn, and the marker moves to the next card automatically.")}
 ${h3("Running the enemy without a GM")}
 ${p("The encounter roll already told you two things: <span class=\"nb\">behaviour</span> (from the highest die) and <span class=\"nb\">threat size</span> (from the number of 6s). Use behaviour to decide what they do on their turn, and ask the Binary Engine when it is genuinely unclear. Pull the actual stat block from the <span class=\"nb\">NPCs</span> tab.")}
@@ -298,7 +298,7 @@ ${h2("11 · Step 5 — the social scene")}
 ${p("After you resolve an event, a threat or an objective, play a social scene. Mechanically it restores <span class=\"nb\">Resolve equal to your PRESENCE rating</span> — and Resolve does not come back from resting, so this is the only way to get it.")}
 ${ul(tables.socialScenes.map(esc))}
 ${p("The app's <span class=\"nb\">Social scene</span> button applies the recovery, prints that guidance and offers a social-hooks roll for a prompt. It also clears the \"social scene due\" state, so the loop moves on.")}
-${box("When it is due", p("The Solo tab tracks this for you: resolving a crisis, completing an objective, or a timer firing all mark a social scene as due, and the next-step card will say so. Playing one through the ordinary session lifecycle counts too."))}
+${box("When it is due", p("The Solo screen tracks this for you: resolving a crisis, completing an objective, or a timer firing all mark a social scene as due, and the next-step card will say so. Playing one through the ordinary session lifecycle counts too."))}
 `);
 
   /* ---------------------------------------------------------------- 12. endgame */
@@ -377,7 +377,7 @@ ${h3("Deciding whether you need an encounter timer")}
 ${p("Ask one question: <span class=\"nb\">is my hero moving through or searching somewhere the opposition could find them?</span> Patrol, sweep of an unknown building, sneaking past a cordon, an escape — yes. A fixed, known scene — no, and the crisis timers and objective carry on regardless.")}
 ${h3("If you are stuck")}
 ${ol([
-  "Check the next-step card at the top of the Solo tab. It always names one action.",
+  "Check the next-step card at the top of the Solo screen. It always names one action.",
   "If the fiction has stalled rather than the procedure, take the jolt: crisis level +1 and roll a crisis event.",
   "If a specific question is blocking you, ask the Binary Engine and accept the answer.",
 ])}

@@ -3385,6 +3385,52 @@ const run = async () => {
   ok("Settings no longer lists the closed crisis-timer gap", !settle.staleGap);
   ok("digits never take Atkinson's slashed zero", settle.digitsExcluded, settle.ranges.join(" ; "));
 
+  /* Cross-links: every surface that talks about another one can reach it. */
+  const links = await page.evaluate(async () => {
+    const Store = await import("/src/store.js");
+    const { Settings } = await import("/src/settings.js");
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    Store.clearCombat?.();
+    const out = {};
+    // a stat block can be put straight onto the action scene
+    location.hash = "#/compendium"; await wait(220);
+    document.querySelector("#screen .npc-row")?.click(); await wait(80);
+    const add = Array.from(document.querySelectorAll(".modal-actions .btn")).find((b) => /action scene|Start a scene/.test(b.textContent));
+    out.npcAdd = !!add;
+    add?.click(); await wait(250);
+    out.onBoard = location.hash === "#/combat" && (Store.getCombat()?.combatants || []).some((c) => c.side === "adversary");
+    // the hero's card on the board opens the sheet it mirrors
+    out.heroLink = !!document.querySelector('#screen .combatant a.cbt-name[href="#/sheet"]');
+    // in Crisis Mode the Action screen offers the way back
+    Settings.set("soloMode", true); location.hash = "#/home"; location.hash = "#/combat"; await wait(250);
+    out.backToSolo = !!document.querySelector('#screen a[href="#/solo"]');
+    Store.clearCombat?.(); Settings.set("soloMode", false);
+    // the GM party opens a hero's sheet
+    Settings.set("gmScreen", true); location.hash = "#/gm"; await wait(250);
+    out.gmOpen = Array.from(document.querySelectorAll("#screen button")).some((b) => b.textContent === "Open sheet");
+    Settings.set("gmScreen", false);
+    // the sheet reaches the journal and the team
+    location.hash = "#/sheet"; await wait(250);
+    const sheetLabels = Array.from(document.querySelectorAll("#screen a, #screen button")).map((b) => b.textContent);
+    out.sheetJournal = sheetLabels.includes("Open the journal");
+    out.sheetTeam = sheetLabels.some((t) => /^Team: |^Create a team$/.test(t));
+    // tutorial pointers are links
+    location.hash = "#/learn"; await wait(250);
+    out.tutLinks = document.querySelectorAll("#screen a.tut-go").length;
+    // no text still points at tabs that no longer exist
+    const txt = [];
+    for (const r of ["home", "sheet", "combat", "learn", "settings"]) { location.hash = `#/${r}`; await wait(200); txt.push(document.querySelector("#screen").textContent); }
+    out.stale = (txt.join(" ").match(/Solo tab|Action tab|Sheet tab|GM tab|bottom bar/g) || []);
+    return out;
+  });
+  ok("a compendium stat block can be put straight onto the action scene", links.npcAdd && links.onBoard, JSON.stringify(links));
+  ok("a hero's combatant card links to the sheet it mirrors", links.heroLink);
+  ok("in Crisis Mode the Action screen links back to the Solo screen", links.backToSolo);
+  ok("the GM party opens a hero's sheet", links.gmOpen);
+  ok("the Hero sheet reaches the journal and the team", links.sheetJournal && links.sheetTeam);
+  ok("tutorial 'In the app' pointers are links to the screen they describe", links.tutLinks >= 3, String(links.tutLinks));
+  ok("no screen names a tab that no longer exists", links.stale.length === 0, links.stale.join(", "));
+
   const zoom = await page.evaluate(() => {
     const vp = document.querySelector('meta[name="viewport"]').content;
     return { userScalable: /user-scalable\s*=\s*no/.test(vp), maxScale: /maximum-scale\s*=\s*1/.test(vp) };
