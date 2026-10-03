@@ -231,7 +231,7 @@ export function clearCombat() { localStorage.removeItem(K.combat); emit("combat"
  * board, the roll log — and reset each hero's session and scene flags. Heroes, the team and their
  * karma survive: this clears the mission, not the campaign.
  */
-export function wipeMissionData() {
+export function wipeMissionData({ journal = false } = {}) {
   const cleared = {
     combat: !!read(K.combat, null),
     tasks: read(K.tasks, []).length,
@@ -245,6 +245,8 @@ export function wipeMissionData() {
   localStorage.removeItem(`${STORAGE_PREFIX}solo`);
   // Clears the mission, not the campaign record: written and annotated journal entries survive.
   clearRollLog();
+  // "Wipe everything" means everything you played: the journal's sessions and writing go too.
+  if (journal) Journal.clearAll();
   const chars = listCharacters().map((c) => {
     c.state.scene = { wreckedZones: [], usedOncePerScene: [], energyDice: 0, barriers: [] };
     c.state.session = { ...c.state.session, karmaAnswers: {}, badKarmaAnswers: {}, wreckedZones: [], stage: "idle", spendUnlocked: true };

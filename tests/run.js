@@ -2275,7 +2275,7 @@ const run = async () => {
       && stage.seen[2][1] === "Start action scene" && stage.seen[4][1] === "End social scene",
     stage.seen.map((x) => x[1]).join(" | "));
   ok("the stage card leads the Home screen", stage.onHome && stage.homeFirst);
-  ok("the sheet carries the same stage card", stage.onSheet);
+  ok("the Hero tab carries no stage card — play is driven from Play, with a bar on Home", !stage.onSheet);
 
   const seqData = await page.evaluate(async () => {
     const D = (await import("/data.js"));
@@ -4388,6 +4388,48 @@ const run = async () => {
   ok("solo: the step-4 card names the timer that is not running, and only that one", whoElse.notRunningAllies, JSON.stringify(whoElse));
   ok("solo: an off-screen ally group is checked before the sitting closes, then owed again next time",
     whoElse.offscreenAsk && whoElse.offscreenRolled && whoElse.closed && whoElse.flagsReset, JSON.stringify(whoElse));
+
+  // One "what now": Home shows a compact bar into Play, the Play screen separates the step from the
+  // tools, and the two wipes do what their names say (and each undoes in one step).
+  const oneSpine = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Journal = await import("/src/journal.js");
+    const { Settings } = await import("/src/settings.js");
+    if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    const out = {};
+    for (const solo of [true, false]) {
+      Settings.set("soloMode", solo);
+      location.hash = "#/journal"; await wait(80); location.hash = "#/home"; await wait(250);
+      const bar = document.querySelector("#screen .play-bar");
+      out[solo ? "soloBar" : "tableBar"] = !!bar && !bar.querySelector(".next-step-why");
+    }
+    Settings.set("soloMode", true);
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    const kids = Array.from(document.querySelectorAll("#screen > *"));
+    const iStep = kids.findIndex((k) => k.id === "solo-next");
+    const iZone = kids.findIndex((k) => k.classList.contains("zone-divider"));
+    const iBoard = kids.findIndex((k) => k.classList.contains("solo-header"));
+    out.zones = iStep === 0 && iZone > iStep && iBoard > iZone;
+    // Wipes
+    Journal.record({ kind: "note", text: "Keep me" });
+    const before = Journal.entries({}).length;
+    Store.wipeMissionData({ journal: false });
+    out.keptWriting = Journal.entries({}).some((e) => e.text === "Keep me");
+    Store.wipeMissionData({ journal: true });
+    out.erased = Journal.entries({}).length === 0 && Journal.listSessions().length === 0;
+    Store.undo();
+    out.undone = Journal.entries({}).some((e) => e.text === "Keep me");
+    location.hash = "#/settings"; await wait(250);
+    const labels = Array.from(document.querySelectorAll("#screen button")).map((b) => b.textContent);
+    out.buttons = labels.includes("Clear the current mission") && labels.includes("Wipe everything, including the journal");
+    return { ...out, before };
+  });
+  ok("Home shows a compact bar into Play in both modes, not the full step card", oneSpine.soloBar && oneSpine.tableBar, JSON.stringify(oneSpine));
+  ok("Play leads with the step card, then a divider, then the board and tools", oneSpine.zones, JSON.stringify(oneSpine));
+  ok("Clear the current mission keeps the journal writing", oneSpine.keptWriting, JSON.stringify(oneSpine));
+  ok("Wipe everything erases the journal too, and one Undo brings it back", oneSpine.erased && oneSpine.undone, JSON.stringify(oneSpine));
+  ok("Settings offers both wipes under names that say what they do", oneSpine.buttons, JSON.stringify(oneSpine));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:

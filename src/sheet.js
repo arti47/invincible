@@ -11,7 +11,6 @@ import * as Roller from "./roller.js";
 import { usePower, useTalent, showRollResult, askManualFaces, spendStress } from "./power-automation.js";
 import { Settings } from "./settings.js";
 import * as Journal from "./journal.js";
-import { stageCard } from "./combat.js";
 import { askTalentSubject, openTeamWizard } from "./wizard.js";
 import { NPC_PROFILES } from "../data-npcs.js";
 
@@ -175,7 +174,8 @@ export function renderSheet(mount) {
       } }, label));
   }
 
-  mount.append(stageCard(), heroHead(c, s), bar, ...tabs.map(([k]) => paneEls[k]));
+  // The sheet is the character, not a game driver: "what now" lives on Play (and Home's bar).
+  mount.append(heroHead(c, s), bar, ...tabs.map(([k]) => paneEls[k]));
 }
 
 /** Which sheet section is showing; survives re-renders within the session. */
