@@ -1,7 +1,7 @@
 // combat.js — initiative, combatant cards, the generic progress/challenge tracker,
 // and the scene / session / adventure lifecycle engine with confirmation + one-step undo.
 
-import { el, clear, uid, clamp, d6, dieEl } from "./core.js";
+import { el, clear, uid, clamp, d6, dieEl, tableLookup, pickOne } from "./core.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -53,7 +53,7 @@ export function drawInitiative(combat) {
 export function dealCard(combat, cb) {
   const taken = new Set(combat.combatants.map((c) => c.card).filter(Boolean));
   const free = Array.from({ length: 10 }, (_, i) => i + 1).filter((n) => !taken.has(n));
-  cb.card = free.length ? free[Math.floor(Math.random() * free.length)] : 1 + Math.floor(Math.random() * 10);
+  cb.card = free.length ? pickOne(free) : 1 + Math.floor(Math.random() * 10);
   cb.acted = false;
   cb.held = false;
   cb.actions = { full: true, quick: true };
@@ -335,8 +335,8 @@ async function openAttack(attacker, combat, mount) {
       const pick = await chooseModal(`Does ${target.name} ${defKind}? (before the roll, costs a quick action)`, opts);
       if (!pick) return;
       if (pick === "oracle") {
-        const v = 1 + Math.floor(Math.random() * 6);
-        const entry = BINARY_ENGINE.entries.find((e) => v >= e.range[0] && v <= e.range[1]);
+        const v = d6();
+        const entry = tableLookup(BINARY_ENGINE.entries, v);
         declared = v >= 4;
         showToast(`Oracle: ${v} — ${entry?.text || (declared ? "Yes" : "No")}. ${target.name} ${declared ? `${defKind}s` : "does not defend"}.`, { timeout: 5000 });
       } else declared = pick === "yes";

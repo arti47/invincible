@@ -1,6 +1,6 @@
 // wizard.js — character creation (14 steps, Ch.2), the team wizard (Ch.7) and pregen instantiation.
 
-import { el, clear, d3, d6, d66, clamp, uid, deepClone } from "./core.js";
+import { el, clear, d3, d6, d66, clamp, uid, deepClone, pickOne } from "./core.js";
 import { modal, showToast, confirmModal, chooseModal, promptModal, announce, selectField } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -75,7 +75,7 @@ function renderStep(budget) {
  * last step to name it. Everything stays editable; nothing here is a shortcut around the rules.
  */
 export function rollWholeHero(target = draft) {
-  const arche = D.ARCHETYPES[Math.floor(Math.random() * D.ARCHETYPES.length)];
+  const arche = pickOne(D.ARCHETYPES);
   applyArchetype(arche, target);                                  // rank-scaled attributes + powers
 
   // Power source: the archetype publishes three, or roll the D66 table.
@@ -116,7 +116,7 @@ export function rollWholeHero(target = draft) {
   // Personality is two traits; drive and flaw are one each (D6 / D3 off the archetype).
   const traits = [...arche.personality];
   const first = traits.splice(d6() - 1, 1)[0];
-  const second = traits[Math.floor(Math.random() * traits.length)];
+  const second = pickOne(traits);
   target.identity.personality = [first, second];
   target.identity.drive = arche.drives[d3() - 1];
   target.identity.flaw = arche.flaws[d3() - 1];

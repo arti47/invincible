@@ -1,7 +1,7 @@
 // sync.js — Firebase auth, campaigns, join codes and live party/combat sync.
 // Runs entirely in local-only mode until real keys are dropped into firebase-config.js.
 
-import { el, uid } from "./core.js";
+import { el, uid, pickOne } from "./core.js";
 import { showToast, modal, promptModal, confirmModal } from "./ui.js";
 import * as Store from "./store.js";
 import { FIREBASE_ENABLED, firebaseConfig } from "../firebase-config.js";
@@ -11,8 +11,7 @@ const WORDS_B = ["dragon", "titan", "comet", "phoenix", "sentinel", "viper", "fa
 const WORDS_C = ["sword", "shield", "fist", "beacon", "engine", "crown", "signal", "anchor", "spark", "bastion"];
 
 export function makeJoinCode() {
-  const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  return `${pick(WORDS_A)}-${pick(WORDS_B)}-${pick(WORDS_C)}`;
+  return `${pickOne(WORDS_A)}-${pickOne(WORDS_B)}-${pickOne(WORDS_C)}`;
 }
 
 let app = null;

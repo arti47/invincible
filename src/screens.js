@@ -83,7 +83,9 @@ export function renderHome(mount) {
   }
 
   // The session lifecycle needs a hero to act on; showing it first is six buttons that cannot help.
-  if (chars.length) mount.append(el("section", { class: "card" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
+  // In Crisis Mode the Solo screen owns the session (social scene, Stop for tonight, Head home) and the
+  // Action board ends its own scenes, so a second set of session controls here would be a rival spine.
+  if (chars.length && !Settings.soloMode()) mount.append(el("section", { class: "card", id: "session-controls" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
 
   mount.append(el("section", { class: "card" },
     el("h3", { text: "Quick reference" }),
@@ -122,6 +124,8 @@ const RULE_TOOL_MAP = {
 };
 const TOOL_LABEL = { combat: "Run it on the Action screen", sheet: "Use it on the Hero tab", home: "Open the session controls on Home" };
 const RULE_TOOLS = Object.fromEntries(Object.entries(RULE_TOOL_MAP).map(([id, r]) => [id, [`#/${r}`, TOOL_LABEL[r]]]));
+/** In Crisis Mode the session controls live on the Solo screen, not Home. */
+const ruleTool = (id) => (RULE_TOOL_MAP[id] === "home" && Settings.soloMode() ? ["#/solo", "Run the session on the Solo screen"] : RULE_TOOLS[id]);
 
 export function renderRules(mount, anchor) {
   clear(mount);
@@ -136,7 +140,7 @@ export function renderRules(mount, anchor) {
         el("summary", {}, el("strong", { text: e.title }), el("span", { class: "muted small", text: ` ${e.chapter}` })),
         el("p", { text: e.body }),
         // Reading a rule should be one tap from the screen that runs it.
-        RULE_TOOLS[e.id] ? el("p", { class: "cite" }, el("a", { class: "rules-link tool-link", href: RULE_TOOLS[e.id][0] }, `${RULE_TOOLS[e.id][1]} →`)) : null));
+        ruleTool(e.id) ? el("p", { class: "cite" }, el("a", { class: "rules-link tool-link", href: ruleTool(e.id)[0] }, `${ruleTool(e.id)[1]} →`)) : null));
     }
     if (anchor) {
       const node = results.querySelector(`#rule-${CSS.escape(anchor)}`);

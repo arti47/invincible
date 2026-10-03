@@ -1,6 +1,6 @@
 // solo.js — Crisis Mode assistant (Ch.9): event checks, response engines, and the four timers.
 
-import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup } from "./core.js";
+import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup, pickOne, STORAGE_PREFIX } from "./core.js";
 import { modal, showToast, promptModal, chooseModal, announce, helpPanel, confirmModal } from "./ui.js";
 import * as S from "../data-solo.js";
 import { NPC_PROFILES } from "../data-npcs.js";
@@ -15,7 +15,6 @@ import { openAttributeGuide, askAttributeScore, openKarma } from "./sheet.js";
 import * as Combat from "./combat.js";
 
 import { icon } from "./icons.js";
-import { STORAGE_PREFIX } from "./core.js";
 
 /** append, skipping the null/false children a conditional leaves behind (DOM append prints "null"). */
 const put = (node, ...kids) => node.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
@@ -452,7 +451,7 @@ function bonusSixBlock(state, sixes) {
 }
 
 export function phaseFor(level) {
-  return S.CRISIS_LEVEL.phases.find((p) => level >= p.range[0] && level <= p.range[1]) || S.CRISIS_LEVEL.phases[0];
+  return tableLookup(S.CRISIS_LEVEL.phases, level) || S.CRISIS_LEVEL.phases[0];
 }
 
 const diceRow = (faces) => el("div", { class: "dice-row" },
@@ -729,7 +728,9 @@ export function renderSolo(mount) {
   const phase = phaseFor(state.crisisLevel);
 
   const step = currentStep(state);
-  const primary = (n) => (step === n ? "btn primary" : "btn");
+  // The step card above owns the one highlighted action; the header repeats the loop's
+  // controls as tools, so it never offers a second primary for the same step.
+  const primary = () => "btn";
 
   // Two zones. Above the line: what to do next, and nothing that competes with it. Below: the
   // board and the tools — used when the step card sends you there or the story calls for one.
@@ -758,7 +759,8 @@ export function renderSolo(mount) {
       el("button", { class: primary(1), onclick: () => doEventCheck(state, mount) }, "Event check"),
       // Loop step 5 is "AFTER resolving an event, threat or objective, play a social scene" —
       // so resolving comes first in the row, as it does in the fiction.
-      state.alert ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
+      // At loop step 4 the step card already offers Resolve crisis — one control, not two.
+      state.alert && step !== 3 ? el("button", { class: "btn warn", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       el("button", { class: primary(4), onclick: () => socialScene(state, mount) }, "Social scene"),
       // Stopping for the night is not the same as finishing a crisis. Head home was only offered
       // at loop step 6 — resolved AND nothing left running — so a player who simply had to stop
@@ -1366,10 +1368,7 @@ async function askBinary(state, mount) {
     { label: "No is likely", value: "no" },
   ]);
   if (!odds) return;
-  let value;
-  if (odds === "even") value = d6();
-  else { const a = d6(), b = d6(); value = odds === "yes" ? Math.max(a, b) : Math.min(a, b); }
-  const entry = tableLookup(S.BINARY_ENGINE.entries, value);
+  const { value, entry } = binaryRoll(odds);
   logEvent(state, `${question} → ${entry.text}`);
   setOracle(state, "Yes / no", `${question} — ${entry.text}`, `D6 ${value}${odds === "even" ? "" : `, ${odds === "yes" ? "keeping the highest of 2D6" : "keeping the lowest of 2D6"}`}.`);
   save(state);
@@ -1416,7 +1415,7 @@ async function generateAlert(state, mount) {
   let pick = await chooseModal("Where does the alert come from?", [
     { label: "Pick for me", hint: "Not sure? Let the dice choose one of these", value: "__any", icon: "die" },
     ...sources.map((s) => ({ label: s, hint: hintFor(s), value: s }))]);
-  if (pick === "__any") pick = sources[Math.floor(Math.random() * sources.length)];
+  if (pick === "__any") pick = pickOne(sources);
   if (!pick) return;
   let parts;
   if (/criminal/i.test(pick)) {
@@ -1543,7 +1542,7 @@ export function rollStartProximity(state) {
   const phase = phaseFor(state.crisisLevel);
   const rows = S.CRISIS_TIMER.startTable[phase.key] || S.CRISIS_TIMER.startTable.low;
   const value = roll2d6();
-  const hit = rows.find((r) => value >= r.range[0] && value <= r.range[1]);
+  const hit = tableLookup(rows, value);
   return { value, phase, key: (hit || rows[rows.length - 1]).key };
 }
 
@@ -1823,7 +1822,7 @@ function alliesCard(state, mount) {
  */
 function suggestAllyGroup() {
   const groups = NPC_PROFILES.filter((n) => n.minion);
-  const pick = groups[Math.floor(Math.random() * groups.length)];
+  const pick = pickOne(groups);
   return pick.desc ? `${pick.name} — ${pick.desc}` : pick.name;
 }
 
@@ -2415,7 +2414,7 @@ async function pickEncounterEnemy(state) {
     if (!name || !name.trim()) return null;
     return Combat.blankCombatant(name.trim());
   }
-  const profile = pick === "__roll" ? pool[Math.floor(Math.random() * pool.length)] : pool.find((p) => p.name === pick);
+  const profile = pick === "__roll" ? pickOne(pool) : pool.find((p) => p.name === pick);
   if (!profile) return null;
   let n = 1;
   if (profile.minion) {
