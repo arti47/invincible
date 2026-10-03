@@ -663,10 +663,11 @@ export function renderSettings(mount) {
     el("button", { class: "btn", onclick: () => importJson(mount) }, "Import JSON"),
     el("button", { class: "btn ghost", onclick: copyJson }, "Copy to clipboard")));
 
-  group("Mission data",
-    el("p", { class: "muted small", text: "Clears the running action scene, challenges, the solo crisis board and the roll log, and resets every hero's scene and session flags. Heroes, the team, karma and advancement are kept." }),
+  group("Clear play data",
+    el("p", { class: "muted small", text: "Clear the current mission removes the action scene, challenges, the solo crisis board and the dice rolls, and resets each hero's scene and session flags — your journal writing stays. Wipe everything also erases the whole journal. Heroes, the team, karma and advancement are always kept. Either can be undone once." }),
     el("div", { class: "row-actions" },
-      el("button", { class: "btn danger", onclick: () => wipeMission(mount) }, "Wipe all mission data")));
+      el("button", { class: "btn danger", onclick: () => wipeMission(mount, false) }, "Clear the current mission"),
+      el("button", { class: "btn danger", onclick: () => wipeMission(mount, true) }, "Wipe everything, including the journal")));
 
   group("Multiplayer", Sync.renderSyncPanel());
 
@@ -682,13 +683,14 @@ export function renderSettings(mount) {
   mount.append(card);
 }
 
-async function wipeMission(mount) {
-  const ok = await confirmModal(
-    "This clears the running action scene, every challenge, the solo crisis board and the roll log, and resets each hero's scene and session flags. Heroes, the team and karma are kept. It can be undone once.",
-    { title: "Wipe all mission data", confirmLabel: "Wipe it", variant: "danger" });
+async function wipeMission(mount, journal) {
+  const ok = await confirmModal(journal
+    ? "This erases the action scene, every challenge, the solo crisis board and the WHOLE journal — every session and everything you wrote — and resets each hero's scene and session flags. Heroes, the team and karma are kept. It can be undone once."
+    : "This clears the action scene, every challenge, the solo crisis board and the dice rolls, and resets each hero's scene and session flags. Your journal writing, heroes, the team and karma are kept. It can be undone once.",
+    { title: journal ? "Wipe everything, including the journal" : "Clear the current mission", confirmLabel: journal ? "Wipe everything" : "Clear it", variant: "danger" });
   if (!ok) return;
-  const c = Store.wipeMissionData();
-  showToast(`Mission data wiped — ${c.rollLog} log entries, ${c.tasks} challenge(s), ${c.heroes} hero(es) reset.`, {
+  const c = Store.wipeMissionData({ journal });
+  showToast(`${journal ? "Everything wiped, journal included" : "Mission cleared"} — ${c.rollLog} roll(s), ${c.tasks} challenge(s), ${c.heroes} hero(es) reset.`, {
     variant: "good", timeout: 8000,
     action: { label: "Undo", onClick: () => { Store.undo(); showToast("Mission data restored."); renderSettings(mount); } },
   });

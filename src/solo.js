@@ -99,7 +99,9 @@ export function soloStageCard() {
   const state = load();
   const running = inSession(state);
   const phase = phaseFor(state.crisisLevel);
-  const card = el("section", { class: "card next-step", id: "solo-stage" });
+  // Home's compact bar: where you are and the button into Play. The step card itself — the reason,
+  // the tools, the moves — lives only on the Play screen, so the two never read as duplicates.
+  const card = el("section", { class: "card next-step play-bar", id: "solo-stage" });
 
   if (!running) {
     // Cold, or between sessions. Say what carried over, then offer the one control that starts play.
@@ -109,9 +111,9 @@ export function soloStageCard() {
       el("h2", { text: last ? "Ready for the next session" : "Ready to play" }),
       last
         ? el("p", { class: "next-step-why", text: `Last time: ${last}` })
-        : el("p", { class: "next-step-why", text: "Crisis Mode is your GM. Starting a session rolls the emergency your hero answers, and the app drives the rest." }),
+        : el("p", { class: "muted small", text: "Crisis Mode is your GM. Play opens on the next step." }),
       state.crisisLevel > 0
-        ? el("p", { class: "muted small", text: `The world is still at crisis level ${state.crisisLevel} — ${phase.name}. That carries into tonight.` })
+        ? el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} — ${phase.name} — carries into tonight.` })
         : null,
       el("div", { class: "row-actions" },
         el("a", { class: "btn primary big", href: "#/solo" }, "Start tonight's session"),
@@ -130,9 +132,7 @@ export function soloStageCard() {
   put(card, 
     el("p", { class: "next-step-eyebrow", text: `In play — step ${step + 1} of 6` }),
     el("h2", { text: next ? next.label : "Continue" }),
-    bits.length ? el("p", { class: "lede", text: bits[0] }) : null,
-    el("p", { class: "next-step-why", text: next ? next.why : "Pick up where you left off." }),
-    el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running.` }),
+    bits.length ? el("p", { class: "muted small", text: `${bits[0]} · crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running` }) : null,
     el("div", { class: "row-actions" },
       el("a", { class: "btn primary big", href: "#/solo" }, "Continue the session"),
       // Knowing how to stop matters as much as knowing how to continue.
@@ -731,9 +731,14 @@ export function renderSolo(mount) {
   const step = currentStep(state);
   const primary = (n) => (step === n ? "btn primary" : "btn");
 
+  // Two zones. Above the line: what to do next, and nothing that competes with it. Below: the
+  // board and the tools — used when the step card sends you there or the story calls for one.
   mount.append(nextStepCard(state, mount));
   const recovery = recoveryCard(state, mount);
   if (recovery) mount.append(recovery);
+  mount.append(el("div", { class: "zone-divider span", role: "separator" },
+    el("h2", { text: "The board and tools" }),
+    el("p", { class: "muted small", text: "Use these when the step above sends you here, or when the story calls for one. The Oracles button answers questions and describes places." })));
   if (state.alert) mount.append(whatHappenedCard(state, mount));
 
   mount.append(el("section", { class: "card solo-header" },

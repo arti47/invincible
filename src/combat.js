@@ -215,10 +215,11 @@ export function stageCard() {
   const action = s.href
     ? el("a", { class: "btn primary big", href: s.href }, s.label)
     : el("button", { class: "btn primary big", onclick: () => s.run() }, s.label);
-  return el("section", { class: "card next-step", id: "session-stage" },
+  // Home only: a compact bar. The full "what now" belongs to the Play screen; repeating the whole
+  // card on Home and the Hero tab read as three different engines with three sets of buttons.
+  return el("section", { class: "card next-step play-bar", id: "session-stage" },
     el("p", { class: "next-step-eyebrow", text: "Now" }),
     el("h2", { text: s.title }),
-    el("p", { class: "next-step-why", text: s.why }),
     el("div", { class: "row-actions" }, action,
       // Every stage that is mid-play can be finished from here. Not knowing how to stop is as
       // bad as not knowing how to start.

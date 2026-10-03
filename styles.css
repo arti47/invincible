@@ -1116,3 +1116,8 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .next-step .not-running { margin-top: 12px; }
 .next-step .not-running ul { margin: 4px 0 0; padding-left: 18px; }
 .next-step .not-running li { margin: 4px 0; }
+
+/* Play screen: the line between "do this next" and the board/tools */
+.zone-divider { margin: 1.4rem 0 .4rem; padding-top: .8rem; border-top: 3px dashed var(--line); }
+.zone-divider h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
+.play-bar h2 { font-size: 1.35rem; }

@@ -49,10 +49,6 @@ const EXEMPT = {
     "rules.js": ["powerLevelName", "talentRanks", "hasDrawback", "findGear", "rulesEntry"],
     // Firebase surface that only runs with FIREBASE_ENABLED; local-only mode never calls it.
     "sync.js": ["isEnabled"],
-    // Whole-journal wipe with no UI path on purpose: the destructive controls the player gets are
-    // per-session (Wipe/Reopen) and Settings' mission wipe, which deliberately spares the journal.
-    // Kept because the harness resets state with it. TRAP: deleting this breaks tests/run.js.
-    "journal.js": ["clearAll"],
     // Snapshot plumbing called by store.js internals rather than by a UI path.
     "store.js": ["clearUndo", "STORAGE_KEYS",
       // Exported for the regression harness. The UI creates heroes through the wizard, which
