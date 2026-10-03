@@ -44,6 +44,8 @@ export function debounce(fn, ms = 250) {
 
 /* ---------------------------------------------------------------- dice */
 
+/** One element of an array, uniformly at random. */
+export const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
 export function d6() { return 1 + Math.floor(Math.random() * 6); }
 export function d3() { return Math.ceil(d6() / 2); }
 export function roll2d6() { return d6() + d6(); }

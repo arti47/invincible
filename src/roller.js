@@ -1,7 +1,7 @@
 // roller.js — the dice engine. Pools, push economy, stunts, opposed sequences, attacks,
 // damage, purchases and the roll log. Rules numbers come from data.js only.
 
-import { pool, countSixes, countOnes, d6, clamp, uid, SUCCESS, BANE } from "./core.js";
+import { pool, countSixes, countOnes, d6, clamp, ceilHalf, uid, SUCCESS, BANE } from "./core.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
 import * as Derived from "./derived.js";
@@ -195,7 +195,7 @@ export function attackDamage(character, kind, { weapon = null, power = null, pow
  */
 export function stuntDamage(character) {
   const str = Derived.effectiveAttributes(character).strength || 1;
-  return Math.ceil(str / 2);
+  return ceilHalf(str);
 }
 
 export function makeAttack(character, kind, opts = {}) {
@@ -393,7 +393,7 @@ export function fireAttack(intensity, { manualFaces = null } = {}) {
 
 /** Placed explosive: Blast rating dice, base Damage = half the Blast (round up). */
 export function explosion(blast, targets = 1, { manualFaces = null } = {}) {
-  const damage = Math.ceil(blast / 2);
+  const damage = ceilHalf(blast);
   const r = rollRaw(blast, `Explosion (Blast ${blast})`, { pushable: false, manualFaces, meta: { explosion: true } });
   const hits = r.sixes > 0;
   const doubles = Math.min(Math.max(0, r.sixes - 1), targets);

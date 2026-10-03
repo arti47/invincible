@@ -122,7 +122,6 @@ export function armorRating(character) {
 
 /* ---------------------------------------------------------------- alternate forms */
 
-const HALVE = (n) => Math.ceil(n / 2);
 
 /** Attributes after any active alternate-form / super-suit / item-dependent reduction. */
 export function effectiveAttributes(character) {
@@ -132,10 +131,10 @@ export function effectiveAttributes(character) {
   if (character.altAttributes) return { ...base, ...character.altAttributes };
   const out = { ...base };
   if (alt.mode === "physical") {
-    for (const k of ["fighting", "agility", "strength"]) out[k] = HALVE(out[k]);
+    for (const k of ["fighting", "agility", "strength"]) out[k] = ceilHalf(out[k]);
   } else {
     const order = ATTR_KEYS.slice().sort((a, b) => out[b] - out[a]).slice(0, 3);
-    for (const k of order) out[k] = HALVE(out[k]);
+    for (const k of order) out[k] = ceilHalf(out[k]);
   }
   return out;
 }

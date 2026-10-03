@@ -4431,6 +4431,49 @@ const run = async () => {
   ok("Wipe everything erases the journal too, and one Undo brings it back", oneSpine.erased && oneSpine.undone, JSON.stringify(oneSpine));
   ok("Settings offers both wipes under names that say what they do", oneSpine.buttons, JSON.stringify(oneSpine));
 
+  // Redundancy: one highlighted action per screen state, one copy of each control, and the shared
+  // dice helpers used instead of local re-implementations.
+  const noDup = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const { Settings } = await import("/src/settings.js");
+    if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    Settings.set("soloMode", true);
+    const out = {};
+    // Step 1: the step card's "Generate crisis alert" leads; the header copy must not also lead.
+    localStorage.removeItem("invincible:solo");
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    out.step1HeaderPrimaries = document.querySelectorAll(".solo-header .btn.primary").length;
+    // Step 4: an alert, a running timer.
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 1, alert: "x", crises: [],
+      timers: [{ id: "t1", name: "Bomb", rung: 3 }], allies: [], objectives: [], encounter: null, mode: "alert",
+      log: [], eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 }));
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    out.primaries = document.querySelectorAll("#screen .btn.primary").length;
+    out.headerPrimaries = document.querySelectorAll(".solo-header .btn.primary").length;
+    out.resolve = Array.from(document.querySelectorAll("#screen button")).filter((b) => b.textContent.trim() === "Resolve crisis").length;
+    localStorage.removeItem("invincible:solo");
+    // Home in Crisis Mode carries no rival session controls; the session rule links to Solo.
+    location.hash = "#/solo"; await wait(80); location.hash = "#/home"; await wait(250);
+    out.soloHomeLifecycle = !!document.querySelector("#session-controls");
+    location.hash = "#/rules"; await wait(250);
+    out.soloRuleHref = document.querySelector("#rule-lifecycle .tool-link")?.getAttribute("href");
+    Settings.set("soloMode", false);
+    location.hash = "#/home"; await wait(250);
+    out.tableHomeLifecycle = !!document.querySelector("#session-controls");
+    location.hash = "#/rules"; await wait(250);
+    out.tableRuleHref = document.querySelector("#rule-lifecycle .tool-link")?.getAttribute("href");
+    // Source-level: no local die or table-lookup re-implementations outside core.js.
+    const srcs = await Promise.all(["solo", "combat", "derived", "roller", "wizard", "sync"].map((m) => fetch(`/src/${m}.js`).then((r) => r.text())));
+    out.inlineDice = srcs.filter((t) => /1 \+ Math\.floor\(Math\.random\(\) \* 6\)|range\[0\] && [^\n]*range\[1\]|Math\.ceil\([a-z]+ \/ 2\)/.test(t)).length;
+    return out;
+  });
+  ok("solo: the header never offers a second primary beside the step card (steps 1 and 4)", noDup.headerPrimaries === 0 && noDup.step1HeaderPrimaries === 0, JSON.stringify(noDup));
+  ok("solo step 4: Resolve crisis appears once", noDup.resolve === 1, JSON.stringify(noDup));
+  ok("Home in Crisis Mode has no table session controls; table mode keeps them", !noDup.soloHomeLifecycle && noDup.tableHomeLifecycle, JSON.stringify(noDup));
+  ok("the session rule links to Solo in Crisis Mode and Home otherwise", noDup.soloRuleHref === "#/solo" && noDup.tableRuleHref === "#/home", JSON.stringify(noDup));
+  ok("no module re-implements d6, table lookup or round-up halving", noDup.inlineDice === 0, JSON.stringify(noDup));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
