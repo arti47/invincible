@@ -808,6 +808,9 @@ function dressHeads(mount) {
  * what it MEANT in the fiction. Every entry can be rewritten, annotated or removed, and the whole
  * log cleared — with a one-step undo on the destructive paths.
  */
+/** The crisis log covers this crisis; the journal is the whole campaign's record. */
+const journalLink = () => el("p", { class: "cite" }, el("a", { class: "rules-link", href: "#/journal" }, "The whole campaign is in the journal →"));
+
 function logCard(state, mount) {
   const shown = state.showAllLog ? state.log : state.log.slice(0, 12);
   const card = el("section", { class: "card", id: "solo-log" },
@@ -820,6 +823,7 @@ function logCard(state, mount) {
 
   if (!state.log.length) {
     put(card, el("p", { class: "muted small", text: "Nothing logged yet. Every roll you make on this tab lands here." }));
+    put(card, journalLink());
     return card;
   }
 
@@ -837,6 +841,7 @@ function logCard(state, mount) {
         el("button", { class: "btn tiny ghost", onclick: () => removeEntry(state, id, mount) }, "Remove"))));
   }
   put(card, list);
+  put(card, journalLink());
 
   const row = el("div", { class: "row-actions" });
   if (state.log.length > 12) {

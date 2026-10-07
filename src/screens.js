@@ -353,7 +353,10 @@ export function renderJournal(mount, arg) {
   if (!groups.length && !open) {
     mount.append(el("div", { class: "empty" },
       el("h3", { text: journalView.query ? "Nothing matches" : "Nothing written yet" }),
-      el("p", { text: journalView.query ? "Try a different word." : "Start a session, then write the first entry." })));
+      el("p", { text: journalView.query ? "Try a different word." : "Start a session, then write the first entry." }),
+      journalView.query ? null : el("div", { class: "row-actions" },
+        el("a", { class: "btn primary", href: Settings.soloMode() ? "#/solo" : "#/home" },
+          Settings.soloMode() ? "Play — the Solo screen" : "Play — start a session on Home"))));
     return;
   }
 
@@ -494,6 +497,14 @@ function burstRow(burst, mount) {
 /** Drawn icons for the journal's entry kinds (the KINDS glyphs stay as the text fallback). */
 const JR_ICONS = { note: "pen", roll: "die", solo: "solo", lifecycle: "play", state: "hero" };
 
+/** Where an automatic entry came from, so the record leads back to the screen that made it. */
+function entrySource(e) {
+  if (e.kind === "solo") return Settings.soloMode() ? ["#/solo", "Go to the Solo screen"] : null;
+  if (e.kind === "roll") return ["#/sheet", "Open the Hero tab"];
+  if (e.kind === "lifecycle") return Settings.soloMode() ? ["#/solo", "Go to the Solo screen"] : ["#/home", "Session controls on Home"];
+  return null;
+}
+
 function entryRow(e, mount, { compact = false } = {}) {
   const meta = Journal.KINDS[e.kind] || { name: e.kind, icon: "•" };
   const isOracle = e.kind === "solo" && /→|answer|Engine|oracle/i.test(e.text);
@@ -522,6 +533,7 @@ function entryRow(e, mount, { compact = false } = {}) {
       const box = document.querySelector("#jr-compose");
       if (box) { box.value = `${box.value}${box.value ? "\n\n" : ""}`; box.focus(); box.scrollIntoView({ block: "center" }); }
     } }, "Write from this") : null,
+    entrySource(e) ? el("a", { class: "btn tiny ghost", href: entrySource(e)[0] }, entrySource(e)[1]) : null,
     el("button", { class: "btn tiny ghost", onclick: async () => {
       const n = await promptModal("Your own words about this moment.",
         { title: e.note ? "Edit note" : "Add a note", value: e.note || "", multiline: true });
@@ -655,7 +667,10 @@ export function renderSettings(mount) {
   for (const t of TOGGLES) {
     const input = el("input", { type: "checkbox", role: "switch", checked: Settings.enabled(t.key), onchange: (e) => {
       Settings.set(t.key, e.target.checked);
-      showToast(`${t.name} ${e.target.checked ? "on" : "off"}.`);
+      // A toggle that adds a screen offers the way to it.
+      const opens = { soloMode: ["#/solo", "Open the Solo screen"], gmScreen: ["#/gm", "Open the GM screen"] }[t.key];
+      showToast(`${t.name} ${e.target.checked ? "on" : "off"}.`,
+        e.target.checked && opens ? { timeout: 6000, action: { label: opens[1], onClick: () => { location.hash = opens[0]; } } } : {});
       document.dispatchEvent(new CustomEvent("nav-refresh"));
     } });
     features.append(el("label", { class: "toggle-row" }, input,

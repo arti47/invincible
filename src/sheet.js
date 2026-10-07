@@ -949,9 +949,11 @@ export function openKarma(c) {
     body.append(
       el("p", { class: "stat-line", text: `Karma: ${ch.state.karma}${ch.state.session.spendUnlocked ? " · spending unlocked" : " · spending locked until the session ends"}` }),
       // Say how to unlock it, in the words of the mode being played.
-      ch.state.session.spendUnlocked ? "" : el("p", { class: "muted small", text: Settings.soloMode()
-        ? "Karma is spent between sessions. In Crisis Mode that means Head home on the Solo screen once a crisis is resolved."
-        : "Karma is spent between sessions. Use End session on Home when tonight's game is over." }),
+      ch.state.session.spendUnlocked ? "" : el("p", { class: "muted small" }, Settings.soloMode()
+        ? "Karma is spent between sessions. In Crisis Mode that means Head home on the Solo screen once a crisis is resolved. "
+        : "Karma is spent between sessions. Use End session on Home when tonight's game is over. ",
+        el("a", { class: "rules-link karma-unlock", href: Settings.soloMode() ? "#/solo" : "#/home" },
+          Settings.soloMode() ? "Go to the Solo screen →" : "Go to the session controls →")),
       el("h4", { class: "section", text: "Spend karma" }),
       el("div", { class: "chiprow column" },
         spendButton("Attribute step (up to rank max)", D.KARMA.costs.attributeStep, "attribute"),
