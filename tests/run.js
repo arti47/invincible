@@ -4474,6 +4474,70 @@ const run = async () => {
   ok("the session rule links to Solo in Crisis Mode and Home otherwise", noDup.soloRuleHref === "#/solo" && noDup.tableRuleHref === "#/home", JSON.stringify(noDup));
   ok("no module re-implements d6, table lookup or round-up halving", noDup.inlineDice === 0, JSON.stringify(noDup));
 
+  // Cross-links: every surface that points somewhere reaches it, and a link inside a dialog leaves
+  // the dialog behind instead of navigating underneath it.
+  const xlinks = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Sheet = await import("/src/sheet.js");
+    const Journal = await import("/src/journal.js");
+    const UI = await import("/src/ui.js");
+    const { Settings } = await import("/src/settings.js");
+    const { el } = await import("/src/core.js");
+    if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    const out = {};
+    const snap = localStorage.getItem("invincible:journal");
+    // Journal empty state names Play, per mode.
+    Journal.clearAll();
+    for (const solo of [true, false]) {
+      Settings.set("soloMode", solo);
+      location.hash = "#/home"; await wait(80); location.hash = "#/journal"; await wait(250);
+      out[solo ? "emptySolo" : "emptyTable"] = document.querySelector("#screen .empty a")?.getAttribute("href");
+    }
+    // Automatic entries lead back to where they were made.
+    Settings.set("soloMode", true);
+    Journal.startSession("Links", Store.activeCharacterId());
+    Journal.record({ kind: "solo", text: "Event check: 7", characterId: Store.activeCharacterId() });
+    location.hash = "#/home"; await wait(80); location.hash = "#/journal"; await wait(250);
+    // An earlier check may have left a filter on; show everything.
+    const all = Array.from(document.querySelectorAll("#screen .segmented button")).find((b) => b.textContent === "Everything");
+    if (all && !all.classList.contains("selected")) { all.click(); await wait(150); }
+    document.querySelector("#screen .jr-solo .jr-main")?.click(); await wait(50);
+    out.soloEntry = Array.from(document.querySelectorAll("#screen .jr-solo .jr-actions a")).map((a) => a.getAttribute("href"));
+    if (snap === null) localStorage.removeItem("invincible:journal"); else localStorage.setItem("invincible:journal", snap);
+    // The solo crisis log reaches the journal.
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    out.logToJournal = !!document.querySelector('#solo-log a[href="#/journal"]');
+    // Locked karma links to the control that unlocks it.
+    const c = Store.activeCharacter();
+    Store.updateCharacter((ch) => { ch.state.session.spendUnlocked = false; }, { id: c.id });
+    Sheet.openKarma(Store.activeCharacter());
+    const a = document.querySelector(".modal .karma-unlock");
+    out.unlockHref = a?.getAttribute("href");
+    a?.click(); await wait(250);
+    out.dialogClosed = !document.querySelector(".modal .karma-panel");
+    out.landed = location.hash;
+    Store.updateCharacter((ch) => { ch.state.session.spendUnlocked = true; }, { id: c.id });
+    // Any route link inside a dialog closes the dialog.
+    UI.modal({ title: "t", body: el("a", { href: "#/rules", id: "dlg-link" }, "rules") });
+    document.querySelector("#dlg-link").click(); await wait(250);
+    out.genericClosed = !document.querySelector("#dlg-link");
+    // Switching on a feature offers the screen it adds.
+    location.hash = "#/settings"; await wait(250);
+    const findSw = () => Array.from(document.querySelectorAll("#screen .toggle-row")).find((r) => /Crisis Mode/.test(r.textContent))?.querySelector("input");
+    if (findSw()?.checked) { findSw().click(); await wait(150); }
+    findSw()?.click(); await wait(150);
+    out.toastAction = Array.from(document.querySelectorAll(".toast .toast-action")).map((b) => b.textContent).pop() || "";
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    return out;
+  });
+  ok("journal: the empty state links to Play in both modes", xlinks.emptySolo === "#/solo" && xlinks.emptyTable === "#/home", JSON.stringify(xlinks));
+  ok("journal: a solo entry links back to the Solo screen", xlinks.soloEntry.includes("#/solo"), JSON.stringify(xlinks));
+  ok("solo: the crisis log links to the journal", xlinks.logToJournal, JSON.stringify(xlinks));
+  ok("karma: locked spending links to the screen that unlocks it, and the dialog closes on the way", xlinks.unlockHref === "#/solo" && xlinks.dialogClosed && xlinks.landed === "#/solo", JSON.stringify(xlinks));
+  ok("any route link inside a dialog closes the dialog", xlinks.genericClosed, JSON.stringify(xlinks));
+  ok("switching on Crisis Mode offers the Solo screen", /Solo screen/.test(xlinks.toastAction), JSON.stringify(xlinks));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

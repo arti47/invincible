@@ -60,6 +60,8 @@ export function modal({ title, body, actions = [], dismissible = true, size = ""
   }
 
   backdrop.addEventListener("click", (e) => { if (e.target === backdrop && dismissible) close(null); });
+  // A link to another screen leaves the dialog behind it: the route changes, so the dialog goes too.
+  dialog.addEventListener("click", (e) => { if (e.target.closest?.('a[href^="#/"]')) close(null); });
   document.addEventListener("keydown", onKey, true);
   // Bottom sheets on a phone: drag the header down to dismiss.
   if (dismissible) {
