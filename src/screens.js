@@ -124,6 +124,10 @@ const RULE_TOOL_MAP = {
 };
 const TOOL_LABEL = { combat: "Run it on the Action screen", sheet: "Use it on the Hero tab", home: "Open the session controls on Home" };
 const RULE_TOOLS = Object.fromEntries(Object.entries(RULE_TOOL_MAP).map(([id, r]) => [id, [`#/${r}`, TOOL_LABEL[r]]]));
+/** A glossary word leads where it is played: solo words to the Solo screen (or to Settings to turn it on). */
+const glossTool = (g) => (/\(solo\)/i.test(g.term)
+  ? (Settings.soloMode() ? ["#/solo", "Play it on the Solo screen"] : ["#/settings", "Turn on Crisis Mode in Settings"])
+  : ruleTool(g.rule));
 /** In Crisis Mode the session controls live on the Solo screen, not Home. */
 const ruleTool = (id) => (RULE_TOOL_MAP[id] === "home" && Settings.soloMode() ? ["#/solo", "Run the session on the Solo screen"] : RULE_TOOLS[id]);
 
@@ -164,7 +168,8 @@ export function renderRules(mount, anchor) {
       glossary.append(el("details", { class: "gloss-entry", open: !!q && hits.length <= 3 },
         el("summary", {}, el("strong", { text: g.term })),
         el("p", { class: "small", text: g.def }),
-        el("p", { class: "cite" }, el("a", { class: "rules-link", href: `#/rules/${g.rule}` }, "the full rule"))));
+        el("p", { class: "cite" }, el("a", { class: "rules-link", href: `#/rules/${g.rule}` }, "the full rule"),
+          glossTool(g) ? " · " : "", glossTool(g) ? el("a", { class: "rules-link tool-link", href: glossTool(g)[0] }, `${glossTool(g)[1]} →`) : "")));
     }
   };
   search.addEventListener("input", drawGlossary);
