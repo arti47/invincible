@@ -420,7 +420,7 @@ function stepSources() {
   if (current.length) {
     wrap.append(el("h4", { class: "section", text: `Chosen (${current.length})` }));
     wrap.append(el("div", { class: "chiprow" }, ...current.map((s) =>
-      el("button", { class: "chip selectable selected", title: "Remove", onclick: () => toggleSource(s) }, `${s} ✕`))));
+      el("button", { class: "chip selectable selected", title: "Remove", "aria-label": `Remove ${s}`, onclick: () => toggleSource(s) }, `${s} `, icon("close", { size: 12 })))));
   }
 
   wrap.append(selectField("Add a power source (D66 table)",

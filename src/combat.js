@@ -595,10 +595,12 @@ export function renderCombat(mount) {
       } }, "End scene"))));
 
   // The initiative order at a glance: one playing card per combatant, the one acting lifted out.
-  mount.append(el("div", { class: "init-rail", role: "list", "aria-label": "Initiative order" },
-    ...combat.combatants.map((cb) => el("div", {
+  // Laid out as a fanned hand: each card tilts by its place in the order.
+  const fanMid = (combat.combatants.length - 1) / 2;
+  mount.append(el("div", { class: "init-rail fan", role: "list", "aria-label": "Initiative order" },
+    ...combat.combatants.map((cb, i) => el("div", {
       class: `init-card ${cb.side} ${cb === up ? "up" : ""} ${cb.acted ? "acted" : ""} ${cb.health <= 0 ? "down" : ""}`,
-      role: "listitem", "data-n": cb.card || "—", title: cb.name,
+      role: "listitem", "data-n": cb.card || "—", title: cb.name, style: `--f:${(i - fanMid).toFixed(1)}`,
     }, el("span", { class: "n", text: cb.card ? String(cb.card) : "—" }), el("span", { class: "who", text: cb.name })))));
 
   // A scene started from Home holds only the hero. Say so, and put the one fix first.
@@ -648,6 +650,14 @@ function healthBar(cb) {
   return el("div", { class: `cbt-bar ${pct <= 25 ? "low" : pct <= 55 ? "mid" : ""}`, style: ticks, "aria-hidden": "true" }, el("span", { style: `width:${pct}%` }));
 }
 
+/** A minion group as a row of tokens, one per minion, the fallen struck out (Health = minions). */
+function minionTokens(cb) {
+  const total = Math.min(cb.maxHealth, 30);
+  return el("div", { class: "minion-tokens", "aria-hidden": "true" },
+    ...Array.from({ length: total }, (_, i) => el("span", { class: `mtok ${i < cb.health ? "up" : "out"}` })),
+    cb.maxHealth > 30 ? el("span", { class: "muted small", text: `+${cb.maxHealth - 30}` }) : null);
+}
+
 function combatantCard(cb, combat, mount, isUp = false) {
   const isMinion = cb.minionCount > 0;
   const blocked = attackBlockedReason(combat, cb);
@@ -664,6 +674,7 @@ function combatantCard(cb, combat, mount, isUp = false) {
       cb.acted ? el("span", { class: "chip muted", text: "Acted" }) : null,
       cb.huge ? el("span", { class: "chip warn", text: "Huge" }) : null),
     healthBar(cb),
+    isMinion ? minionTokens(cb) : null,
     el("div", { class: "cbt-stats" },
       el("span", { text: isMinion ? `Minions ${cb.health}/${cb.maxHealth}` : `Health ${cb.health}/${cb.maxHealth}` }),
       el("span", { text: `Resolve ${cb.resolve}/${cb.maxResolve}` }),

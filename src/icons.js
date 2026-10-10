@@ -59,6 +59,7 @@ const P = {
   theme: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/>',
   oracle: '<path d="M12 2.5 14 9.5l7 2.5-7 2.5-2 7-2-7-7-2.5 7-2.5 2-7Z"/>',
   close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  chevron: '<path d="m9 5 7 7-7 7"/>',
   burst: '<path d="M12 1.5 14.3 8l6.7-2.4-3.9 5.9 5.4 3.6-6.8.4.9 6.9L12 17.6 7.4 22.4l.9-6.9-6.8-.4 5.4-3.6L3 5.6 9.7 8 12 1.5Z" fill="currentColor"/>',
 };
 
@@ -85,6 +86,9 @@ const ROLE_COLOURS = {
   Blaster: "#ff3d00", Brains: "#00a0e3", Brawn: "#d4006a", Controller: "#7a3cff",
   Defender: "#0067c5", Leader: "#ffd400", Striker: "#e50914", Wildcard: "#11a05a",
 };
+
+/** The role's print colour, for art that dresses a hero (the emblem uses the same table). */
+export const roleColour = (role) => ROLE_COLOURS[role] || "#ffd400";
 
 function hash(s) { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
 

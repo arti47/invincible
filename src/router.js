@@ -11,6 +11,8 @@ import { startWizard, isActive as wizardActive } from "./wizard.js";
 import * as Learn from "./learn.js";
 import * as Store from "./store.js";
 import { icon } from "./icons.js";
+import { sceneFor } from "./art.js";
+import { linkGlossary } from "./glossary-links.js";
 
 // `nav` is where a route lives: "tab" in the bottom bar, "more" on the More screen, false only by
 // link. The bar holds five tabs; Play is Solo or Action depending on the mode being played.
@@ -67,6 +69,7 @@ export function route() {
   if (def.gate && !def.gate()) { location.hash = "#/home"; return; }
   clear(mount);
   mount.scrollTop = 0;
+  delete document.body.dataset.crisis;   // the Solo screen sets its phase backdrop while it is shown
   // Wide screens lay these out in columns; reading screens stay one measure wide.
   mount.classList.toggle("cols", ["home", "sheet", "solo", "gm", "more"].includes(def.path));
   try {
@@ -89,15 +92,33 @@ export function route() {
  * panel's corner, and a starburst illustration over every empty state.
  */
 function decorate(mount, def) {
+  markOverflow(mount);
+  if (def.path !== "rules") linkGlossary(mount);
   const first = mount.querySelector(":scope > .card, :scope > section.card");
   if (first && !first.querySelector(":scope > .card-mark")) {
     first.append(el("span", { class: "card-mark", "aria-hidden": "true" }, icon(def.icon, { size: 120 })));
   }
   for (const e of mount.querySelectorAll(".empty")) {
     if (e.querySelector(":scope > .empty-art")) continue;
-    e.prepend(el("span", { class: "empty-art", "aria-hidden": "true" },
-      icon("burst", { size: 120 }), el("span", { class: "empty-ico" }, icon(def.icon, { size: 44 }))));
+    e.prepend(el("span", { class: "empty-art scene", "aria-hidden": "true" }, sceneFor(def.path),
+      el("span", { class: "empty-badge" }, icon("burst", { size: 64 }), el("span", { class: "empty-ico" }, icon(def.icon, { size: 26 })))));
   }
+}
+
+/** Segmented rows wider than their box get an edge fade, and keep the selected option in view. */
+function markOverflow(root) {
+  requestAnimationFrame(() => {
+    for (const s of root.querySelectorAll(".segmented, .wizard-steps")) {
+      const over = s.scrollWidth > s.clientWidth + 2;
+      s.classList.toggle("overflows", over);
+      if (!over) continue;
+      const sel = s.querySelector(".selected, [aria-selected=\"true\"], [aria-current], .current");
+      if (sel) s.scrollLeft = Math.max(0, sel.offsetLeft - 24);
+      const edge = () => s.classList.toggle("at-end", s.scrollLeft + s.clientWidth >= s.scrollWidth - 2);
+      edge();
+      if (!s.dataset.fadeBound) { s.dataset.fadeBound = "1"; s.addEventListener("scroll", edge, { passive: true }); }
+    }
+  });
 }
 
 function navLink(r, cls = "nav-item", label = r.label) {
@@ -151,6 +172,9 @@ function updateFab() {
 
 function updateNavState(path) {
   const moreSet = ROUTES.filter((r) => r.nav === "more").map((r) => r.path);
+  // The Play tab follows the live mode, so a mode switched elsewhere never leaves it stale.
+  const playTab = navHost?.querySelector('.nav-item[data-tab="play"]');
+  if (playTab && playTab.dataset.path !== playPath()) { playTab.dataset.path = playPath(); playTab.href = `#/${playPath()}`; }
   for (const a of navHost ? navHost.querySelectorAll(".nav-item") : []) {
     const on = a.dataset.path === path || (a.dataset.path === "more" && moreSet.includes(path) && path !== playPath())
       || (a.dataset.path === "journal" && path === "log");

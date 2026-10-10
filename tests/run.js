@@ -4644,6 +4644,115 @@ const run = async () => {
   ok("a new or published hero offers a way to start playing", /Start playing/.test(xl3.pregenAction), JSON.stringify(xl3));
   ok("a stressed-out solo hero's sheet links to the memory rally", xl3.rallyLink, JSON.stringify(xl3));
 
+  // ---- comic-page art (v89). Decoration never replaces a number: each picture's figure is also text.
+  section("Comic-page art");
+  const comic = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Wizard = await import("/src/wizard.js");
+    const C = await import("/src/combat.js");
+    const J = await import("/src/journal.js");
+    const { D } = await import("/src/rules.js");
+    const { Settings } = await import("/src/settings.js");
+    const { NPC_PROFILES } = await import("/data-npcs.js");
+    const go = async (r) => { location.hash = "#/more"; await wait(60); location.hash = "#/" + r; await wait(300); };
+    const out = {};
+    const wasSolo = Settings.soloMode();
+    const before = Store.activeCharacterId();
+    const snap = Store.snapshot ? Store.snapshot() : null;
+    const soloKey = "invincible:solo"; const soloBefore = localStorage.getItem(soloKey);
+    const saved = await Wizard.instantiatePregen(Wizard.listPregens()[0]); await wait(150);
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    // Home cover.
+    Settings.set("soloMode", false);
+    await go("home");
+    const cover = document.querySelector("#screen .cover");
+    out.cover = !!cover && cover.querySelector(".cover-title")?.textContent.includes(saved.identity.heroName || saved.identity.realName || "");
+    out.coverFirst = !!cover && document.querySelector("#screen").firstElementChild?.contains(cover);
+    // Hero hexagon.
+    await go("sheet");
+    const hex = document.querySelector("#screen .attr-hex .art-hex");
+    out.hexLabel = hex?.getAttribute("aria-label") || "";
+    out.hexPoints = (hex?.querySelector("polygon.shape")?.getAttribute("points") || "").split(" ").filter(Boolean).length;
+    // Play tab follows the mode, and only one nav item is current.
+    out.playTable = document.querySelector('#bottom-nav [data-tab="play"]')?.getAttribute("href");
+    Settings.set("soloMode", true);
+    localStorage.setItem(soloKey, JSON.stringify({ crisisLevel: 6, alert: "x", alertParts: { kind: "City incident", headline: "Fire" }, crises: [],
+      timers: [{ id: "t1", name: "Roof", proximity: "soon" }], allies: [{ id: "a1", name: "Police", status: "diminished", start: "unified" }],
+      objectives: [{ id: "o1", name: "Out", status: "manageable", start: "manageable", karma: 2 }], encounter: { presence: "suspected", phase: "moving" },
+      mode: "alert", log: [], eventChecks: 1, resolved: 0 }));
+    await go("solo");
+    out.playSolo = document.querySelector('#bottom-nav [data-tab="play"]')?.getAttribute("href");
+    out.navCurrent = document.querySelectorAll('#bottom-nav [aria-current="page"]').length;
+    const dial = document.querySelector("#screen .crisis-gauge .art-dial");
+    out.dialLabel = dial?.getAttribute("aria-label") || "";
+    out.dialText = document.querySelector("#screen .crisis-value")?.textContent || "";
+    out.bomb = !!document.querySelector("#screen .timer .timer-art .art-bomb");
+    out.road = !!document.querySelector("#screen .timer .timer-art .art-road");
+    out.squad = !!document.querySelector("#screen .timer .timer-art .art-squad");
+    out.radar = !!document.querySelector("#screen .enc-radar .art-radar");
+    out.artHidden = Array.from(document.querySelectorAll("#screen .timer-art")).every((a) => a.getAttribute("aria-hidden") === "true");
+    out.crisisBg = document.body.dataset.crisis;
+    // Glossary words in panel prose open their definition.
+    const term = document.querySelector("#screen .gloss-term");
+    out.termText = term?.textContent || "";
+    term?.click(); await wait(200);
+    const g = D.GLOSSARY.find((x) => x.term.replace(/\s*\(.*\)\s*$/, "").trim().toLowerCase() === out.termText.toLowerCase());
+    const dlg = document.querySelector(".modal");
+    out.termDef = !!g && !!dlg && dlg.textContent.includes(g.def);
+    out.termRule = !!dlg?.querySelector('a[href^="#/rules/"]');
+    dlg?.querySelector("button.primary")?.click(); await wait(150);
+    out.termOutsideCtl = Array.from(document.querySelectorAll("#screen .gloss-term")).every((t) => !t.closest("button, a, h1, h2, h3, h4, label"));
+    await go("rules");
+    out.rulesTerms = document.querySelectorAll("#screen .gloss-term").length;
+    // The board: a fanned hand and minion tokens.
+    Settings.set("soloMode", false);
+    const cmb = C.startActionScene();
+    const mp = NPC_PROFILES.find((p) => p.minion);
+    const m = C.joinCombat(cmb, C.combatantFromProfile(mp, { count: 5 }));
+    await go("combat");
+    out.fan = document.querySelectorAll("#screen .init-rail.fan .init-card[style*='--f']").length;
+    out.cards = cmb.combatants.length;
+    const mCard = Array.from(document.querySelectorAll("#screen .combatant")).find((x) => x.textContent.includes(mp.name));
+    out.tokens = mCard?.querySelectorAll(".minion-tokens .mtok.up").length;
+    out.minionHealth = m.health;
+    // Journal: sessions carry an issue badge; segmented filters say when they scroll.
+    J.startSession("Art check");
+    await go("journal");
+    out.issue = document.querySelector("#screen .card.session.current .issue-badge .issue-no")?.textContent || "";
+    out.vw = innerWidth;
+    out.segOverflow = Array.from(document.querySelectorAll("#screen .segmented")).some((sg) => sg.scrollWidth > sg.clientWidth + 2 ? sg.classList.contains("overflows") : false)
+      || Array.from(document.querySelectorAll("#screen .segmented")).every((sg) => sg.scrollWidth <= sg.clientWidth + 2) && "fits";
+    // Text glyphs replaced by drawn icons in chrome controls.
+    const glyphs = [];
+    for (const r of ["home", "sheet", "journal", "compendium", "combat"]) {
+      await go(r);
+      document.querySelectorAll("button, .tap-hint, .session-caret, .hud a").forEach((b) => { if (/[✕✎▸▾]/.test(b.textContent)) glyphs.push(`${r}: ${b.textContent.trim().slice(0, 20)}`); });
+    }
+    out.glyphs = glyphs;
+    // cleanup
+    C.endActionScene ? null : null;
+    localStorage.removeItem("invincible:combat");
+    if (soloBefore === null) localStorage.removeItem(soloKey); else localStorage.setItem(soloKey, soloBefore);
+    Store.deleteCharacter(saved.id);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo);
+    return out;
+  });
+  ok("Home opens with a comic cover carrying the hero's name", comic.cover && comic.coverFirst, JSON.stringify(comic));
+  ok("the Hero sheet draws the six attributes as a labelled hexagon", comic.hexPoints === 6 && /FIGHTING \d+.*PRESENCE \d+/i.test(comic.hexLabel), comic.hexLabel);
+  ok("the Play tab follows the mode, and one nav item is current", comic.playTable === "#/combat" && comic.playSolo === "#/solo" && comic.navCurrent === 1, JSON.stringify(comic));
+  ok("the crisis level is a dial whose label matches the printed level", comic.dialLabel === "Crisis level 6 of 10" && /^6/.test(comic.dialText), `${comic.dialLabel} / ${comic.dialText}`);
+  ok("each timer type carries its picture (bomb, road, squad, radar), decorative only", comic.bomb && comic.road && comic.squad && comic.radar && comic.artHidden, JSON.stringify(comic));
+  ok("the Solo screen takes the crisis phase as its backdrop", comic.crisisBg === "medium", comic.crisisBg);
+  ok("a glossary word in panel prose opens its definition and rule", !!comic.termText && comic.termDef && comic.termRule, JSON.stringify(comic));
+  ok("glossary words never sit inside controls or headings, and not on the rules screen", comic.termOutsideCtl && comic.rulesTerms === 0, JSON.stringify(comic));
+  ok("initiative is a fanned hand, one card per combatant", comic.fan === comic.cards && comic.cards >= 2, JSON.stringify(comic));
+  ok("a minion group shows one live token per minion", comic.tokens === comic.minionHealth && comic.tokens === 5, JSON.stringify(comic));
+  ok("a segmented row that scrolls is marked so it shows a scroll cue", comic.segOverflow === true || comic.segOverflow === "fits", JSON.stringify({ vw: comic.vw, seg: comic.segOverflow }));
+  ok("a journal session carries its issue number", /^#\d+$/.test(comic.issue), comic.issue);
+  ok("no chrome control is drawn with a text glyph (✕ ✎ ▸ ▾)", comic.glyphs.length === 0, comic.glyphs.join(" | "));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

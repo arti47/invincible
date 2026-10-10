@@ -204,7 +204,7 @@ function adversaryPanel() {
         el("span", { class: "npc-avatar" }, icon(iconFor(n.group) || "npcs", { size: 22 })),
         el("div", { class: "npc-main" }, el("strong", { text: n.name }),
           el("p", { class: "muted small", text: `${n.group} · ${n.desc || n.descriptor || ""}` })),
-        el("span", { class: "tap-hint", text: "▸" })));
+        el("span", { class: "tap-hint", "aria-hidden": "true" }, icon("chevron", { size: 14 }))));
     }
   };
   search.addEventListener("input", draw);

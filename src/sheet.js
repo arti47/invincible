@@ -1,7 +1,8 @@
 // sheet.js — the live character sheet, persistent resource header and all in-play tracking.
 
 import { el, clear, clamp, uid, dieEl, STORAGE_PREFIX } from "./core.js";
-import { emblem, icon, iconFor } from "./icons.js";
+import { emblem, icon, iconFor, roleColour } from "./icons.js";
+import { attributeHex, heroFigure } from "./art.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -47,7 +48,7 @@ export function renderResourceHeader(mount) {
         s.armor.value ? flat("Armor", s.armor.value, s.armor.sources.map((x) => x.name).join(", "), "extra") : null),
       // Jot without leaving whatever screen you are on.
       el("button", { class: "icon-btn res-pill journal", "aria-label": "Write a journal entry", title: "Write a journal entry",
-        onclick: () => quickJournal(c) }, el("span", { class: "res-value", text: "✎" }))),
+        onclick: () => quickJournal(c) }, el("span", { class: "res-value" }, icon("pen", { size: 18 })))),
     el("div", { class: "hud-flags" },
       c.state.broken ? el("span", { class: "res-pill danger", text: "BROKEN" }) : null,
       c.state.resolve === 0 ? el("span", { class: "res-pill warn", text: "STRESSED OUT" }) : null,
@@ -184,11 +185,13 @@ let sheetTab = "overview";
 /** The trading-card header: emblem or portrait, name, who they are, and both tracks as boxes. */
 function heroHead(c, s) {
   const rank = R.findRank(c.identity.rank);
-  const track = (label, value, max, kind) => el("div", { class: `track ${kind}`, role: "img", "aria-label": `${label} ${value} of ${max}` },
+  // Power cells: each point a cell; a low track pulses, so danger reads before the number does.
+  const track = (label, value, max, kind) => el("div", { class: `track ${kind} ${max && value > 0 && value / max <= 0.25 ? "low" : ""}`, role: "img", "aria-label": `${label} ${value} of ${max}` },
     el("span", { class: "track-label", text: label }),
     el("span", { class: "track-boxes" }, ...Array.from({ length: max }, (_, i) => el("span", { class: `track-box ${i < value ? "on" : ""}` }))),
     el("span", { class: "track-value", text: `${value}/${max}` }));
   return el("section", { class: `hero-head ${c.state.broken ? "is-broken" : ""} ${c.state.dying?.active ? "is-dying" : ""}` },
+    el("span", { class: "head-figure", "aria-hidden": "true" }, heroFigure(roleColour(c.identity.role))),
     el("div", { class: "identity-head" },
       emblem(c.identity.heroName || c.identity.realName, c.identity.role, { portrait: c.identity.portraitUrl }),
       el("div", { style: "min-width:0;flex:1" },
@@ -359,6 +362,8 @@ function attributesCard(c, s) {
     el("h3", { text: "Attributes" }),
     helpPanel(["Your six attributes are your dice pools. Tap one to roll it — pool size equals the score, and a single 6 succeeds.", "Critical injuries and active conditions are already subtracted from the number of dice shown; a pool never drops below 1.", "Attack opens the four attack types, each rolling the attribute the rules require."]),
     el("p", { class: "muted small", text: "Tap to roll. Critical injuries and conditions are applied automatically." }),
+    el("div", { class: "attr-hex" }, attributeHex(s.attributes, 12,
+      D.ATTRIBUTES.map((a) => `${a.name} ${s.attributes[a.key]}`).join(", "))),
     grid,
     el("div", { class: "row-actions" },
       el("button", { class: "btn", onclick: () => openAttackDialog(c) }, "Attack"),
@@ -592,7 +597,7 @@ function powersCard(c) {
         def ? el("p", { class: "muted small", text: def.summary.slice(0, 140) + (def.summary.length > 140 ? "…" : "") }) : el("p", { class: "warn small", text: p.note || "Not in the rules library." }),
         (p.boosts || []).length ? el("p", { class: "small", text: `Boosts: ${p.boosts.join(", ")}` }) : null,
         (p.limits || []).length ? el("p", { class: "small warn", text: `Limits: ${p.limits.join(", ")}` }) : null),
-      el("span", { class: "tap-hint", text: "Use ▸" })));
+      el("span", { class: "tap-hint" }, "Use ", icon("chevron", { size: 12 }))));
   }
   if (!(c.powers || []).length) list.append(el("p", { class: "muted", text: "No powers recorded." }));
   return el("section", { class: "card" }, el("h3", { text: `Powers (${(c.powers || []).length})` }), list);
@@ -743,7 +748,7 @@ async function openGearCatalogue(c) {
             item.durability !== undefined ? `Durability ${item.durability}` : null,
             (item.features || []).join(", ") || null, item.note || null].filter(Boolean).join(" · ") }),
           v.text ? el("span", { class: `chip tiny gear-verdict ${v.cls}`, text: v.text }) : null),
-        el("span", { class: "tap-hint", text: "Buy ▸" })));
+        el("span", { class: "tap-hint" }, "Buy ", icon("chevron", { size: 12 }))));
     }
     if (!shown) list.append(el("p", { class: "muted", text: `Nothing matches "${search.value}". Try a shorter word, or clear the search to see everything.` }));
   };
