@@ -226,7 +226,7 @@ const NEXT_STEP = [
     // first-timer pressed the big yellow button and nothing happened.
     run: (state, mount) => engageFromCard(state, mount) },
   { label: "Say what your hero just did",
-    why: "The timers are set — now play. Decide what your hero does in the fiction, then tell the app: it works out which checks that action triggers and rolls them in order. You never have to pick a timer yourself.",
+    why: "Now play. Decide what your hero does in the fiction, then tell the app. What you did decides the timers: the app rolls the ones it affects, and if it needs one that is not running yet — you moved somewhere enemies could hide, a group joined in, you set a goal — it asks whether to start it.",
     run: (state, mount) => whatHappened(state, mount) },
   { label: "Play a social scene",
     why: "Something resolved. A social scene restores Resolve equal to your PRESENCE — take it before the next danger.",
@@ -382,7 +382,7 @@ function nextStepCard(state, mount) {
         ? el("button", { class: "btn warn", onclick: () => focusCard(state, mount, "solo-encounter") }, "The encounter needs you — go to it") : null,
       i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
       // Starting timers is the player's call at steps 3 and 4; the chart says when.
-      (i === 2 || i === 3) && state.alert ? el("button", { class: "btn ghost", onclick: () => focusCard(state, mount, "solo-move") }, "When do I start a timer?") : null,
+      i === 2 && state.alert ? el("button", { class: "btn ghost", onclick: () => focusCard(state, mount, "solo-move") }, "When do I start a timer?") : null,
       // How a crisis ends was only a header button; at the step where play happens, offer it here.
       i === 3 && state.alert ? el("button", { class: "btn ghost", title: "When the danger is dealt with in the fiction", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")),
@@ -534,38 +534,65 @@ const MOVES = [
   { key: "brawl", label: "A fight broke out",
     when: "You attacked someone, or someone came at you.",
     fires: "Action scene — pick the enemy, draw initiative, fight on the Action screen",
-    steps: ["combat"] },
+    steps: ["combat"], timers: ["ally"] },
   { key: "zone", label: "I moved to a new place",
     when: "Walking into the next zone, room, street or corridor.",
     fires: "Encounter check · crisis timers",
-    steps: ["encounter", "timers"] },
+    steps: ["encounter", "timers"], timers: ["encounter", "crisis"] },
   { key: "search", label: "I searched, waited or worked on something",
     when: "Lingering anywhere for a few minutes or more — searching, picking a lock, treating the wounded.",
     fires: "Encounter check · crisis timers at +1 die (it took time)",
-    steps: ["encounter", "timers+"] },
+    steps: ["encounter", "timers+"], timers: ["encounter", "crisis"] },
   { key: "milestone", label: "Something moved my objective",
     when: "You learned something, reached somewhere, or lost ground. For or against — both count.",
     fires: "Objective check · event check",
-    steps: ["objective", "event"] },
+    steps: ["objective", "event"], timers: ["objective"] },
   { key: "allies", label: "My allies faced danger",
     when: "The group fought, held a line, evacuated people, or tried something risky.",
     fires: "Ally check",
-    steps: ["ally"] },
+    steps: ["ally"], timers: ["ally"] },
   { key: "fight", label: "A fight or a long scene ended",
     when: "Combat is over, or a chase, or anything that ate real time.",
     fires: "Crisis timers at +1 die · event check",
-    steps: ["timers+", "event"] },
+    steps: ["timers+", "event"], timers: ["crisis"] },
   { key: "scene", label: "Time jumped, or the scene changed",
     when: "You travelled, waited hours, or tied off a chunk of the mission.",
     fires: "Crisis timers · event check",
-    steps: ["timers", "event"] },
+    steps: ["timers", "event"], timers: ["crisis"] },
+  // The two moves that START a timer. What the hero does decides when a timer begins as much as
+  // when one rolls: a new goal is an objective (Ch.9: name it and give it a starting status), and
+  // a danger that fires, is stopped or appears is a crisis timer ("once a timer is triggered or
+  // stopped, start another").
+  { key: "goal", label: "I set my hero a goal",
+    when: "You decided what would settle this — rescue them, stop it, find it, get out.",
+    fires: "Starts an objective timer — it is where solo karma comes from",
+    steps: ["startObjective"], timers: [] },
+  { key: "danger", label: "A danger went off, was stopped, or a new one appeared",
+    when: "A crisis timer reached Now, you defused one, or the story revealed a fresh threat.",
+    fires: "Starts a crisis timer — always keep at least one running",
+    steps: ["startCrisis"], timers: [] },
 ];
 
+const TIMER_NAMES = { crisis: "crisis timer", objective: "objective", ally: "ally group", encounter: "encounter timer" };
+const timerRunning = (state, kind) => ({
+  crisis: state.timers.length > 0,
+  objective: state.objectives.some((o) => o.status !== "reached"),
+  ally: liveAllies(state).length > 0,
+  encounter: !!state.encounter,
+}[kind]);
+/** What a move needs that is not running — shown on the move, and offered before it rolls. */
+const missingFor = (state, move) => (move.timers || []).filter((k) => !timerRunning(state, k));
+
 async function whatHappened(state, mount) {
-  const pick = await chooseModal("What did your hero just do?", MOVES.map((m) => ({
-    label: m.label, hint: `${m.when}  →  ${m.fires}`, value: m.key })));
+  const pick = await chooseModal("What did your hero just do?", MOVES.map((m) => {
+    const missing = missingFor(state, m);
+    return { label: m.label, value: m.key,
+      hint: `${m.when}  →  ${m.fires}${missing.length ? `  ·  No ${missing.map((k) => TIMER_NAMES[k]).join(" or ")} running — you'll be asked whether to start one` : ""}` };
+  }));
   if (!pick) return;
   const move = MOVES.find((m) => m.key === pick);
+  if (move.steps[0] === "startObjective") { await addObjective(state, mount); return; }
+  if (move.steps[0] === "startCrisis") { await addTimer(state, mount); return; }
   const report = el("div", {});
   let acted = false;
   let allyDamage = 0;
@@ -573,9 +600,10 @@ async function whatHappened(state, mount) {
   // These two hand straight over to the screen that does the work, rather than rolling timers.
   if (move.steps[0] === "roll") { openAttributeGuide(); return; }
   if (move.steps[0] === "combat") { await offerMissingTimer(state, mount, "ally"); await startFight(load(), mount); return; }
-  // A move whose timer is not running asks whether it should be, before rolling anything.
-  if (move.steps.includes("encounter") || move.steps.includes("ally")) {
-    await offerMissingTimer(state, mount, move.steps.includes("ally") ? "ally" : "encounter");
+  // A move whose timer is not running asks whether it should be, before rolling anything —
+  // this is where what the hero did decides when a timer starts.
+  for (const kind of missingFor(state, move)) {
+    await offerMissingTimer(state, mount, kind);
     Object.assign(state, load());
   }
 
@@ -674,7 +702,7 @@ function whatHappenedCard(state, mount) {
   return el("section", { class: "card", id: "solo-move" },
     el("h3", { text: duplicated ? "When does each timer start, roll and end?" : "What did your hero just do?" }),
     duplicated
-      ? el("p", { class: "muted small", text: "You start a timer; the app rolls it. Start one when its line below matches your story, then just say what your hero does — the control above rolls whichever are running." })
+      ? el("p", { class: "muted small", text: "What your hero does decides the timers. Report it with the control above: the app rolls the timers that action affects, and offers to start any it needs that is not running. These are the rules it follows." })
       : el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
     duplicated ? null : el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it"),
@@ -692,22 +720,22 @@ function timerChart(state, mount) {
   const openObjectives = state.objectives.filter((o) => o.status !== "reached").length;
   const rows = [
     { key: "crisis", name: "Crisis timer", icon: "clock", running: state.timers.length,
-      start: "When you take on a crisis — Engage starts it. When one fires or is stopped, start the next: keep at least one running.",
+      start: "When you take on a crisis — Engage starts it. When one fires or is stopped, start the next: keep at least one running. Report it as “A danger went off, was stopped, or a new one appeared”.",
       roll: "Time passes: between scenes, on a delay, changing location, lingering, or doing something complex. +1 die for anything lengthy, −1 for anything fast.",
       end: "It reaches Now: the bad thing happens and the crisis level rises by 1. Or you stop it in the story — find the bomb, cut the wire.",
       add: () => addTimer(state, mount), label: "Start a crisis timer" },
     { key: "objective", name: "Objective", icon: "target", running: openObjectives,
-      start: "When you take on a crisis: name the goal that would settle it. A more distant goal moves slower but pays more karma.",
+      start: "When you take on a crisis: name the goal that would settle it. A more distant goal moves slower but pays more karma. Report it as “I set my hero a goal”.",
       roll: "A milestone — something meaningful happens for or against the goal. Never on a clock.",
       end: "It is reached (the karma is paid when you head home), or it becomes impossible and you drop it.",
       add: () => addObjective(state, mount), label: "Set an objective" },
     { key: "ally", name: "Ally group", icon: "minions", running: liveAllies(state).length,
-      start: "When a group — police, a team, bystanders — is helping you or is in danger. One timer per group.",
+      start: "When a group — police, a team, bystanders — is helping you or is in danger. One timer per group. Reporting “My allies faced danger” or “A fight broke out” asks if none is tracked.",
       roll: "The group faces a threat or tries something dangerous. Off-screen, at least once a session.",
       end: "Each 1 costs them a step; at You are Alone nobody is left.",
       add: () => addAllies(state, mount), label: "Add an ally group" },
     { key: "encounter", name: "Encounter timer", icon: "map", running: state.encounter ? 1 : 0,
-      start: "When you explore a place where enemies may be: All clear with no warning, Confirmed if you know they are here, Closing or Near if they are converging.",
+      start: "When you explore a place where enemies may be: All clear with no warning, Confirmed if you know they are here, Closing or Near if they are converging. Reporting “I moved to a new place” or “I searched…” asks if none is running.",
       roll: "Each zone you move into, or a few minutes lingering in one. Ordinary travel needs no timer.",
       end: "Encountered: you face them. Once that is avoided, escaped or resolved, reset it to fit the situation.",
       add: state.encounter ? null : () => startEncounter(state, mount), label: "Start the encounter timer" },
@@ -1173,6 +1201,20 @@ async function askWhoElse(state, mount) {
  * crisis alert.
  */
 async function offerMissingTimer(state, mount, kind) {
+  // Crisis timers and objectives are not optional extras: Ch.9 says keep at least one crisis timer
+  // running, and objectives are the only solo karma. So they are offered plainly, with no "stop
+  // asking" — declining just carries on.
+  if (kind === "crisis" || kind === "objective") {
+    if (timerRunning(state, kind)) return;
+    const crisis = kind === "crisis";
+    const pick = await chooseModal(crisis ? "No crisis timer is running — start one now?" : "No objective is set — set one now?", [
+      { label: crisis ? "Yes — start a crisis timer" : "Yes — set an objective",
+        hint: crisis ? "Ch.9: always keep at least one running; it is the clock that makes the danger move" : "It is where solo karma comes from", value: "yes" },
+      { label: "Not now", value: "no" },
+    ]);
+    if (pick === "yes") await (crisis ? addTimer(state, mount) : addObjective(state, mount));
+    return;
+  }
   const isAlly = kind === "ally";
   if (isAlly ? (liveAllies(state).length || state.skipAllyPrompt) : (state.encounter || state.skipEncounterPrompt)) return;
   const pick = await chooseModal(isAlly ? "Is a group fighting or in danger alongside you?" : "Could enemies be around here that you haven't found yet?", [

@@ -576,7 +576,7 @@ const run = async () => {
     };
   });
   ok("step 4 offers the narrate-then-roll control", /what your hero just did/i.test(soloStuck.heading), soloStuck.heading);
-  ok("step 4 explains you never pick a timer yourself", /which checks that action triggers/i.test(soloStuck.why), soloStuck.why.slice(0, 60));
+  ok("step 4 explains that what the hero did rolls timers and starts any it needs", /decides the timers/i.test(soloStuck.why) && /asks whether to start it/i.test(soloStuck.why), soloStuck.why.slice(0, 80));
   ok("the encounter panel answers whether a timer is needed", soloStuck.hasNeedCheck);
   // Two cards must never front the same control: at step 4 the next-step card owns it.
   ok("the narrate-then-roll control is offered exactly once",
@@ -2983,7 +2983,7 @@ const run = async () => {
     moves.triggers.join(" || "));
   ok("the encounter panel says ordinary travel needs no timer", /Ordinary travel needs no encounter timer/.test(moves.encText));
   ok("the encounter panel explains how a fight starts", /When does a fight actually start\?/.test(moves.encText));
-  ok("the move list covers the eight things a solo hero does", moves.choices.length === 8, String(moves.choices.length));
+  ok("the move list covers the ten things a solo hero does", moves.choices.length === 10, String(moves.choices.length));
 
   const stepFlow = await page.evaluate(async () => {
     const wait = (ms) => new Promise((x) => setTimeout(x, ms));
@@ -4555,7 +4555,7 @@ const run = async () => {
       keys: rows.map((r) => r.dataset.timer),
       facts: rows.length === 4 && rows.every((r) => Array.from(r.querySelectorAll("dt")).map((d) => d.textContent).join("|") === "Start it|It rolls|It ends"),
       status: Object.fromEntries(rows.map((r) => [r.dataset.timer, r.querySelector(".tc-head .chip").textContent])),
-      pointer: !!Array.from(document.querySelectorAll("#solo-next button")).find((b) => b.textContent === "When do I start a timer?"),
+      pointer: /asks whether to start it/.test(document.querySelector("#solo-next .next-step-why")?.textContent || ""),
     };
     // The encounter row's start control opens the encounter start dialog.
     rows.find((r) => r.dataset.timer === "encounter")?.querySelector("button")?.click(); await wait(200);
@@ -4568,8 +4568,49 @@ const run = async () => {
   ok("solo: the timer chart covers all four timers in Ch.9 order", JSON.stringify(chart.keys) === JSON.stringify(["crisis", "objective", "ally", "encounter"]), JSON.stringify(chart));
   ok("solo: each timer says when it starts, when it rolls and when it ends", chart.facts, JSON.stringify(chart));
   ok("solo: the chart shows which timers are running", chart.status.crisis === "Running" && chart.status.ally === "Not running", JSON.stringify(chart));
-  ok("solo: the step-4 card points to when a timer starts", chart.pointer, JSON.stringify(chart));
+  ok("solo: the step-4 card says reporting an action is how timers start", chart.pointer, JSON.stringify(chart));
   ok("solo: a timer's start control opens its own start dialog", /encounter|enem|presence/i.test(chart.encounterDialog), JSON.stringify(chart));
+
+  // What the hero did decides when a timer starts: each move names any timer it needs that is not
+  // running, offers to start it before rolling, and two moves exist only to start one.
+  const didStart = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const { Settings } = await import("/src/settings.js");
+    if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    Settings.set("soloMode", true);
+    const before = localStorage.getItem("invincible:solo");
+    const board = { crisisLevel: 1, alert: "x", crises: [], timers: [], allies: [], objectives: [{ id: "o1", name: "Save them", status: "manageable", start: "manageable" }],
+      encounter: null, mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 };
+    localStorage.setItem("invincible:solo", JSON.stringify(board));
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    const ctl = () => Array.from(document.querySelectorAll("#screen button")).find((b) => /Say what your hero just did|Something happened/.test(b.textContent));
+    ctl()?.click(); await wait(150);
+    const choice = (re) => Array.from(document.querySelectorAll(".modal .choice")).find((c) => re.test(c.textContent));
+    const out = {
+      zoneHint: choice(/I moved to a new place/)?.textContent || "",
+      milestoneHint: choice(/Something moved my objective/)?.textContent || "",
+      goal: !!choice(/I set my hero a goal/), danger: !!choice(/A danger went off/),
+    };
+    // A move that rolls crisis timers with none running offers to start one first.
+    choice(/Time jumped/)?.click(); await wait(200);
+    out.crisisAsk = [...document.querySelectorAll(".modal")].pop()?.querySelector(".modal-title")?.textContent || "";
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.body.classList.remove("modal-open");
+    // The "danger" move goes straight to the new-timer dialog.
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    ctl()?.click(); await wait(150);
+    choice(/A danger went off/)?.click(); await wait(200);
+    out.dangerOpens = [...document.querySelectorAll(".modal")].pop()?.textContent || "";
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.body.classList.remove("modal-open");
+    if (before === null) localStorage.removeItem("invincible:solo"); else localStorage.setItem("invincible:solo", before);
+    return out;
+  });
+  ok("solo: a move names any timer it needs that is not running", /No encounter timer or crisis timer running/.test(didStart.zoneHint) && !/running — you'll be asked/.test(didStart.milestoneHint), JSON.stringify(didStart));
+  ok("solo: setting a goal and a new danger are moves that start a timer", didStart.goal && didStart.danger, JSON.stringify(didStart));
+  ok("solo: a move that rolls crisis timers with none running offers to start one", /No crisis timer is running/.test(didStart.crisisAsk), JSON.stringify(didStart));
+  ok("solo: reporting a new danger opens the crisis-timer dialog", /proximity|How close|timer/i.test(didStart.dangerOpens) && !/What did your hero just do/.test(didStart.dangerOpens), didStart.dangerOpens.slice(0, 120));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
