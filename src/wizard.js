@@ -10,6 +10,7 @@ import * as Store from "./store.js";
 import { PREGENS } from "../data-pregens.js";
 import { Settings } from "./settings.js";
 import { icon, iconFor } from "./icons.js";
+import { attributeHex, skyline } from "./art.js";
 
 const STEPS = [
   "Rank", "Archetype & Role", "Attributes", "Powers", "Power sources",
@@ -36,7 +37,11 @@ function render() {
   const budget = creationBudget(draft);
   host.append(
     el("div", { class: "wizard" },
-      el("p", { class: "stage-label", text: `Step ${step + 1} of ${STEPS.length} — ${STEPS[step]}` }),
+      // Each step opens on a full-bleed "origin" panel: the step number lettered big over the city.
+      el("div", { class: "origin-panel" },
+        el("span", { class: "origin-art", "aria-hidden": "true" }, skyline()),
+        el("span", { class: "origin-no", "aria-hidden": "true", text: String(step + 1) }),
+        el("p", { class: "stage-label", text: `Step ${step + 1} of ${STEPS.length} — ${STEPS[step]}` })),
       el("div", { class: "wizard-progress", role: "progressbar", "aria-valuemin": "1", "aria-valuemax": String(STEPS.length), "aria-valuenow": String(step + 1), "aria-label": "Creation progress" },
         el("span", { style: `width:${Math.round((100 * (step + 1)) / STEPS.length)}%` })),
       el("div", { class: "wizard-steps", role: "list" },
@@ -309,6 +314,9 @@ function stepAttributes(budget) {
   }
 
   const c = normalizeCharacter(draft);
+  // The shape of the hero as the points go in — the same hexagon the Hero tab shows.
+  wrap.append(el("div", { class: "attr-hex wizard-hex" }, attributeHex(draft.attributes, rank.attrMax,
+    D.ATTRIBUTES.map((a) => `${a.name} ${draft.attributes[a.key]}`).join(", "))));
   wrap.append(el("div", { class: "derived-preview" },
     el("span", { text: `Health ${maxHealth(c)}` }),
     el("span", { text: `Resolve ${maxResolve(c)}` }),

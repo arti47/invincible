@@ -18,6 +18,8 @@ export const TOGGLES = [
   { key: "familyFriendly", name: "Family-friendly critical injuries", desc: "Treats every critical injury result of 9 or higher as Cracked skull — an option offered by the rulebook." },
   { key: "manualDice", name: "Manual dice entry", desc: "Lets you type the faces you rolled with physical dice instead of rolling digitally." },
   { key: "noMotion", name: "Reduce motion", desc: "Turns off dice tumbles, comic sound-effect bursts and panel slide-ins." },
+  { key: "diceSound", name: "Dice sound", desc: "Plays a short dice clatter when a roll lands. Off by default; the sound is synthesised, no file is downloaded." },
+  { key: "haptics", name: "Vibrate on rolls", desc: "A short buzz when dice land, a longer one on a critical injury. Phones only; off by default." },
   { key: "advancedAutomation", name: "Advanced automation", desc: "Auto-applies fire intensity, ongoing conditions and per-scene flags during combat." },
 ];
 
@@ -34,8 +36,10 @@ export const Settings = {
   manualDice() { return this.enabled("manualDice"); },
   advancedAutomation() { return this.enabled("advancedAutomation"); },
   noMotion() { return this.enabled("noMotion"); },
+  diceSound() { return this.enabled("diceSound"); },
+  haptics() { return this.enabled("haptics"); },
 
-  // Theme: "system" (default) | "light" | "dark"
+  // Theme: "system" (default) | "light" | "dark" | "golden" (Golden Age sepia newsprint)
   theme() { return read("theme") || "system"; },
   setTheme(t) {
     write("theme", t);

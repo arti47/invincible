@@ -1,7 +1,7 @@
 // solo.js — Crisis Mode assistant (Ch.9): event checks, response engines, and the four timers.
 
 import { el, clear, uid, clamp, d6, d66, roll2d6, tableLookup, pickOne, STORAGE_PREFIX } from "./core.js";
-import { modal, showToast, promptModal, chooseModal, announce, helpPanel, confirmModal } from "./ui.js";
+import { modal, showToast, promptModal, chooseModal, announce, helpPanel, confirmModal, sfx } from "./ui.js";
 import * as S from "../data-solo.js";
 import { NPC_PROFILES } from "../data-npcs.js";
 import { ADVERSARIES } from "../data-monsters.js";
@@ -1352,12 +1352,13 @@ function joltCrisisEvent(state, mount) {
   setOracle(state, "Crisis event", ev.text,
     `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}. Added to Crises.`);
   save(state);
-  modal({ title: `Crisis event — ${ev.focus}`,
-    body: el("div", {},
+  const evBody = el("div", {},
       el("p", { class: "lede big", text: ev.detail }),
       el("p", { class: "muted small", text: `Focus D66 ${ev.focusRoll} · detail 2D6 + crisis level = ${ev.detailRoll} (${ev.band.label}). Crisis level is now ${state.crisisLevel}.` }),
       el("p", { class: "muted small", text: S.CRISIS_EVENT_ENGINE.note }),
-      el("p", { class: "small", text: "Added to Crises — engage it there to start a timer." })),
+      el("p", { class: "small", text: "Added to Crises — engage it there to start a timer." }));
+  sfx(evBody, "BOOM!", "krak");
+  modal({ title: `Crisis event — ${ev.focus}`, body: evBody,
     actions: [{ label: "OK", variant: "primary" }] });
   renderSolo(mount);
 }
@@ -1417,10 +1418,12 @@ function doEventCheck(state, mount) {
   offSequence(state, 1, "an event check");
   const r = rollEventCheck(state);
   save(state);
+  const checkBody = el("div", {}, el("p", { text: r.entry.text }), r.extra ? el("p", { class: "lede", text: r.extra }) : null,
+    r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null,
+    r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null);
+  if (r.value <= 4) sfx(checkBody, "BOOM!", "krak");
   modal({ title: `Event check — ${r.value}`,
-    body: el("div", {}, el("p", { text: r.entry.text }), r.extra ? el("p", { class: "lede", text: r.extra }) : null,
-      r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null,
-      r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null),
+    body: checkBody,
     // With nothing engaged yet, the next step is choosing a crisis: offer it here.
     actions: (state.crises || []).length && !(state.timers || []).length
       ? [{ label: "Later", value: false, variant: "ghost" }, { label: "Take on a crisis", value: true, variant: "primary" }]

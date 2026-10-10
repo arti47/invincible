@@ -2,7 +2,7 @@
 // Every demo runs on a disposable copy of TUTORIAL_HERO. Nothing here touches the player's
 // characters, and no demo roll is written to the shared roll log.
 
-import { el, clear, dieEl, d6, d66, roll2d6, pool, countSixes, countOnes, tableLookup } from "./core.js";
+import { el, clear, dieEl, d6, d66, roll2d6, pool, countSixes, countOnes, tableLookup, STORAGE_PREFIX } from "./core.js";
 import { showToast, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -27,6 +27,21 @@ export function exampleHero() {
 
 let activeTab = "basics";
 
+/* A star per chapter the player has marked read — a per-device convenience, never game state. */
+const DONE_KEY = `${STORAGE_PREFIX}learn-done`;
+function doneSet() { try { return new Set(JSON.parse(localStorage.getItem(DONE_KEY) || "[]")); } catch { return new Set(); } }
+function setDone(id, on) {
+  const s = doneSet(); on ? s.add(id) : s.delete(id);
+  try { localStorage.setItem(DONE_KEY, JSON.stringify([...s])); } catch { /* storage unavailable */ }
+}
+function starRow(tut) {
+  const done = doneSet();
+  const n = tut.chapters.length;
+  const got = tut.chapters.filter((_, i) => done.has(`${tut.key}:${i}`)).length;
+  return el("p", { class: "learn-stars", role: "img", "aria-label": `${got} of ${n} chapters read` },
+    ...tut.chapters.map((_, i) => el("span", { class: `star ${done.has(`${tut.key}:${i}`) ? "on" : ""}`, "aria-hidden": "true", text: "★" })));
+}
+
 /** Lets another screen deep-link a specific tutorial — the Solo screen points at the solo walkthrough. */
 export function setLearnTab(key) {
   if (TUTORIAL_INDEX.some((t) => t.key === key)) activeTab = key;
@@ -45,12 +60,13 @@ export function renderLearn(mount) {
       class: `chip selectable ${activeTab === t.key ? "selected" : ""}`, role: "tab", "aria-selected": activeTab === t.key ? "true" : "false",
       onclick: () => { activeTab = t.key; renderLearn(mount); },
     }, t.name))),
-    el("p", { class: "muted small", text: TUTORIAL_INDEX.find((t) => t.key === activeTab).desc })));
+    el("p", { class: "muted small", text: TUTORIAL_INDEX.find((t) => t.key === activeTab).desc }),
+    starRow(TUTORIAL_INDEX.find((t) => t.key === activeTab))));
 
   mount.append(heroCard(hero));
 
   const tut = TUTORIAL_INDEX.find((t) => t.key === activeTab);
-  tut.chapters.forEach((ch, i) => mount.append(chapterCard(ch, i === 0, hero, mount)));
+  tut.chapters.forEach((ch, i) => mount.append(chapterCard(ch, i === 0, hero, mount, `${tut.key}:${i}`)));
 
   if (activeTab === "walkthrough") {
     mount.append(el("section", { class: "card" },
@@ -114,8 +130,9 @@ function heroCard(hero) {
     el("p", { class: "stat-line", text: `Powers: ${hero.powers.map((p) => R.powerDisplayName(p)).join(", ")} · Talents: ${hero.talents.map((t) => t.name).join(", ")}` }));
 }
 
-function chapterCard(ch, open, hero, mount) {
-  const card = el("section", { class: "card" },
+function chapterCard(ch, open, hero, mount, id) {
+  const read = doneSet().has(id);
+  const card = el("section", { class: `card tut-chapter ${read ? "read" : ""}` },
     el("h3", { text: ch.title }),
     el("p", { class: "muted", text: ch.intro }));
   const list = el("ol", { class: "tutorial-steps" });
@@ -137,6 +154,10 @@ function chapterCard(ch, open, hero, mount) {
     list.append(li);
   }
   card.append(list);
+  card.append(el("div", { class: "row-actions" }, el("button", {
+    class: `btn tiny ${read ? "ghost" : ""}`, "aria-pressed": read ? "true" : "false",
+    onclick: () => { setDone(id, !read); renderLearn(mount); },
+  }, read ? "★ Read — mark unread" : "☆ Mark this chapter read")));
   return card;
 }
 
