@@ -2,7 +2,7 @@
 
 import { el, clear, clamp, uid, dieEl, STORAGE_PREFIX } from "./core.js";
 import { emblem, icon, iconFor, roleColour } from "./icons.js";
-import { attributeHex, heroFigure } from "./art.js";
+import { attributeHex, heroFigure, shatter } from "./art.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel, sfx } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -20,6 +20,10 @@ import { NPC_PROFILES } from "../data-npcs.js";
 export function renderResourceHeader(mount) {
   const c = Store.activeCharacter();
   clear(mount);
+  // The active hero's role tints the chrome (hero header band, HUD rule, cover) — rec 27.
+  const rootStyle = document.documentElement.style;
+  if (c?.identity?.role) { rootStyle.setProperty("--role", roleColour(c.identity.role)); document.documentElement.dataset.role = c.identity.role; }
+  else { rootStyle.removeProperty("--role"); delete document.documentElement.dataset.role; }
   if (!c) { mount.hidden = true; return; }
   mount.hidden = false;
   const s = Derived.summary(c);
@@ -190,8 +194,12 @@ function heroHead(c, s) {
     el("span", { class: "track-label", text: label }),
     el("span", { class: "track-boxes" }, ...Array.from({ length: max }, (_, i) => el("span", { class: `track-box ${i < value ? "on" : ""}` }))),
     el("span", { class: "track-value", text: `${value}/${max}` }));
+  // Cover-art header: the hero's sessions so far as an issue number, a role silhouette behind.
+  const issue = Journal.listSessions().filter((x) => x.characterId === c.id).length;
   return el("section", { class: `hero-head ${c.state.broken ? "is-broken" : ""} ${c.state.dying?.active ? "is-dying" : ""}` },
     el("span", { class: "head-figure", "aria-hidden": "true" }, heroFigure(roleColour(c.identity.role))),
+    el("span", { class: "head-issue", "aria-hidden": "true" }, el("small", { text: "No." }), el("strong", { text: String(Math.max(1, issue)) })),
+    c.state.broken ? el("span", { class: "head-shatter", "aria-hidden": "true" }, shatter()) : null,
     el("div", { class: "identity-head" },
       emblem(c.identity.heroName || c.identity.realName, c.identity.role, { portrait: c.identity.portraitUrl }),
       el("div", { style: "min-width:0;flex:1" },

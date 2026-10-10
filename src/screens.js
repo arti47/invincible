@@ -162,13 +162,27 @@ const glossTool = (g) => (/\(solo\)/i.test(g.term)
 /** In Crisis Mode the session controls live on the Solo screen, not Home. */
 const ruleTool = (id) => (RULE_TOOL_MAP[id] === "home" && Settings.soloMode() ? ["#/solo", "Run the session on the Solo screen"] : RULE_TOOLS[id]);
 
+/** Which chapter tab the rules library shows; survives re-renders in the session. */
+let rulesChapter = "All";
+
 export function renderRules(mount, anchor) {
   clear(mount);
   const search = el("input", { class: "input sticky-search", type: "search", placeholder: "Search the rules…", "aria-label": "Search the rules" });
   const results = el("div", { class: "rules-list" });
+  // A manual's chapter tabs: the chapters the library actually cites, in book order.
+  const chapters = [...new Set(D.RULES_LIBRARY.map((e) => e.chapter))].sort((a, b) => parseFloat(a.slice(3)) - parseFloat(b.slice(3)));
+  const tabRail = el("div", { class: "segmented chapter-rail", role: "radiogroup", "aria-label": "Show rules from a chapter" });
+  const drawRail = () => {
+    clear(tabRail);
+    for (const ch of ["All", ...chapters]) {
+      tabRail.append(el("button", { class: `chip selectable ${rulesChapter === ch ? "selected" : ""}`, role: "radio", "aria-checked": rulesChapter === ch ? "true" : "false",
+        onclick: () => { rulesChapter = ch; drawRail(); draw(); } }, ch === "All" ? "All chapters" : ch));
+    }
+  };
+  drawRail();
   const draw = () => {
     clear(results);
-    const entries = R.searchRules(search.value);
+    const entries = R.searchRules(search.value).filter((e) => rulesChapter === "All" || anchor === e.id || e.chapter === rulesChapter);
     if (!entries.length) results.append(el("p", { class: "muted", text: "Nothing matches." }));
     for (const e of entries) {
       results.append(el("details", { class: "rule-entry", id: `rule-${e.id}`, open: anchor === e.id },
@@ -216,7 +230,7 @@ export function renderRules(mount, anchor) {
       el("h3", { text: `Words you'll see (${D.GLOSSARY.length})` }),
       el("p", { class: "muted small", text: "Plain-English definitions of everything the app calls by name." }),
       glossary),
-    el("section", { class: "card" }, el("h3", { text: "The rules" }), results),
+    el("section", { class: "card manual" }, el("h3", { text: "The rules" }), tabRail, results),
     orphanedRules(),
     referenceTables());
 }
@@ -703,10 +717,10 @@ export function renderSettings(mount) {
   };
 
   const themeRow = el("div", { class: "segmented", role: "radiogroup", "aria-label": "Theme" });
-  for (const t of ["system", "light", "dark"]) {
+  for (const t of ["system", "light", "dark", "golden"]) {
     themeRow.append(el("button", { class: `chip selectable ${Settings.theme() === t ? "selected" : ""}`, role: "radio",
       "aria-checked": Settings.theme() === t ? "true" : "false",
-      onclick: () => { Settings.setTheme(t); renderSettings(mount); } }, t === "system" ? "Follow system" : t));
+      onclick: () => { Settings.setTheme(t); renderSettings(mount); } }, t === "system" ? "Follow system" : t === "golden" ? "Golden Age" : t));
   }
   group("Theme", themeRow);
 

@@ -6,6 +6,7 @@ import { initRouter, route } from "./router.js";
 import { renderResourceHeader } from "./sheet.js";
 import { showToast } from "./ui.js";
 import * as Store from "./store.js";
+import { installFeedback } from "./feedback.js";
 
 function boot() {
   applyTheme();
@@ -20,14 +21,15 @@ function boot() {
   const toggle = $("#theme-toggle");
   if (toggle) {
     toggle.addEventListener("click", () => {
-      const order = ["system", "light", "dark"];
+      const order = ["system", "light", "dark", "golden"];
       const next = order[(order.indexOf(Settings.theme()) + 1) % order.length];
       Settings.setTheme(next);
-      showToast(`Theme: ${next === "system" ? "follow system" : next}`);
+      showToast(`Theme: ${next === "system" ? "follow system" : next === "golden" ? "Golden Age" : next}`);
     });
   }
 
   document.addEventListener("settings-changed", () => applyTheme());
+  installFeedback();
   lockZoom();
   registerServiceWorker();
   window.__invincibleReady = true;

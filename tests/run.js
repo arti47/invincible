@@ -4753,6 +4753,169 @@ const run = async () => {
   ok("a journal session carries its issue number", /^#\d+$/.test(comic.issue), comic.issue);
   ok("no chrome control is drawn with a text glyph (✕ ✎ ▸ ▾)", comic.glyphs.length === 0, comic.glyphs.join(" | "));
 
+  // ---- comic-page art, round 2 (v90): feedback, transitions, themes and the remaining screens.
+  section("Comic-page art, round 2");
+  const r2 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Wizard = await import("/src/wizard.js");
+    const C = await import("/src/combat.js");
+    const Roller = await import("/src/roller.js");
+    const PA = await import("/src/power-automation.js");
+    const { D } = await import("/src/rules.js");
+    const { Settings } = await import("/src/settings.js");
+    const { roleColour } = await import("/src/icons.js");
+    const { NPC_PROFILES } = await import("/data-npcs.js");
+    const go = async (r) => { location.hash = "#/more"; await wait(60); location.hash = "#/" + r; await wait(300); };
+    const closeAll = async () => { for (let i = 0; i < 4; i++) { const b = document.querySelector(".modal-backdrop"); if (!b) break; document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); await wait(120); } document.querySelectorAll(".toast").forEach((t) => t.remove()); };
+    const out = {};
+    const wasSolo = Settings.soloMode(); const wasTheme = Settings.theme();
+    const before = Store.activeCharacterId();
+    const soloKey = "invincible:solo"; const soloBefore = localStorage.getItem(soloKey);
+    const saved = await Wizard.instantiatePregen(Wizard.listPregens()[0]); await wait(150);
+    await closeAll();
+    Settings.set("soloMode", false);
+
+    // Feedback toggles: present, off by default, and they act on a roll only when on.
+    await go("settings");
+    const names = Array.from(document.querySelectorAll('#screen [role="switch"]')).map((sw) => sw.closest("label, .toggle-row, .setting-row, div")?.textContent || "");
+    out.sw = { sound: names.some((t) => /Dice sound/.test(t)), haptics: names.some((t) => /Vibrate on rolls/.test(t)) };
+    out.defaultsOff = !Settings.enabled("diceSound") && !Settings.enabled("haptics");
+    let buzzes = 0, audio = 0;
+    const realVib = navigator.vibrate; const RealAC = window.AudioContext;
+    navigator.vibrate = () => { buzzes++; return true; };
+    window.AudioContext = function () { audio++; return { state: "running", currentTime: 0, sampleRate: 8000, destination: {},
+      createBuffer: () => ({ getChannelData: () => new Float32Array(10) }),
+      createBufferSource: () => ({ connect: (x) => x, start() {} }), createBiquadFilter: () => ({ frequency: {}, Q: {}, connect: (x) => x }),
+      createGain: () => ({ gain: {}, connect: (x) => x }), resume() {} }; };
+    const showDice = async () => { const r = Roller.rollRaw(3, "Feedback test", { log: false }); PA.showRollResult(saved, r); await wait(150); await closeAll(); };
+    await showDice();
+    out.offQuiet = buzzes === 0 && audio === 0;
+    Settings.set("haptics", true); Settings.set("diceSound", true);
+    await showDice();
+    out.onBuzz = buzzes > 0; out.onAudio = audio > 0;
+    Settings.set("haptics", false); Settings.set("diceSound", false);
+    navigator.vibrate = realVib; window.AudioContext = RealAC;
+
+    // Lettering: SIX! for spare 6s, PUSH! after a push.
+    const six = Roller.rollRaw(3, "Six test", { log: false }); six.dice = [6, 6, 2]; six.sixes = 2;
+    PA.showRollResult(saved, six); await wait(120);
+    out.six = document.querySelector(".modal .sfx")?.textContent || ""; await closeAll();
+    const pushed = Roller.rollRaw(3, "Push test", { log: false }); pushed.pushes = 1;
+    PA.showRollResult(saved, pushed); await wait(120);
+    out.push = document.querySelector(".modal .sfx")?.textContent || ""; await closeAll();
+
+    // Golden Age theme and the role accent.
+    Settings.setTheme("golden"); await wait(60);
+    out.golden = document.documentElement.getAttribute("data-theme");
+    out.goldenPaper = getComputedStyle(document.documentElement).getPropertyValue("--paper").trim();
+    Settings.setTheme(wasTheme);
+    await go("home");
+    out.role = document.documentElement.style.getPropertyValue("--role").trim();
+    out.roleWant = roleColour(saved.identity.role);
+
+    // Route transition: a wipe on a real route change, none under Reduce motion.
+    location.hash = "#/journal"; await wait(30);
+    out.wipe = !!document.querySelector(".page-wipe");
+    Settings.set("noMotion", true); document.body.classList.add("no-motion");
+    location.hash = "#/home"; await wait(30);
+    out.wipeOff = !document.querySelector(".page-wipe");
+    Settings.set("noMotion", false); document.body.classList.remove("no-motion");
+    await wait(900);
+
+    // Hero cover header: an issue box; shattered glass only when broken.
+    await go("sheet");
+    out.issueBox = !!document.querySelector("#screen .hero-head .head-issue");
+    out.shatterWhole = !!document.querySelector("#screen .hero-head .head-shatter");
+    Store.updateCharacter((c) => { c.state.health = 0; c.state.broken = true; }, { id: saved.id });
+    await go("sheet");
+    out.shatterBroken = !!document.querySelector("#screen .hero-head .head-shatter .art-shatter");
+    Store.updateCharacter((c) => { c.state.health = 5; c.state.broken = false; }, { id: saved.id });
+
+    // Altitude bands: four bands, every combatant named with its altitude in the label.
+    const cmb = C.startActionScene();
+    const foe = C.combatantFromProfile(NPC_PROFILES.find((p) => !p.minion)); foe.altitude = "elevated";
+    C.joinCombat(cmb, foe);
+    await go("combat");
+    const bands = document.querySelector("#screen .alt-bands");
+    out.bands = bands?.querySelectorAll(".alt-band").length;
+    out.bandLabel = bands?.getAttribute("aria-label") || "";
+    out.foeName = foe.name;
+    out.elevTok = !!bands?.querySelector(".band-elevated .alt-tok.adversary");
+    localStorage.removeItem("invincible:combat");
+
+    // Crisis clipping and the narration panel.
+    Settings.set("soloMode", true);
+    localStorage.setItem(soloKey, JSON.stringify({ crisisLevel: 2, alert: "x", alertParts: { kind: "City incident", headline: "Fire" }, crises: [{ id: "c1", source: "alert", text: "x", parts: { kind: "City incident", headline: "Fire", where: "Lab" } }],
+      timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [], eventChecks: 1, resolved: 0 }));
+    await go("solo");
+    const clip = document.querySelector("#screen #solo-crises .crisis-body");
+    out.extra = clip ? getComputedStyle(clip, "::before").content : "";
+    const why = document.querySelector("#screen #solo-next .next-step-why");
+    out.balloon = why ? parseFloat(getComputedStyle(why).borderTopLeftRadius) : 0;
+
+    // Rules: chapter tabs filter the library.
+    await go("rules");
+    const ch2 = Array.from(document.querySelectorAll("#screen .chapter-rail button")).find((b) => b.textContent === "Ch.2");
+    ch2?.click(); await wait(100);
+    const shown = Array.from(document.querySelectorAll("#screen .manual .rule-entry .muted")).map((x) => x.textContent.trim());
+    out.ch2 = shown.length > 0 && shown.every((t) => t === "Ch.2");
+    out.ch2Count = shown.length; out.ch2Want = D.RULES_LIBRARY.filter((e) => e.chapter === "Ch.2").length;
+    Array.from(document.querySelectorAll("#screen .chapter-rail button")).find((b) => b.textContent === "All chapters")?.click();
+
+    // Learn: a chapter marked read lights its star.
+    localStorage.removeItem("invincible:learn-done");
+    await go("learn");
+    const before0 = document.querySelector("#screen .learn-stars")?.getAttribute("aria-label");
+    Array.from(document.querySelectorAll("#screen button")).find((b) => /Mark this chapter read/.test(b.textContent))?.click(); await wait(150);
+    out.stars = [before0, document.querySelector("#screen .learn-stars")?.getAttribute("aria-label"), document.querySelectorAll("#screen .learn-stars .star.on").length];
+    out.panels = document.querySelectorAll("#screen .tutorial-steps > li").length;
+    localStorage.removeItem("invincible:learn-done");
+
+    // More tiles carry an issue number; the wizard opens on an origin panel and draws a live hexagon.
+    await go("more");
+    out.tiles = [document.querySelectorAll("#screen .more-tile").length, document.querySelectorAll("#screen .more-tile .tile-issue").length];
+    await go("create");
+    out.origin = !!document.querySelector("#screen .origin-panel .stage-label");
+    Array.from(document.querySelectorAll("#screen .wizard-step")).find((b) => /Attributes/.test(b.textContent))?.click(); await wait(150);
+    const hx = document.querySelector("#screen .wizard-hex .art-hex");
+    out.wizHex = hx?.getAttribute("aria-label") || "";
+
+    if (soloBefore === null) localStorage.removeItem(soloKey); else localStorage.setItem(soloKey, soloBefore);
+    Store.deleteCharacter(saved.id);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo);
+    location.hash = "#/home"; await wait(200);
+    return out;
+  });
+  ok("Settings offers Dice sound and Vibrate on rolls, both off by default", r2.sw.sound && r2.sw.haptics && r2.defaultsOff, JSON.stringify(r2.sw));
+  ok("dice landing are silent and still while the toggles are off", r2.offQuiet, JSON.stringify(r2));
+  ok("with the toggles on, dice landing buzz and clatter", r2.onBuzz && r2.onAudio, JSON.stringify(r2));
+  ok("spare 6s letter SIX!, a pushed roll letters PUSH!", r2.six === "SIX!" && r2.push === "PUSH!", `${r2.six} / ${r2.push}`);
+  ok("the Golden Age theme applies its own palette", r2.golden === "golden" && r2.goldenPaper && r2.goldenPaper !== "#f3ead3", `${r2.golden} ${r2.goldenPaper}`);
+  ok("the active hero's role colour drives the chrome accent", !!r2.role && r2.role.toLowerCase() === r2.roleWant.toLowerCase(), `${r2.role} vs ${r2.roleWant}`);
+  ok("changing route wipes the page, never under Reduce motion", r2.wipe && r2.wipeOff, JSON.stringify({ wipe: r2.wipe, off: r2.wipeOff }));
+  ok("the hero header carries an issue box; shattered glass only when broken", r2.issueBox && !r2.shatterWhole && r2.shatterBroken, JSON.stringify(r2));
+  ok("the Action board draws four altitude bands naming who is where", r2.bands === 4 && r2.bandLabel.includes(`Elevated — ${r2.foeName}`) && r2.elevTok, r2.bandLabel);
+  ok("a crisis reads as a newspaper clipping", /EXTRA!/.test(r2.extra), r2.extra);
+  ok("the step card's reason is a speech balloon", r2.balloon >= 12, String(r2.balloon));
+  ok("the rules library filters by chapter tab", r2.ch2 && r2.ch2Count === r2.ch2Want, JSON.stringify({ n: r2.ch2Count, want: r2.ch2Want }));
+  ok("a tutorial chapter marked read lights its star; steps are panels", /^0 of/.test(r2.stars[0] || "") && /^1 of/.test(r2.stars[1] || "") && r2.stars[2] === 1 && r2.panels > 3, JSON.stringify(r2.stars));
+  ok("every More tile carries an issue number", r2.tiles[0] > 3 && r2.tiles[0] === r2.tiles[1], JSON.stringify(r2.tiles));
+  ok("the wizard opens on an origin panel and draws the attributes live", r2.origin && /FIGHTING \d+/i.test(r2.wizHex), r2.wizHex);
+  {
+    const prevVp = page.viewportSize();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() => { location.hash = "#/more"; }); await page.waitForTimeout(80);
+    await page.evaluate(() => { location.hash = "#/home"; }); await page.waitForTimeout(400);
+    const spread = await page.evaluate(() => {
+      const m = document.querySelector("#screen.cols") || document.querySelector(".screen.cols");
+      return m ? [getComputedStyle(m, "::before").content, getComputedStyle(m, "::after").content] : null;
+    });
+    if (prevVp) await page.setViewportSize(prevVp);
+    ok("wide screens lay the column pages out as a two-page spread", !!spread && /2/.test(spread[0]) && /3/.test(spread[1]), JSON.stringify(spread));
+  }
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

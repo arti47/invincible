@@ -430,7 +430,7 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext
         : defence ? `Stopped — the ${defence.kind} cancelled it.` : "Miss." }));
     if (defence?.note) body.append(el("p", { class: "warn", text: defence.note }));
     // One burst, on the first draw only — re-drawing for a stunt toggle should not replay it.
-    if (!burstShown) { burstShown = true; sfx(body, effective ? "POW!" : defence ? "BLOCK!" : "WHIFF!", effective ? "" : "zap"); }
+    if (!burstShown) { burstShown = true; sfx(body, effective ? "POW!" : defence?.kind === "dodge" ? "WHOOSH!" : defence ? "BLOCK!" : "WHIFF!", effective ? "" : "zap"); }
 
     if (effective && available) {
       body.append(el("p", { class: "muted small", text: `${available} stunt${available === 1 ? "" : "s"} available — tap to apply.` }));
@@ -603,6 +603,8 @@ export function renderCombat(mount) {
       role: "listitem", "data-n": cb.card || "—", title: cb.name, style: `--f:${(i - fanMid).toFixed(1)}`,
     }, el("span", { class: "n", text: cb.card ? String(cb.card) : "—" }), el("span", { class: "who", text: cb.name })))));
 
+  mount.append(altitudeBands(combat));
+
   // A scene started from Home holds only the hero. Say so, and put the one fix first.
   if (!combat.combatants.some((cb) => cb.side === "adversary")) {
     mount.append(el("div", { class: "card next-step", id: "no-opponent" },
@@ -638,6 +640,25 @@ export function attackBlockedReason(combat, cb) {
   if (up && up.id !== cb.id) return `It is ${up.name}'s turn (card #${up.card || "—"}). Use Hold off to change the order.`;
   if (!up) return "Everyone has acted — draw the next round.";
   return null;
+}
+
+/**
+ * Who is where, as a cross-section: orbit at the top, ground at the bottom, one token per
+ * combatant in its band (side-coloured, initials). Labelled with the same facts as text.
+ */
+function altitudeBands(combat) {
+  const initials = (n) => n.replace(/\(.*?\)/g, "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const bands = D.ALTITUDES.slice().reverse();
+  const label = "Altitude: " + bands.map((a) => {
+    const who = combat.combatants.filter((cb) => (cb.altitude || "ground") === a.key);
+    return `${a.name} — ${who.length ? who.map((cb) => cb.name).join(", ") : "nobody"}`;
+  }).join("; ");
+  return el("div", { class: "alt-bands", role: "img", "aria-label": label },
+    ...bands.map((a) => el("div", { class: `alt-band band-${a.key}`, "aria-hidden": "true" },
+      el("span", { class: "alt-band-name" }, icon(ALT_ICONS[a.key] || "ground", { size: 14 }), a.name),
+      el("span", { class: "alt-band-who" },
+        ...combat.combatants.filter((cb) => (cb.altitude || "ground") === a.key).map((cb) =>
+          el("span", { class: `alt-tok ${cb.side} ${cb.health <= 0 ? "down" : ""}`, title: cb.name, text: initials(cb.name) || "?" }))))));
 }
 
 const ALT_ICONS = { ground: "ground", elevated: "building", sky: "cloud", orbit: "planet" };

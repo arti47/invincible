@@ -210,7 +210,9 @@ export function showRollResult(character, r, { damage = null, power = null, onPu
     r.sixes > 1 ? el("p", { class: "muted", text: `${r.sixes - 1} stunt${r.sixes - 1 === 1 ? "" : "s"} available.` }) : null,
     power ? el("p", { class: "cite" }, el("a", { href: "#/rules/powers", class: "rules-link" }, "Rules: Using powers")) : null);
 
-  if (r.sixes > 1) sfx(body, "POW!");
+  // Lettering, one burst per result: a push that landed, else spare 6s for stunts.
+  if (r.pushes) sfx(body, "PUSH!", "zap");
+  else if (r.sixes > 1) sfx(body, "SIX!");
   const pushCheck = Roller.canPush(character, r);
   // A control that silently disappears reads as a missing feature, not a rule. Say why.
   if (!pushCheck.ok && pushCheck.reason) {

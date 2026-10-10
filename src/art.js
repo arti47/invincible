@@ -143,3 +143,15 @@ export function sceneFor(route) {
   if (route === "solo") return radar(2);
   return skyline();
 }
+
+/** Shattered glass radiating from an impact point — laid over a broken hero's header. */
+export function shatter() {
+  const cx = 150, cy = 46;
+  const rays = [[0, -46], [60, -40], [130, 6], [80, 74], [10, 74], [-70, 74], [-150, 30], [-140, -30], [-60, -46]];
+  const lines = rays.map(([dx, dy]) => `M${cx} ${cy}L${cx + dx} ${cy + dy}`).join("");
+  const rings = [18, 38].map((r) => rays.map(([dx, dy], i) => {
+    const k = r / Math.hypot(dx, dy); const [nx, ny] = rays[(i + 1) % rays.length]; const k2 = r / Math.hypot(nx, ny);
+    return `M${(cx + dx * k).toFixed(1)} ${(cy + dy * k).toFixed(1)}L${(cx + nx * k2).toFixed(1)} ${(cy + ny * k2).toFixed(1)}`;
+  }).join("")).join("");
+  return wrap("shatter", `<svg viewBox="0 0 300 120" preserveAspectRatio="none"><path class="crack" d="${lines}${rings}"/><circle cx="${cx}" cy="${cy}" r="5" class="impact"/></svg>`);
+}
