@@ -4538,6 +4538,39 @@ const run = async () => {
   ok("any route link inside a dialog closes the dialog", xlinks.genericClosed, JSON.stringify(xlinks));
   ok("switching on Crisis Mode offers the Solo screen", /Solo screen/.test(xlinks.toastAction), JSON.stringify(xlinks));
 
+  // Timer chart: when each Ch.9 timer starts, rolls and ends, with live status and a start control.
+  const chart = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const { Settings } = await import("/src/settings.js");
+    if (!Store.activeCharacter()) { const c = Store.createCharacter({}); Store.setActiveCharacter(c.id); }
+    Settings.set("soloMode", true);
+    const before = localStorage.getItem("invincible:solo");
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 1, alert: "x", crises: [],
+      timers: [{ id: "t1", name: "Roof falls", proximity: "soon" }], allies: [], objectives: [], encounter: null,
+      mode: "alert", log: [], eventChecks: 1, awaitingSocial: false, lastOracle: null, place: null, resolved: 0 }));
+    location.hash = "#/home"; await wait(80); location.hash = "#/solo"; await wait(300);
+    const rows = Array.from(document.querySelectorAll("#solo-move .tc-row"));
+    const out = {
+      keys: rows.map((r) => r.dataset.timer),
+      facts: rows.length === 4 && rows.every((r) => Array.from(r.querySelectorAll("dt")).map((d) => d.textContent).join("|") === "Start it|It rolls|It ends"),
+      status: Object.fromEntries(rows.map((r) => [r.dataset.timer, r.querySelector(".tc-head .chip").textContent])),
+      pointer: !!Array.from(document.querySelectorAll("#solo-next button")).find((b) => b.textContent === "When do I start a timer?"),
+    };
+    // The encounter row's start control opens the encounter start dialog.
+    rows.find((r) => r.dataset.timer === "encounter")?.querySelector("button")?.click(); await wait(200);
+    out.encounterDialog = document.querySelector(".modal .modal-title")?.textContent || "";
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.body.classList.remove("modal-open");
+    if (before === null) localStorage.removeItem("invincible:solo"); else localStorage.setItem("invincible:solo", before);
+    return out;
+  });
+  ok("solo: the timer chart covers all four timers in Ch.9 order", JSON.stringify(chart.keys) === JSON.stringify(["crisis", "objective", "ally", "encounter"]), JSON.stringify(chart));
+  ok("solo: each timer says when it starts, when it rolls and when it ends", chart.facts, JSON.stringify(chart));
+  ok("solo: the chart shows which timers are running", chart.status.crisis === "Running" && chart.status.ally === "Not running", JSON.stringify(chart));
+  ok("solo: the step-4 card points to when a timer starts", chart.pointer, JSON.stringify(chart));
+  ok("solo: a timer's start control opens its own start dialog", /encounter|enem|presence/i.test(chart.encounterDialog), JSON.stringify(chart));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

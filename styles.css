@@ -1121,3 +1121,15 @@ summary { cursor: pointer; padding: .35rem 0; font-weight: 700; }
 .zone-divider { margin: 1.4rem 0 .4rem; padding-top: .8rem; border-top: 3px dashed var(--line); }
 .zone-divider h2 { margin: 0 0 .2rem; font-size: 1.2rem; }
 .play-bar h2 { font-size: 1.35rem; }
+
+/* Timer chart: when each Ch.9 timer starts, rolls and ends. */
+.timer-chart { display: grid; gap: 10px; margin-top: 8px; }
+@media (min-width: 900px) { .timer-chart { grid-template-columns: 1fr 1fr; } }
+.tc-row { border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--paper-2); min-width: 0; }
+.tc-row.on { border-color: var(--good); }
+.tc-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tc-head .chip { margin-left: auto; }
+.tc-ico { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; background: var(--ink); color: var(--paper); }
+.tc-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 8px 0; font-size: .92rem; }
+.tc-facts dt { font-weight: 700; white-space: nowrap; }
+.tc-facts dd { margin: 0; min-width: 0; }
