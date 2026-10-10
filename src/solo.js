@@ -381,6 +381,8 @@ function nextStepCard(state, mount) {
       i === 3 && state.encounter && state.encounter.phase && state.encounter.phase !== "moving"
         ? el("button", { class: "btn warn", onclick: () => focusCard(state, mount, "solo-encounter") }, "The encounter needs you — go to it") : null,
       i === 3 ? el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?") : null,
+      // Starting timers is the player's call at steps 3 and 4; the chart says when.
+      (i === 2 || i === 3) && state.alert ? el("button", { class: "btn ghost", onclick: () => focusCard(state, mount, "solo-move") }, "When do I start a timer?") : null,
       // How a crisis ends was only a header button; at the step where play happens, offer it here.
       i === 3 && state.alert ? el("button", { class: "btn ghost", title: "When the danger is dealt with in the fiction", onclick: () => resolveCrisis(state, mount) }, "Resolve crisis") : null,
       el("a", { class: "btn ghost", href: "#/learn", onclick: () => setLearnTab("solo") }, "New to solo play? Read the walkthrough")),
@@ -670,22 +672,56 @@ async function whatHappened(state, mount) {
 function whatHappenedCard(state, mount) {
   const duplicated = currentStep(state) === 3;
   return el("section", { class: "card", id: "solo-move" },
-    el("h3", { text: duplicated ? "Which timer fires when?" : "What did your hero just do?" }),
+    el("h3", { text: duplicated ? "When does each timer start, roll and end?" : "What did your hero just do?" }),
     duplicated
-      ? el("p", { class: "muted small", text: "Reference for the control above: this is what each timer reacts to." })
+      ? el("p", { class: "muted small", text: "You start a timer; the app rolls it. Start one when its line below matches your story, then just say what your hero does — the control above rolls whichever are running." })
       : el("p", { class: "muted small", text: "Each timer has its own trigger, and remembering which is the fiddliest part of solo play. Tell the app what happened and it rolls the right checks, in order, with the right modifiers." }),
     duplicated ? null : el("div", { class: "row-actions" },
       el("button", { class: "btn primary big", onclick: () => whatHappened(state, mount) }, "Something happened — roll it"),
       el("button", { class: "btn", onclick: () => openAttributeGuide() }, "Which attribute do I roll?")),
-    // When the card's own title already asks the question, its summary would print it twice.
-    el("details", { class: "help", open: duplicated }, el("summary", { class: duplicated ? "sr-only" : null, text: "Which timer fires when?" }),
-      el("div", { class: "tablewrap" },
-        el("table", { class: "data-table" },
-          el("tr", {}, el("th", { text: "Timer" }), el("th", { text: "Check it when" })),
-          el("tr", {}, el("td", { text: "Crisis" }), el("td", { text: "Time passes: between scenes, on a delay, changing location, or lingering. +1 die for anything lengthy, -1 for anything fast." })),
-          el("tr", {}, el("td", { text: "Objective" }), el("td", { text: "A milestone happens — something meaningful for or against the goal. Never on a clock." })),
-          el("tr", {}, el("td", { text: "Ally" }), el("td", { text: "The group faces a threat or tries something dangerous. Off-screen, at least once every few hours of game time." })),
-          el("tr", {}, el("td", { text: "Encounter" }), el("td", { text: "Only while exploring somewhere a fight could break out — once per zone you move through or linger in. Ordinary travel needs no timer at all." }))))));
+    duplicated ? null : el("h4", { class: "section", text: "When does each timer start, roll and end?" }),
+    timerChart(state, mount));
+}
+
+/**
+ * The four Ch.9 timers side by side: when to START each one (the player's call), when it ROLLS
+ * (the app's job, through the moves), and when it ENDS — with its live status and a start
+ * control. Starting is the question players kept asking; rolling was already automated.
+ */
+function timerChart(state, mount) {
+  const openObjectives = state.objectives.filter((o) => o.status !== "reached").length;
+  const rows = [
+    { key: "crisis", name: "Crisis timer", icon: "clock", running: state.timers.length,
+      start: "When you take on a crisis — Engage starts it. When one fires or is stopped, start the next: keep at least one running.",
+      roll: "Time passes: between scenes, on a delay, changing location, lingering, or doing something complex. +1 die for anything lengthy, −1 for anything fast.",
+      end: "It reaches Now: the bad thing happens and the crisis level rises by 1. Or you stop it in the story — find the bomb, cut the wire.",
+      add: () => addTimer(state, mount), label: "Start a crisis timer" },
+    { key: "objective", name: "Objective", icon: "target", running: openObjectives,
+      start: "When you take on a crisis: name the goal that would settle it. A more distant goal moves slower but pays more karma.",
+      roll: "A milestone — something meaningful happens for or against the goal. Never on a clock.",
+      end: "It is reached (the karma is paid when you head home), or it becomes impossible and you drop it.",
+      add: () => addObjective(state, mount), label: "Set an objective" },
+    { key: "ally", name: "Ally group", icon: "minions", running: liveAllies(state).length,
+      start: "When a group — police, a team, bystanders — is helping you or is in danger. One timer per group.",
+      roll: "The group faces a threat or tries something dangerous. Off-screen, at least once a session.",
+      end: "Each 1 costs them a step; at You are Alone nobody is left.",
+      add: () => addAllies(state, mount), label: "Add an ally group" },
+    { key: "encounter", name: "Encounter timer", icon: "map", running: state.encounter ? 1 : 0,
+      start: "When you explore a place where enemies may be: All clear with no warning, Confirmed if you know they are here, Closing or Near if they are converging.",
+      roll: "Each zone you move into, or a few minutes lingering in one. Ordinary travel needs no timer.",
+      end: "Encountered: you face them. Once that is avoided, escaped or resolved, reset it to fit the situation.",
+      add: state.encounter ? null : () => startEncounter(state, mount), label: "Start the encounter timer" },
+  ];
+  return el("div", { class: "timer-chart" }, ...rows.map((r) => el("div", { class: `tc-row ${r.running ? "on" : ""}`, "data-timer": r.key },
+    el("div", { class: "tc-head" },
+      el("span", { class: "tc-ico", "aria-hidden": "true" }, icon(r.icon, { size: 16 })),
+      el("strong", { text: r.name }),
+      el("span", { class: `chip ${r.running ? "good" : ""}`, text: r.running ? `Running${r.running > 1 ? ` (${r.running})` : ""}` : "Not running" })),
+    el("dl", { class: "tc-facts" },
+      el("dt", { text: "Start it" }), el("dd", { text: r.start }),
+      el("dt", { text: "It rolls" }), el("dd", { text: r.roll }),
+      el("dt", { text: "It ends" }), el("dd", { text: r.end })),
+    r.add ? el("button", { class: "btn tiny", onclick: r.add }, r.running ? `${r.label} (another)` : r.label) : null)));
 }
 
 /**
