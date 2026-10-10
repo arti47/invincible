@@ -44,7 +44,7 @@ export function modal({ title, body, actions = [], dismissible = true, size = ""
   const dialog = el("div", { class: `modal ${size}`, role: "dialog", "aria-modal": "true", "aria-label": title || "Dialog" },
     el("div", { class: "modal-head" },
       el("h2", { class: "modal-title", text: title || "" }),
-      dismissible ? el("button", { class: "icon-btn", "aria-label": "Close", onclick: () => close(null) }, "✕") : null),
+      dismissible ? el("button", { class: "icon-btn", "aria-label": "Close", onclick: () => close(null) }, icon("close", { size: 18 })) : null),
     bodyWrap, footer);
 
   for (const a of actions) {

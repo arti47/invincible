@@ -1,7 +1,8 @@
 // screens.js — home, rules library, compendium, roll log, settings & about.
 
 import { el, clear, dieFace, dieEl } from "./core.js";
-import { emblem, icon, iconFor } from "./icons.js";
+import { emblem, icon, iconFor, roleColour } from "./icons.js";
+import { skyline, heroFigure, headquarters } from "./art.js";
 import { modal, showToast, confirmModal, promptModal, chooseModal, announce, helpPanel } from "./ui.js";
 import * as R from "./rules.js";
 import { D } from "./rules.js";
@@ -11,7 +12,7 @@ import { Settings, TOGGLES, applyTheme } from "./settings.js";
 import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
 import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
 import { showNPC } from "./gm.js";
-import { soloStageCard } from "./solo.js";
+import { soloStageCard, crisisNow } from "./solo.js";
 import { buyBaseUpgrade } from "./sheet.js";
 import { NPC_RECIPE, NPC_HANDLING, CREATURE_NOTE } from "../data-npcs.js";
 import { ADVERSARY_NOTE } from "../data-monsters.js";
@@ -20,6 +21,34 @@ import * as Sync from "./sync.js";
 import * as Journal from "./journal.js";
 
 /* ---------------------------------------------------------------- home */
+
+/**
+ * Home's comic cover: the series lockup, the issue number (sessions played so far + this one),
+ * a price box carrying the live number that matters (crisis level in solo, karma otherwise),
+ * the active hero striking a pose over the skyline, and a "Previously…" balloon quoting the last
+ * thing written or closed in the journal. All of it is the player's own data; nothing is invented.
+ */
+function homeCover(c) {
+  const issue = Journal.listSessions().length + (Journal.openSession() ? 0 : 1);
+  const solo = Settings.soloMode();
+  const crisis = solo ? crisisNow() : null;
+  const last = Journal.entries({ characterId: c.id, kinds: ["note", "lifecycle"] })[0];
+  const name = c.identity.heroName || c.identity.realName || "Your hero";
+  const price = solo
+    ? el("span", { class: `cover-price ${crisis.phase.key}`, "aria-label": `Crisis level ${crisis.level}, ${crisis.phase.name}` },
+        el("small", { text: "Crisis" }), el("strong", { text: String(crisis.level) }))
+    : el("span", { class: "cover-price", "aria-label": `Karma ${c.state.karma}` }, el("small", { text: "Karma" }), el("strong", { text: String(c.state.karma) }));
+  const barcode = el("span", { class: "cover-barcode", "aria-hidden": "true" });
+  barcode.innerHTML = `<svg viewBox="0 0 60 30">${Array.from({ length: 22 }, (_, i) => `<rect x="${i * 2.7}" y="0" width="${(i * 7) % 3 === 0 ? 1.8 : 0.9}" height="24"/>`).join("")}<text x="30" y="29.5">${String(issue).padStart(4, "0")}</text></svg>`;
+  return el("section", { class: "cover span", "aria-label": `Issue ${issue} — ${name}` },
+    el("div", { class: "cover-art", "aria-hidden": "true" }, skyline(), el("span", { class: "cover-hero" }, heroFigure(roleColour(c.identity.role)))),
+    el("div", { class: "cover-top" },
+      el("span", { class: "cover-issue", text: `#${issue}` }),
+      price),
+    el("p", { class: "cover-title", text: name }),
+    last ? el("p", { class: "cover-balloon" }, el("strong", { text: "Previously… " }), el("span", { text: last.text.length > 140 ? `${last.text.slice(0, 137)}…` : last.text })) : null,
+    barcode);
+}
 
 export function renderHome(mount) {
   clear(mount);
@@ -30,6 +59,7 @@ export function renderHome(mount) {
   // One spine, not two. A solo player was being told to run the group lifecycle ("Start session"
   // -> "Start action scene") while the engine that actually generates their game sat on another
   // tab. When Crisis Mode is on, the solo thread is the thread.
+  if (c) mount.append(homeCover(c));
   if (chars.length) mount.append(Settings.soloMode() ? soloStageCard() : stageCard());
 
   // With an empty roster, learning the game comes before building a hero for it.
@@ -73,6 +103,7 @@ export function renderHome(mount) {
   if (team) {
     mount.append(el("section", { class: "card team-card" },
       el("h3", { class: "with-ico" }, el("span", { class: "head-ico", "aria-hidden": "true" }, icon("building", { size: 18 })), team.name || "Your team"),
+      el("div", { class: "team-art" }, headquarters()),
       team.purpose ? el("p", { text: team.purpose }) : null,
       el("p", { class: "muted small", text: `${team.base?.location || "No base yet"} — ${(team.base?.upgrades || []).map((u) => u.name).join(", ") || "no upgrades"}` }),
       el("div", { class: "row-actions" },
@@ -309,7 +340,7 @@ export function renderCompendium(mount) {
         list.append(el("button", { class: "npc-row", "data-group": n.group, onclick: () => showNPC(n) },
           el("span", { class: "npc-avatar" }, icon(iconFor(n.group) || "npcs", { size: 22 })),
           el("div", { class: "npc-main" }, el("strong", { text: n.name }), el("p", { class: "muted small", text: n.desc || n.descriptor || "" })),
-          el("span", { class: "tap-hint", text: "▸" })));
+          el("span", { class: "tap-hint", "aria-hidden": "true" }, icon("chevron", { size: 14 }))));
       }
     }
   };
@@ -432,6 +463,16 @@ function journalHeader(mount, chars, scope, open) {
 const sessionIsOpen = (id) =>
   journalView.openSessions === "all" || (journalView.openSessions && journalView.openSessions.has(id));
 
+/** A session heads its pages like a comic cover corner: issue number over the date it began. */
+function issueBadge(session) {
+  const all = Journal.listSessions();
+  const n = all.length - all.findIndex((x) => x.id === session.id);
+  const d = new Date(session.startedAt);
+  return el("span", { class: "issue-badge", "aria-hidden": "true" },
+    el("span", { class: "issue-no", text: `#${n}` }),
+    el("span", { class: "issue-date", text: d.toLocaleDateString([], { month: "short", day: "numeric" }) }));
+}
+
 function sessionCard(g, mount, openSession) {
   const id = g.session?.id || "__loose";
   const isCurrent = openSession && g.session?.id === openSession.id;
@@ -445,7 +486,8 @@ function sessionCard(g, mount, openSession) {
       else journalView.openSessions.add(id);
       renderJournal(mount);
     } },
-    el("span", { class: "session-caret", "aria-hidden": "true", text: expanded ? "▾" : "▸" }),
+    el("span", { class: `session-caret ${expanded ? "open" : ""}`, "aria-hidden": "true" }, icon("chevron", { size: 16 })),
+    g.session ? issueBadge(g.session) : null,
     el("span", {}, el("strong", { text: g.title }),
       el("span", { class: "muted small", text: ` · ${g.entries.length} entr${g.entries.length === 1 ? "y" : "ies"}${isCurrent ? " · open" : ""}` })));
   // The disclosure pattern: the button lives INSIDE a heading, so a screen-reader user can jump
@@ -489,9 +531,9 @@ function burstRow(burst, mount) {
   const body = el("div", { class: "jr-burst-detail", hidden: true });
   const head = el("button", { class: "jr-burst-head", onclick: () => {
     body.hidden = !body.hidden;
-    head.querySelector(".session-caret").textContent = body.hidden ? "▸" : "▾";
+    head.querySelector(".session-caret").classList.toggle("open", !body.hidden);
   } },
-    el("span", { class: "session-caret", "aria-hidden": "true", text: "▸" }),
+    el("span", { class: "session-caret", "aria-hidden": "true" }, icon("chevron", { size: 16 })),
     el("span", { class: "jr-when", text: new Date(burst.from).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }),
     el("span", { text: Journal.burstSummary(burst) }));
   for (const e of burst.entries) body.append(entryRow(e, mount, { compact: true }));

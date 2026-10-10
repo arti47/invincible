@@ -15,6 +15,7 @@ import { openAttributeGuide, askAttributeScore, openKarma } from "./sheet.js";
 import * as Combat from "./combat.js";
 
 import { icon } from "./icons.js";
+import { crisisDial, bomb, road, squad, radar } from "./art.js";
 
 /** append, skipping the null/false children a conditional leaves behind (DOM append prints "null"). */
 const put = (node, ...kids) => node.append(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
@@ -92,6 +93,12 @@ export function inSession(state) {
     || !!state.awaitingSocial
     || (state.resolved || 0) > 0
     || (state.eventChecks || 0) > 0;
+}
+
+/** The crisis level and phase for other screens' dressing (Home's cover price box). */
+export function crisisNow() {
+  const state = load();
+  return { level: state.crisisLevel || 0, phase: phaseFor(state.crisisLevel || 0), live: !!state.alert };
 }
 
 export function soloStageCard() {
@@ -183,10 +190,9 @@ function stepNow(state) {
   return el("p", { class: "solo-current-text", "aria-hidden": "true", text: `${cur + 1}. ${S.SOLO_SETUP.loop[cur]}` });
 }
 
-/** The crisis level as a gauge: eleven cells, coloured by the phase each one belongs to. */
+/** The crisis level as a dial: the three Ch.9 phase bands and a needle on the level. */
 function crisisGauge(level) {
-  return el("span", { class: "crisis-gauge", role: "img", "aria-label": `Crisis level ${level} of 10` },
-    ...Array.from({ length: 11 }, (_, i) => el("span", { class: `${phaseFor(i).key} ${i <= level ? "on" : ""} ${i === level ? "cur" : ""}` })));
+  return el("span", { class: "crisis-gauge" }, crisisDial(level, `Crisis level ${level} of 10`));
 }
 
 /** Oracles live in a drawer: one tap away from anywhere on the tab, never in the way. */
@@ -790,6 +796,7 @@ export function renderSolo(mount) {
   const state = load();
   clear(mount);
   const phase = phaseFor(state.crisisLevel);
+  document.body.dataset.crisis = state.alert ? phase.key : "";
 
   const step = currentStep(state);
   // The step card above owns the one highlighted action; the header repeats the loop's
@@ -1561,13 +1568,14 @@ async function generateAlert(state, mount) {
  * about which way is bad or how much road is left, so each row shows a ladder of pips, the dice it
  * rolls right now, and one plain sentence saying what happens next.
  */
-function timerRow({ name, ladder, index, diceLabel, meaning, tone, note, actions }) {
+function timerRow({ name, ladder, index, diceLabel, meaning, tone, note, actions, art = null }) {
   const steps = ladder.length - 1;                       // the last rung is the outcome, not a step
   const left = steps - index;
   const pips = el("span", { class: `pips ${tone}`, "aria-hidden": "true" });
   ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= index ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
   return el("div", { class: `timer ${tone}` },
-    el("span", { class: "clock", "aria-hidden": "true", style: `--p:${steps ? Math.round((100 * index) / steps) : 100};--seg:${Math.max(1, steps)}` }),
+    art ? el("span", { class: "timer-art", "aria-hidden": "true" }, art)
+      : el("span", { class: "clock", "aria-hidden": "true", style: `--p:${steps ? Math.round((100 * index) / steps) : 100};--seg:${Math.max(1, steps)}` }),
     el("div", { class: "timer-main" },
       el("strong", { class: "timer-name", text: name }),
       el("div", { class: "timer-track" }, pips,
@@ -1593,6 +1601,7 @@ function timersCard(state, mount) {
     put(card, timerRow({
       name: t.name,
       ladder, index: idx, tone: left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
+      art: bomb(left, ladder.length - 1),
       diceLabel: `roll ${count(ladder[idx].dice, "die", "dice")}`,
       meaning: left === 0
         ? "It is happening now. Deal with the consequences, then start another timer."
@@ -1751,6 +1760,7 @@ function objectivesCard(state, mount) {
     put(card, timerRow({
       name: o.name,
       ladder, index: idx, tone: left === 0 ? "t-done" : "t-good",
+      art: road(idx, ladder.length - 1),
       diceLabel: left === 0 ? `worth ${o.karma} karma` : `roll ${count(dice, "die", "dice")}${pen ? ` (${pen} for ${phase.name.toLowerCase()})` : ""}`,
       meaning: left === 0
         ? `Reached. Claim ${count(o.karma, "karma point")} — it pays what the objective was worth when you set it.`
@@ -1881,6 +1891,7 @@ function alliesCard(state, mount) {
     put(card, timerRow({
       name: a.name,
       ladder, index: idx, tone: gone ? "t-gone" : left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool",
+      art: squad(left, ladder.length - 1),
       diceLabel: gone ? "nobody left" : `roll ${count(ladder[idx].dice, "die", "dice")}`,
       meaning: gone
         ? "There is nobody left to roll for. You finish this alone."
@@ -2154,8 +2165,9 @@ function encounterCard(state, mount) {
     const left = ladder.length - 1 - idx;
     const pips = el("span", { class: `pips ${left <= 1 ? "t-hot" : left <= 2 ? "t-warm" : "t-cool"}`, "aria-hidden": "true" });
     ladder.forEach((_, i) => pips.append(el("span", { class: `pip ${i <= idx ? "on" : ""} ${i === ladder.length - 1 ? "end" : ""}` })));
-    put(card, el("div", { class: "timer-track" }, pips,
-      el("span", { class: "timer-status", text: `${rung.name}${rung.dice ? ` · roll ${count(dice, "die", "dice")}` : ""}` })));
+    put(card, el("div", { class: "enc-radar" }, el("span", { class: "timer-art", "aria-hidden": "true" }, radar(idx)),
+      el("div", { class: "timer-track" }, pips,
+        el("span", { class: "timer-status", text: `${rung.name}${rung.dice ? ` · roll ${count(dice, "die", "dice")}` : ""}` }))));
     put(card, el("p", { class: "timer-meaning", text: left === 0
       ? "Something is here. Work through the steps below."
       : `${count(left, "step")} from running into somebody. Every 6 brings them one step closer.` }));
