@@ -4612,6 +4612,38 @@ const run = async () => {
   ok("solo: a move that rolls crisis timers with none running offers to start one", /No crisis timer is running/.test(didStart.crisisAsk), JSON.stringify(didStart));
   ok("solo: reporting a new danger opens the crisis-timer dialog", /proximity|How close|timer/i.test(didStart.dangerOpens) && !/What did your hero just do/.test(didStart.dangerOpens), didStart.dangerOpens.slice(0, 120));
 
+  // Cross-links, third pass: a new hero hands over to play, glossary words lead to the screen that
+  // runs them, and a stressed-out solo hero on the sheet is pointed at the rally the sheet lacks.
+  const xl3 = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Wizard = await import("/src/wizard.js");
+    const { Settings } = await import("/src/settings.js");
+    const out = {};
+    Settings.set("soloMode", true);
+    location.hash = "#/home"; await wait(80); location.hash = "#/rules"; await wait(300);
+    const gl = (term) => Array.from(document.querySelectorAll("#glossary .gloss-entry")).find((d) => d.querySelector("strong")?.textContent === term);
+    out.timerTool = gl("Timer (solo)")?.querySelector(".tool-link")?.getAttribute("href");
+    out.karmaTool = gl("Karma")?.querySelector(".tool-link")?.getAttribute("href");
+    // A published hero lands on the sheet with a way to start playing.
+    const before = Store.activeCharacterId();
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    const saved = await Wizard.instantiatePregen(Wizard.listPregens()[0]); await wait(200);
+    out.pregenAction = Array.from(document.querySelectorAll(".toast .toast-action")).map((b) => b.textContent).pop() || "";
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    // Stressed out in Crisis Mode: the sheet points at the memory rally.
+    Store.updateCharacter((ch) => { ch.state.resolve = 0; }, { id: saved.id });
+    location.hash = "#/home"; await wait(80); location.hash = "#/sheet"; await wait(300);
+    out.rallyLink = !!Array.from(document.querySelectorAll('#screen a[href="#/solo"]')).find((a) => /Rally on a memory/.test(a.textContent));
+    Store.deleteCharacter(saved.id);
+    if (before) Store.setActiveCharacter(before);
+    return out;
+  });
+  ok("glossary: a solo word links to the Solo screen", xl3.timerTool === "#/solo", JSON.stringify(xl3));
+  ok("glossary: a rules word links to the screen that runs it", xl3.karmaTool === "#/sheet", JSON.stringify(xl3));
+  ok("a new or published hero offers a way to start playing", /Start playing/.test(xl3.pregenAction), JSON.stringify(xl3));
+  ok("a stressed-out solo hero's sheet links to the memory rally", xl3.rallyLink, JSON.stringify(xl3));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)

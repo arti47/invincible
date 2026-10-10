@@ -254,6 +254,8 @@ function vitalsCard(c, s) {
       el("button", { class: "btn", onclick: () => promptStress() }, "Take stress"),
       c.state.broken ? el("button", { class: "btn primary", onclick: () => doRally(c) }, "Rally") : null,
       c.state.dying?.active ? el("button", { class: "btn danger", onclick: () => doStabilise(c) }, "Stabilise") : null,
+      // Ch.9: stressed out in solo play, you may rally "aided" by a memory — that roll lives on the Solo screen.
+      Settings.soloMode() && c.state.resolve <= 0 ? el("a", { class: "btn", href: "#/solo" }, "Rally on a memory — Solo screen") : null,
       el("button", { class: "btn ghost", onclick: () => openRecovery(c) }, "Rest & recover")),
     critList.length ? el("div", { class: "crits" }, el("h4", { text: "Critical injuries" }),
       ...critList.map((x) => el("div", { class: "crit-row" },

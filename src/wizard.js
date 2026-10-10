@@ -759,8 +759,15 @@ async function finish() {
   Store.setActiveCharacter(saved.id);
   draft = null;
   announce(`${saved.identity.heroName || "Your hero"} created.`);
-  showToast(`${saved.identity.heroName || "Hero"} created.`, { variant: "good" });
+  showToast(`${saved.identity.heroName || "Hero"} created.`, { variant: "good", timeout: 7000, action: playAction() });
   location.hash = "#/sheet";
+}
+
+/** The step after making a hero is playing one: Crisis Mode's loop, or the session controls on Home. */
+function playAction() {
+  return Settings.soloMode()
+    ? { label: "Start playing — Solo screen", onClick: () => { location.hash = "#/solo"; } }
+    : { label: "Start playing — session on Home", onClick: () => { location.hash = "#/home"; } };
 }
 
 /* ---------------------------------------------------------------- pregens */
@@ -803,7 +810,7 @@ export async function instantiatePregen(p) {
   const c = pregenToCharacter(p);
   const saved = Store.saveCharacter(c);
   Store.setActiveCharacter(saved.id);
-  showToast(`${p.name} added as a playable hero (published stat block).`, { variant: "good" });
+  showToast(`${p.name} added as a playable hero (published stat block).`, { variant: "good", timeout: 7000, action: playAction() });
   location.hash = "#/sheet";
   return saved;
 }
