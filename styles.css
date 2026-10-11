@@ -1349,14 +1349,6 @@ body.no-motion .npc-row[data-group]:hover { transform: none; }
 .hero-head { border-top: 8px solid var(--role, var(--accent)); }
 .cover { border-top: 8px solid var(--role, #121018); }
 
-/* Route transition: a diagonal halftone band wipes across, then the panels slide in (rec 4). */
-.page-wipe { position: fixed; inset: 0; z-index: 60; pointer-events: none;
-  background: linear-gradient(105deg, transparent 0 30%, var(--accent) 30% 46%, var(--line) 46% 49%, transparent 49%);
-  background-size: 250% 100%; animation: page-wipe .42s ease-in both; }
-@keyframes page-wipe { from { background-position: 100% 0; } to { background-position: -40% 0; } }
-body.no-motion .page-wipe { display: none; }
-@media (prefers-reduced-motion: reduce) { .page-wipe { display: none; } }
-
 /* Hero tab cover-art header (rec 11): issue box, title lettering; shattered glass when broken (rec 12). */
 .head-issue { position: absolute; top: -.2rem; right: 3rem; z-index: 2; display: grid; place-items: center; min-width: 2.6rem; padding: .15rem .35rem;
   background: var(--paper-2); color: var(--ink); border: 2px solid var(--line); box-shadow: 2px 2px 0 var(--shadow-c); rotate: 4deg; }

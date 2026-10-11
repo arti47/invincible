@@ -4814,14 +4814,10 @@ const run = async () => {
     out.role = document.documentElement.style.getPropertyValue("--role").trim();
     out.roleWant = roleColour(saved.identity.role);
 
-    // Route transition: a wipe on a real route change, none under Reduce motion.
+    // The page-flip wipe was removed at the owner's request (v91): a route change draws no overlay.
     location.hash = "#/journal"; await wait(30);
-    out.wipe = !!document.querySelector(".page-wipe");
-    Settings.set("noMotion", true); document.body.classList.add("no-motion");
-    location.hash = "#/home"; await wait(30);
-    out.wipeOff = !document.querySelector(".page-wipe");
-    Settings.set("noMotion", false); document.body.classList.remove("no-motion");
-    await wait(900);
+    out.noWipe = !document.querySelector(".page-wipe") && !Array.from(document.body.children).some((n) => getComputedStyle(n).position === "fixed" && /wipe/.test(n.className));
+    location.hash = "#/home"; await wait(200);
 
     // Hero cover header: an issue box; shattered glass only when broken.
     await go("sheet");
@@ -4894,7 +4890,7 @@ const run = async () => {
   ok("spare 6s letter SIX!, a pushed roll letters PUSH!", r2.six === "SIX!" && r2.push === "PUSH!", `${r2.six} / ${r2.push}`);
   ok("the Golden Age theme applies its own palette", r2.golden === "golden" && r2.goldenPaper && r2.goldenPaper !== "#f3ead3", `${r2.golden} ${r2.goldenPaper}`);
   ok("the active hero's role colour drives the chrome accent", !!r2.role && r2.role.toLowerCase() === r2.roleWant.toLowerCase(), `${r2.role} vs ${r2.roleWant}`);
-  ok("changing route wipes the page, never under Reduce motion", r2.wipe && r2.wipeOff, JSON.stringify({ wipe: r2.wipe, off: r2.wipeOff }));
+  ok("changing route draws no page-flip overlay", r2.noWipe, String(r2.noWipe));
   ok("the hero header carries an issue box; shattered glass only when broken", r2.issueBox && !r2.shatterWhole && r2.shatterBroken, JSON.stringify(r2));
   ok("the Action board draws four altitude bands naming who is where", r2.bands === 4 && r2.bandLabel.includes(`Elevated — ${r2.foeName}`) && r2.elevTok, r2.bandLabel);
   ok("a crisis reads as a newspaper clipping", /EXTRA!/.test(r2.extra), r2.extra);

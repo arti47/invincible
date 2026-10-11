@@ -81,25 +81,10 @@ export function route() {
   const header = $("#resource-header");
   if (header) Sheet.renderResourceHeader(header);
   decorate(mount, def);
-  if (document.body.dataset.route && document.body.dataset.route !== def.path) pageWipe();
   document.body.dataset.route = def.path;
   updateNavState(def.path);
   updateFab();
   document.title = `${def.label} · Invincible Player`;
-}
-
-/**
- * A panel wipe between screens — a halftone band sweeping across, like turning to the next panel.
- * Only when the route changes (never on a re-render), and never under Reduce motion.
- */
-function pageWipe() {
-  document.querySelector(".page-wipe")?.remove();
-  if (document.body.classList.contains("no-motion")) return;
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  const w = el("span", { class: "page-wipe", "aria-hidden": "true" });
-  w.addEventListener("animationend", () => w.remove());
-  setTimeout(() => w.remove(), 900);
-  document.body.append(w);
 }
 
 /**
