@@ -252,8 +252,8 @@ export function howToPlay() {
          "Make an event check, then engage one of the crises it turns up. Engaging starts a crisis timer, which is the clock that makes things get worse while you are busy."]
       : ["Press Start session. That closes karma spending and opens the record.",
          "Then start an action scene when trouble arrives, or just play out a social scene first."],
-    el("button", { class: "btn tiny primary", onclick: () => { location.hash = solo ? "#/solo" : "#/home"; if (!solo) openLifecycle("start"); } },
-      solo ? "Go to the Solo screen" : "Start session")));
+    el("button", { class: "btn tiny primary", onclick: () => { location.hash = solo ? "#/story" : "#/home"; if (!solo) openLifecycle("start"); } },
+      solo ? "Go to the story" : "Start session")));
 
   body.append(beat(2, "Keeping it going",
     solo
@@ -486,7 +486,7 @@ function showAttack(attacker, target, kind, roll, defence, combat, mount, upNext
       return true;
     } });
   }
-  modal({ title: `${attacker.name} → ${target.name}`, body, actions }).promise.then(() => {
+  modal({ title: `${attacker.name} → ${target.name}`, body, actions, beat: true }).promise.then(() => {
     if (effective && !applied) {
       showToast(`No damage applied — ${target.name} is untouched. Use Damage on their card if that was a mistake.`,
         { variant: "warn", timeout: 7000 });
@@ -520,17 +520,19 @@ export function syncHeroCombatants(combat) {
 /** Damage lands on the board: minions drop one per point, heroes route through the crit engine. */
 export function applyAttackDamage(target, amount, combat, stunts = []) {
   const after = Math.max(0, amount - (target.armor || 0));
+  // Every blow that lands is also a line in the record — the story screen reads the fight from it.
+  const say = (text, opts) => { showToast(text, opts); Journal.record({ kind: "state", text }); };
   if (target.minionCount > 0) {
     target.health = Math.max(0, target.health - after);
-    showToast(`${after} minion(s) down. ${target.health} remain.`, { variant: "good" });
+    say(`${after} minion(s) down. ${target.health} remain.`, { variant: "good" });
   } else if (target.refId) {
     Store.updateCharacter((ch) => { Roller.applyDamage(ch, amount, { armor: target.armor }); }, { id: target.refId });
     const updated = Store.getCharacter(target.refId);
     target.health = updated.state.health;
-    showToast(`${target.name} takes ${after}${updated.state.broken ? " — BROKEN" : ""}.`, { variant: updated.state.broken ? "danger" : "" });
+    say(`${target.name} takes ${after}${updated.state.broken ? " — BROKEN" : ""}.`, { variant: updated.state.broken ? "danger" : "" });
   } else {
     target.health = Math.max(0, target.health - after);
-    showToast(target.health === 0
+    say(target.health === 0
       ? `${target.name} is broken — knocked out or killed, as fits the moment.`
       : `${target.name} takes ${after} damage.`, { variant: target.health === 0 ? "danger" : "good", timeout: 5000 });
   }
@@ -557,7 +559,7 @@ export function renderCombat(mount) {
       el("p", { text: "Start a scene to draw initiative, track combatants and apply damage." }),
       el("button", { class: "btn primary", onclick: () => { startActionScene(); renderCombat(mount); } }, "Start action scene"),
       // In Crisis Mode a fight is one beat of the solo loop; the way back must be on this screen.
-      Settings.soloMode() ? el("a", { class: "btn ghost", href: "#/solo" }, "Back to Crisis Mode") : null,
+      Settings.soloMode() ? el("a", { class: "btn ghost", href: "#/story" }, "Back to the story") : null,
       // Between scenes, not next steps: these close stages you have already played.
       el("p", { class: "stage-label", text: "Between scenes" }),
       el("div", { class: "row-actions" },
@@ -584,15 +586,7 @@ export function renderCombat(mount) {
       el("button", { class: "btn ghost", onclick: () => openWreck(combat, mount) }, "Wreck a zone"),
       el("button", { class: roundDone ? "btn primary" : "btn", onclick: () => advanceRound(combat, mount) }, "Next round"),
       // One confirmation, not two: the bundle dialog already lists what ending does and is undoable.
-      el("button", { class: "btn danger", onclick: async () => {
-        if (!(await openLifecycle("action"))) return;
-        Store.clearCombat();
-        if (Settings.soloMode()) {
-          // A fight is one beat of the solo loop: go straight back, and say what to tell the app.
-          showToast("Scene over. Next: “Say what your hero just did” → “A fight or a long scene ended” rolls the timers.", { timeout: 9000 });
-          location.hash = "#/solo";
-        } else renderCombat(mount);
-      } }, "End scene"))));
+      el("button", { class: "btn danger", onclick: () => endFight(mount) }, "End scene"))));
 
   // The initiative order at a glance: one playing card per combatant, the one acting lifted out.
   // Laid out as a fanned hand: each card tilts by its place in the order.
@@ -617,7 +611,7 @@ export function renderCombat(mount) {
   for (const cb of combat.combatants) list.append(combatantCard(cb, combat, mount, cb === up));
   mount.append(list);
 
-  if (Settings.soloMode()) mount.append(el("p", { class: "small" }, el("a", { href: "#/solo" }, "← Back to Crisis Mode"), " — the crisis timers keep their place while you fight."));
+  if (Settings.soloMode()) mount.append(el("p", { class: "small" }, el("a", { href: "#/story" }, "← Back to the story"), " — the crisis timers keep their place while you fight."));
   if (combat.wreckedZones.length) {
     mount.append(el("p", { class: "warn small", text: `Wrecked zones this scene: ${combat.wreckedZones.join(", ")} — wrecking costs bad karma at the end of the session.` }));
   }
@@ -851,6 +845,27 @@ async function openCombatantConditions(cb, combat, mount) {
   await modal({ title: `${cb.name} — conditions`, body, size: "wide", actions: [{ label: "Done", variant: "primary" }] }).promise;
   renderCombat(mount);
 }
+
+/** End the action scene through its lifecycle bundle. In Crisis Mode a fight is one beat of the
+ *  solo loop, so play goes straight back to the story and says which move to report. */
+async function endFight(mount) {
+  if (!(await openLifecycle("action"))) return false;
+  Store.clearCombat();
+  if (Settings.soloMode()) {
+    showToast("Scene over. Next: “A fight or a long scene ended” rolls the timers.", { timeout: 9000 });
+    if (location.hash !== "#/story") location.hash = "#/story";
+  } else if (mount) renderCombat(mount);
+  return true;
+}
+
+/** What the story screen drives during a fight: the same functions the board's buttons run. */
+export const combatActions = {
+  combat: () => getCombat(),
+  attack: (id, mount) => { const c = getCombat(); const cb = c?.combatants.find((x) => x.id === id); return cb ? openAttack(cb, c, mount) : null; },
+  nextRound: (mount) => { const c = getCombat(); return c ? advanceRound(c, mount) : null; },
+  end: (mount) => endFight(mount),
+  addOpponent: (mount) => openAddCombatant(mount),
+};
 
 async function advanceRound(combat, mount) {
   const burning = combat.combatants.filter((c) => c.health > 0 && conditionFlags(c.conditions).recurringDamage);

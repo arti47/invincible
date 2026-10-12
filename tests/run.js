@@ -859,7 +859,7 @@ const run = async () => {
   });
   ok("before play, the stage is not-started and offers no ending", /Not playing yet/.test(spine.tableTitle) && !spine.tableHasEnd, spine.tableTitle);
   ok("once a session is open there is always a way to finish", spine.openHasEnd && /Finish for now/.test(spine.openEndLabel), spine.openEndLabel);
-  ok("Crisis Mode makes the solo loop the spine everywhere", /solo|crisis/i.test(spine.soloColdTitle) && spine.soloColdHref === "#/solo",
+  ok("Crisis Mode makes the solo loop the spine everywhere", /solo|crisis/i.test(spine.soloColdTitle) && spine.soloColdHref === "#/story",
     `${spine.soloColdTitle} → ${spine.soloColdHref}`);
   ok("a solo session in play reports its step, not the table lifecycle",
     /step \d of 6/.test(spine.soloPlayingTitle) && spine.soloIsNotTableSpine, spine.soloPlayingTitle);
@@ -3018,7 +3018,7 @@ const run = async () => {
     pick(/^NoJust me/)?.click(); await wait(150);
     pick(/Roll one from the book/)?.click(); await wait(300);
     const c = Store.getCombat();
-    out.fight = location.hash === "#/combat" && !!c?.active && c.combatants.some((x) => x.side === "adversary");
+    out.fight = location.hash === "#/story" && !!c?.active && c.combatants.some((x) => x.side === "adversary");
     Store.clearCombat();
     if (saved) localStorage.setItem(KEY, saved); else localStorage.removeItem(KEY);
     document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
@@ -3028,7 +3028,7 @@ const run = async () => {
   ok("step 3's own button engages the crisis instead of only scrolling", stepFlow.engageOpens && stepFlow.timerStarted, JSON.stringify(stepFlow));
   ok("the proximity chooser leads with 'roll for it' for players with no basis to pick", stepFlow.rollFirst);
   ok("'I tried something risky' opens the attribute guide", stepFlow.riskyGuide);
-  ok("'A fight broke out' puts an enemy on the board and goes to it", stepFlow.fight);
+  ok("'A fight broke out' puts an enemy on the board and plays it in the story", stepFlow.fight);
 
   const r1b = await page.evaluate(async () => {
     const wait = (ms) => new Promise((x) => setTimeout(x, ms));
@@ -3386,7 +3386,7 @@ const run = async () => {
     const out = {
       count: items.length,
       labels: items.map((a) => a.textContent.trim()),
-      playIsSolo: !!nav.querySelector('.nav-item[data-tab="play"][data-path="solo"]'),
+      playIsSolo: !!nav.querySelector('.nav-item[data-tab="play"][data-path="story"]'),
       minFont: Math.min(...items.map((a) => parseFloat(getComputedStyle(a.querySelector(".nav-label")).fontSize))),
       overflow: nav.scrollWidth - nav.clientWidth,
       clipped: items.filter((a) => a.getBoundingClientRect().right > nav.getBoundingClientRect().right + 1).length,
@@ -3400,7 +3400,7 @@ const run = async () => {
     return out;
   });
   ok("nav holds exactly five tabs with Solo and GM on", navFit.count === 5, navFit.labels.join(", "));
-  ok("Play is the solo board in Crisis Mode and the action scene otherwise", navFit.playIsSolo && navFit.playIsAction);
+  ok("Play is the story in Crisis Mode and the action scene otherwise", navFit.playIsSolo && navFit.playIsAction);
   ok("nav labels stay readable (≥11px)", navFit.minFont >= 11, String(navFit.minFont));
   ok("nav icons are drawn SVG, not platform glyphs", navFit.icons);
   ok("the Roll button rises out of the nav", navFit.fab);
@@ -3532,7 +3532,7 @@ const run = async () => {
     out.heroLink = !!document.querySelector('#screen .combatant a.cbt-name[href="#/sheet"]');
     // in Crisis Mode the Action screen offers the way back
     Settings.set("soloMode", true); location.hash = "#/home"; location.hash = "#/combat"; await wait(250);
-    out.backToSolo = !!document.querySelector('#screen a[href="#/solo"]');
+    out.backToSolo = !!document.querySelector('#screen a[href="#/story"]');
     Store.clearCombat?.(); Settings.set("soloMode", false);
     // the GM party opens a hero's sheet
     Settings.set("gmScreen", true); location.hash = "#/gm"; await wait(250);
@@ -3554,7 +3554,7 @@ const run = async () => {
   });
   ok("a compendium stat block can be put straight onto the action scene", links.npcAdd && links.onBoard, JSON.stringify(links));
   ok("a hero's combatant card links to the sheet it mirrors", links.heroLink);
-  ok("in Crisis Mode the Action screen links back to the Solo screen", links.backToSolo);
+  ok("in Crisis Mode the Action screen links back to the story", links.backToSolo);
   ok("the GM party opens a hero's sheet", links.gmOpen);
   ok("the Hero sheet reaches the journal and the team", links.sheetJournal && links.sheetTeam);
   ok("tutorial 'In the app' pointers are links to the screen they describe", links.tutLinks >= 3, String(links.tutLinks));
@@ -3829,11 +3829,11 @@ const run = async () => {
   section("Toggle gating");
   const gating = await page.evaluate(async () => {
     const { Settings } = await import("/src/settings.js");
-    const before = document.querySelectorAll('.nav-item[data-path="solo"]').length;
+    const before = document.querySelectorAll('.nav-item[data-path="story"]').length;
     Settings.set("soloMode", true);
     document.dispatchEvent(new CustomEvent("nav-refresh"));
     await new Promise((r) => setTimeout(r, 100));
-    const after = document.querySelectorAll('.nav-item[data-path="solo"]').length;
+    const after = document.querySelectorAll('.nav-item[data-path="story"]').length;
     location.hash = "#/more";
     await new Promise((r) => setTimeout(r, 150));
     const gmBefore = document.querySelectorAll('.more-tile[data-path="gm"]').length;
@@ -4531,8 +4531,8 @@ const run = async () => {
     document.querySelectorAll(".toast").forEach((t) => t.remove());
     return out;
   });
-  ok("journal: the empty state links to Play in both modes", xlinks.emptySolo === "#/solo" && xlinks.emptyTable === "#/home", JSON.stringify(xlinks));
-  ok("journal: a solo entry links back to the Solo screen", xlinks.soloEntry.includes("#/solo"), JSON.stringify(xlinks));
+  ok("journal: the empty state links to Play in both modes", xlinks.emptySolo === "#/story" && xlinks.emptyTable === "#/home", JSON.stringify(xlinks));
+  ok("journal: a solo entry links back to the story", xlinks.soloEntry.includes("#/story"), JSON.stringify(xlinks));
   ok("solo: the crisis log links to the journal", xlinks.logToJournal, JSON.stringify(xlinks));
   ok("karma: locked spending links to the screen that unlocks it, and the dialog closes on the way", xlinks.unlockHref === "#/solo" && xlinks.dialogClosed && xlinks.landed === "#/solo", JSON.stringify(xlinks));
   ok("any route link inside a dialog closes the dialog", xlinks.genericClosed, JSON.stringify(xlinks));
@@ -4741,7 +4741,7 @@ const run = async () => {
   });
   ok("Home opens with a comic cover carrying the hero's name", comic.cover && comic.coverFirst, JSON.stringify(comic));
   ok("the Hero sheet draws the six attributes as a labelled hexagon", comic.hexPoints === 6 && /FIGHTING \d+.*PRESENCE \d+/i.test(comic.hexLabel), comic.hexLabel);
-  ok("the Play tab follows the mode, and one nav item is current", comic.playTable === "#/combat" && comic.playSolo === "#/solo" && comic.navCurrent === 1, JSON.stringify(comic));
+  ok("the Play tab follows the mode, and one nav item is current", comic.playTable === "#/combat" && comic.playSolo === "#/story" && comic.navCurrent === 1, JSON.stringify(comic));
   ok("the crisis level is a dial whose label matches the printed level", comic.dialLabel === "Crisis level 6 of 10" && /^6/.test(comic.dialText), `${comic.dialLabel} / ${comic.dialText}`);
   ok("each timer type carries its picture (bomb, road, squad, radar), decorative only", comic.bomb && comic.road && comic.squad && comic.radar && comic.artHidden, JSON.stringify(comic));
   ok("the Solo screen takes the crisis phase as its backdrop", comic.crisisBg === "medium", comic.crisisBg);
@@ -4911,6 +4911,117 @@ const run = async () => {
     if (prevVp) await page.setViewportSize(prevVp);
     ok("wide screens lay the column pages out as a two-page spread", !!spread && /2/.test(spread[0]) && /3/.test(spread[1]), JSON.stringify(spread));
   }
+
+  // ---- the story screen (v92): Play in Crisis Mode — the game and the journal on one page.
+  section("Story screen");
+  const story = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const Wizard = await import("/src/wizard.js");
+    const C = await import("/src/combat.js");
+    const J = await import("/src/journal.js");
+    const { Settings } = await import("/src/settings.js");
+    const { NPC_PROFILES } = await import("/data-npcs.js");
+    const go = async (r) => { location.hash = "#/more"; await wait(60); location.hash = "#/" + r; await wait(350); };
+    const out = {};
+    const wasSolo = Settings.soloMode();
+    const before = Store.activeCharacterId();
+    const soloKey = "invincible:solo"; const soloBefore = localStorage.getItem(soloKey);
+    const jBefore = localStorage.getItem("invincible:journal");
+    localStorage.removeItem(soloKey); localStorage.removeItem("invincible:combat");
+    J.clearAll();
+    Settings.set("soloMode", true);
+    document.dispatchEvent(new CustomEvent("nav-refresh")); await wait(80);
+    const saved = await Wizard.instantiatePregen(Wizard.listPregens()[0]); await wait(150);
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    out.playHref = document.querySelector('#bottom-nav [data-tab="play"]')?.getAttribute("href");
+    await go("story");
+    out.parts = ["story-status", "story-stream", "story-write", "story-choices", "story-board"].map((c) => !!document.querySelector(`#screen .${c}`));
+    out.step0 = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.dataset.choice);
+    // The alert: its chooser stays a dialog; its result lands in the story as a beat.
+    document.querySelector('#screen .story-choice[data-choice="alert"]')?.click(); await wait(250);
+    out.chooserIsDialog = !!document.querySelector(".modal-backdrop .modal .choice");
+    document.querySelector(".modal-backdrop .modal .choice")?.click(); await wait(500);
+    out.resultIsBeat = !!document.querySelector("#screen .story-pending .beat.pending") && !document.querySelector(".modal-backdrop");
+    out.beatButtons = Array.from(document.querySelectorAll("#screen .story-pending .beat.pending .beat-actions .btn")).map((b) => b.textContent);
+    const open = J.openSession();
+    const first = J.load().entries.filter((e) => e.sessionId === open?.id).sort((a, b) => a.seq - b.seq)[0];
+    out.firstEntry = first?.text || "";
+    // The stream is the open session: one beat per entry for this hero.
+    out.later = Array.from(document.querySelectorAll("#screen .story-pending .beat.pending .beat-actions .btn")).find((b) => /Later/.test(b.textContent));
+    out.later?.click(); out.later = !!out.later; await wait(300);
+    const sessEntries = J.load().entries.filter((e) => e.sessionId === J.openSession()?.id);
+    out.beats = [document.querySelectorAll("#screen .story-stream .beat").length, sessEntries.length];
+    // Writing: optional, lands in the journal session, and the question moves on.
+    const ta = document.querySelector("#screen .story-text");
+    out.q1 = ta?.getAttribute("aria-label");
+    if (ta) { ta.value = "Smoke everywhere."; ta.dispatchEvent(new Event("input")); }
+    Array.from(document.querySelectorAll("#screen .story-write .btn")).find((b) => /Write it/.test(b.textContent))?.click(); await wait(300);
+    out.noteBeat = Array.from(document.querySelectorAll("#screen .story-stream .beat-note")).some((b) => b.textContent.includes("Smoke everywhere."));
+    out.noteInSession = J.load().entries.some((e) => e.kind === "note" && e.text === "Smoke everywhere." && e.sessionId === J.openSession()?.id);
+    out.q2 = document.querySelector("#screen .story-text")?.getAttribute("aria-label");
+    // Step 4 (play): 2–4 story choices plus "Something else…".
+    const st = JSON.parse(localStorage.getItem(soloKey)) || { crisisLevel: 0, alert: "x", crises: [], timers: [], allies: [], objectives: [], log: [] };
+    st.timers = [{ id: "t1", name: "Roof", proximity: "soon" }]; st.eventChecks = 1; st.crises = [];
+    localStorage.setItem(soloKey, JSON.stringify(st));
+    await go("story");
+    out.play = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.dataset.choice);
+    out.somethingElse = !!document.querySelector('#screen [data-choice="else"]');
+    // The status strip pulses when the crisis level changes.
+    st.crisisLevel = 4; localStorage.setItem(soloKey, JSON.stringify(st));
+    document.dispatchEvent(new CustomEvent("solo-changed")); await wait(150);
+    out.pulse = !!document.querySelector("#screen .story-status .pulse");
+    // The board: a drawer on a phone, holding the dashboard's panels.
+    const board = document.querySelector("#screen .story-board");
+    out.boardHidden = board?.getAttribute("aria-hidden") === "true" && getComputedStyle(board).display === "none";
+    document.querySelector("#screen .story-board-btn")?.click(); await wait(100);
+    out.boardOpen = board?.getAttribute("aria-hidden") === "false" && getComputedStyle(board).display !== "none";
+    out.boardHasTimers = !!board?.querySelector(".timer-group");
+    // A fight plays out in the story, turn by turn.
+    const cmb = C.startActionScene();
+    const foe = C.combatantFromProfile(NPC_PROFILES.find((p) => !p.minion));
+    C.joinCombat(cmb, foe);
+    await go("story");
+    out.fight = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.dataset.choice);
+    out.fightKicker = document.querySelector("#screen .story-choices .story-kicker")?.textContent || "";
+    // A blow that lands is a line in the record.
+    const n0 = J.load().entries.length;
+    const live = C.combatActions?.combat() || null; const t = live?.combatants.find((x) => x.side === "adversary");
+    if (t) C.applyAttackDamage(t, 999, live, []);
+    out.damageLine = J.load().entries.length === n0 + 1 && /broken|damage/i.test(J.load().entries.slice(-1)[0].text);
+    await go("story");
+    out.won = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.textContent);
+    localStorage.removeItem("invincible:combat");
+    // Off the story screen, result dialogs stay dialogs.
+    await go("solo");
+    const S2 = await import("/src/solo.js");
+    S2.soloActions?.eventCheck(document.querySelector("#screen")); await wait(250);
+    out.boardDialog = !!document.querySelector(".modal-backdrop .modal");
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove()); document.body.classList.remove("modal-open");
+    // cleanup
+    if (soloBefore === null) localStorage.removeItem(soloKey); else localStorage.setItem(soloKey, soloBefore);
+    if (jBefore === null) J.clearAll(); else localStorage.setItem("invincible:journal", jBefore);
+    Store.deleteCharacter(saved.id);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; await wait(200);
+    return out;
+  });
+  ok("in Crisis Mode Play opens the story", story.playHref === "#/story", story.playHref);
+  ok("the story holds status, the record, a write box, choices and the board", story.parts.every(Boolean), JSON.stringify(story.parts));
+  ok("with nothing happening, the story offers one choice: sound the alert", JSON.stringify(story.step0) === '["alert"]', JSON.stringify(story.step0));
+  ok("a chooser stays a dialog; the result lands in the story as a beat with its buttons", story.chooserIsDialog && story.resultIsBeat && story.beatButtons.some((b) => /event check/i.test(b)), JSON.stringify(story));
+  ok("the alert is the session's first entry", /^New crisis alert/.test(story.firstEntry), story.firstEntry);
+  ok("the story is the open journal session, one beat per entry", story.later && story.beats[0] === story.beats[1] && story.beats[0] > 0, JSON.stringify(story.beats));
+  ok("writing lands in the session as a beat and the next question moves on", story.noteBeat && story.noteInSession && story.q1 !== story.q2 && /And then/.test(story.q2), `${story.q1} → ${story.q2}`);
+  ok("mid-crisis the story offers 2–4 moves plus 'Something else'", story.play.length >= 2 && story.play.length <= 4 && story.play.includes("zone") && story.somethingElse, JSON.stringify(story.play));
+  ok("the status strip pulses when the crisis level changes", story.pulse);
+  ok("the board is a closed drawer on a phone that opens onto the timers", story.boardHidden && story.boardOpen && story.boardHasTimers, JSON.stringify(story));
+  ok("a fight plays in the story: attack, hold back, end", story.fight.includes("attack") && story.fight.includes("end-fight") && /Round 1/.test(story.fightKicker), JSON.stringify([story.fight, story.fightKicker]));
+  ok("a blow that lands is written to the record", story.damageLine);
+  ok("once one side is down, ending the scene is the move", story.won.length === 1 && /fight is won/i.test(story.won[0]), JSON.stringify(story.won));
+  ok("off the story screen, result dialogs stay dialogs", story.boardDialog);
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:

@@ -176,6 +176,52 @@ async function answerDialogs(page, { prefer = null, max = 8 } = {}) {
   return answered;
 }
 
+/** Inline result beats on the story screen: press the beat's own leading button, as a player would. */
+async function resolveBeats(page) {
+  for (let i = 0; i < 6; i++) {
+    const label = await page.evaluate(() => {
+      const card = document.querySelector(".story-pending .beat.pending");
+      if (!card) return null;
+      const btns = Array.from(card.querySelectorAll(".beat-actions .btn"));
+      const b = btns.find((x) => /primary/.test(x.className)) || btns[btns.length - 1];
+      if (!b) return null;
+      b.click();
+      return `${card.querySelector(".beat-title")?.textContent || "result"} — ${b.textContent.trim()}`;
+    });
+    if (!label) return;
+    say("app", `beat: ${label}`);
+    await page.waitForTimeout(200);
+    await answerDialogs(page, {});
+  }
+}
+
+/** A fight in the story, to a decision. Every roll is the app's; the harness only picks the choice. */
+async function playFight(page) {
+  for (let turn = 0; turn < 16; turn++) {
+    await resolveBeats(page);
+    const pick = await page.evaluate(() => {
+      const c = Array.from(document.querySelectorAll(".story-choice"));
+      const by = (k) => c.find((b) => b.dataset.choice === k);
+      const end = c.find((b) => /fight is won|side is down/i.test(b.textContent));
+      const b = end || by("attack") || by("next-round") || by("pass") || by("end-fight");
+      if (!b) return null;
+      b.click();
+      return { label: b.querySelector("strong")?.textContent || b.textContent, ending: !!end || b.dataset.choice === "end-fight" };
+    });
+    if (!pick) return;
+    say("press", `"${pick.label}" (in the story)`);
+    await page.waitForTimeout(220);
+    await answerDialogs(page, { prefer: pick.ending ? "End|Apply|OK|Confirm" : null });
+    await page.waitForTimeout(220);
+    await resolveBeats(page);
+    if (pick.ending) return;
+  }
+  // Sixteen turns without a decision: end it rather than loop forever.
+  await page.evaluate(() => document.querySelector('.story-choice[data-choice="end-fight"]')?.click());
+  await page.waitForTimeout(220);
+  await answerDialogs(page, { prefer: "End|OK|Confirm" });
+}
+
 /** Press a control by label. Returns false when the app never offered it — that is a stall. */
 async function press(page, pattern, { why = "", prefer = null, optional = false, exact = false } = {}) {
   const re = new RegExp(exact ? `^${pattern}$` : pattern, "i");
@@ -190,6 +236,15 @@ async function press(page, pattern, { why = "", prefer = null, optional = false,
     await page.waitForTimeout(220);
     await answerDialogs(page, {});
     await page.waitForTimeout(300);
+    before = await visibleButtons(page);
+    hit = before.find((t) => re.test(t));
+  }
+  // In Crisis Mode a fight now plays out in the story (Play), blow by blow. A player fights it to a
+  // decision — attack on their turn, roll for the enemy on theirs — then ends the scene; the
+  // harness does the same and returns to the board it drives the rest of the session from.
+  if (!hit && /#\/story/.test(await page.evaluate(() => location.hash)) && before.some((t) => /End the fight|end the scene/i.test(t))) {
+    await playFight(page);
+    await goto(page, "solo");
     before = await visibleButtons(page);
     hit = before.find((t) => re.test(t));
   }

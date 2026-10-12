@@ -25,7 +25,11 @@ const KEY = `${STORAGE_PREFIX}solo`;
 function load() {
   try { return { ...defaults(), ...(JSON.parse(localStorage.getItem(KEY)) || {}) }; } catch { return defaults(); }
 }
-function save(state) { localStorage.setItem(KEY, JSON.stringify(state)); return state; }
+function save(state) {
+  localStorage.setItem(KEY, JSON.stringify(state));
+  document.dispatchEvent(new CustomEvent("solo-changed"));
+  return state;
+}
 function defaults() {
   return { crisisLevel: 0, alert: "", crises: [], timers: [], allies: [], objectives: [], encounter: null, mode: "alert", log: [],
     eventChecks: 0, awaitingSocial: false, lastOracle: null, place: null, resolved: 0, alertParts: null,
@@ -122,7 +126,7 @@ export function soloStageCard() {
         ? el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} — ${phase.name} — carries into tonight.` })
         : null,
       el("div", { class: "row-actions" },
-        el("a", { class: "btn primary big", href: "#/solo" }, "Start tonight's session"),
+        el("a", { class: "btn primary big", href: "#/story" }, "Start tonight's session"),
         el("button", { class: "btn ghost", onclick: () => { setLearnTab("walkthrough"); location.hash = "#/learn"; } },
           "Show me a whole session first"),
         el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
@@ -140,7 +144,7 @@ export function soloStageCard() {
     el("h2", { text: next ? next.label : "Continue" }),
     bits.length ? el("p", { class: "muted small", text: `${bits[0]} · crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running` }) : null,
     el("div", { class: "row-actions" },
-      el("a", { class: "btn primary big", href: "#/solo" }, "Continue the session"),
+      el("a", { class: "btn primary big", href: "#/story" }, "Continue the session"),
       // Knowing how to stop matters as much as knowing how to continue.
       el("button", { class: "btn", onclick: () => stopForTonight(load(), document.querySelector("#screen")) }, "Stop for tonight"),
       el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
@@ -589,8 +593,8 @@ const timerRunning = (state, kind) => ({
 /** What a move needs that is not running — shown on the move, and offered before it rolls. */
 const missingFor = (state, move) => (move.timers || []).filter((k) => !timerRunning(state, k));
 
-async function whatHappened(state, mount) {
-  const pick = await chooseModal("What did your hero just do?", MOVES.map((m) => {
+async function whatHappened(state, mount, preset = null) {
+  const pick = preset || await chooseModal("What did your hero just do?", MOVES.map((m) => {
     const missing = missingFor(state, m);
     return { label: m.label, value: m.key,
       hint: `${m.when}  →  ${m.fires}${missing.length ? `  ·  No ${missing.map((k) => TIMER_NAMES[k]).join(" or ")} running — you'll be asked whether to start one` : ""}` };
@@ -693,7 +697,7 @@ async function whatHappened(state, mount) {
   modal({ title: move.label,
     body: el("div", {}, report,
       el("p", { class: "muted small", text: acted ? `Rolled: ${move.fires}.` : "Nothing was running that this affects." })),
-    actions: allyDamageActions(allyDamage) })
+    actions: allyDamageActions(allyDamage), beat: true })
     .promise.then((v) => { if (v === "apply") landAllyDamage(allyDamage); });
   renderSolo(mount);
 }
@@ -777,13 +781,13 @@ export function soloStage() {
   // Ending well: head home once something is resolved, otherwise stop the sitting where it is.
   const end = state.alert
     ? (i === 5
-        ? { label: "Head home — rest and bank karma", run: () => { location.hash = "#/solo"; setTimeout(() => headHome(load(), document.querySelector("#screen")), 150); } }
+        ? { label: "Head home — rest and bank karma", run: () => { location.hash = "#/story"; setTimeout(() => headHome(load(), document.querySelector("#screen .story-board-solo") || document.querySelector("#screen")), 150); } }
         : { label: "Stop for tonight", run: () => stopForTonight(load(), document.querySelector("#screen")) })
     : null;
 
   return {
     key: `solo${i}`, title: state.alert ? `${where} — ${step.label}` : "Ready to play solo",
-    why, label: step.label, href: "#/solo", end,
+    why, label: step.label, href: "#/story", end,
   };
 }
 
@@ -791,6 +795,27 @@ export function soloStage() {
 Combat.setStageProvider(() => soloStage());
 
 /* ---------------------------------------------------------------- render */
+
+/**
+ * What the story screen (Play in Crisis Mode) drives. Every action is the same function the board
+ * runs — the story only chooses which to offer. `mount` is the board container they re-render.
+ */
+export const soloActions = {
+  state: () => load(),
+  step: () => currentStep(load()),
+  alert: (mount) => generateAlert(load(), mount),
+  eventCheck: (mount) => doEventCheck(load(), mount),
+  engage: (mount) => engageFromCard(load(), mount),
+  move: (mount, key = null) => whatHappened(load(), mount, key),
+  social: (mount) => socialScene(load(), mount),
+  resolve: (mount) => resolveCrisis(load(), mount),
+  home: (mount) => headHome(load(), mount),
+  stop: (mount) => stopForTonight(load(), mount),
+  oracle: (mount) => askBinary(load(), mount),
+  claim: (mount) => { const st = load(); const o = st.objectives.find((x) => x.status === "reached"); return o ? completeObjective(st, o, mount) : null; },
+  encounterWaiting: () => { const e = load().encounter; return !!(e && e.phase && e.phase !== "moving"); },
+  inSession: () => inSession(load()),
+};
 
 export function renderSolo(mount) {
   const state = load();
@@ -1422,7 +1447,7 @@ function doEventCheck(state, mount) {
     r.rolls ? el("p", { class: "muted small", text: r.rolls }) : null,
     r.value <= 4 ? el("p", { class: "muted small", text: "Added to Crises — engage it there to start a timer, or leave it pending." }) : null);
   if (r.value <= 4) sfx(checkBody, "BOOM!", "krak");
-  modal({ title: `Event check — ${r.value}`,
+  modal({ title: `Event check — ${r.value}`, beat: true,
     body: checkBody,
     // With nothing engaged yet, the next step is choosing a crisis: offer it here.
     actions: (state.crises || []).length && !(state.timers || []).length
@@ -1542,14 +1567,14 @@ async function generateAlert(state, mount) {
   state.skipAllyPrompt = false;
   state.skipEncounterPrompt = false;
   addCrisis(state, text, "alert", parts);
-  logEvent(state, `New crisis alert: ${text}`);
-  // An alert IS the start of a sitting, so the journal opens a session here. Without this every
-  // entry a solo player wrote landed unfiled — a whole session's record with no session on it.
+  // An alert IS the start of a sitting, so the journal opens a session here — before the alert is
+  // logged, so the alert itself is the session's first entry rather than an unfiled line before it.
   Journal.startSession(state.alertParts?.headline || text, Store.activeCharacter()?.id || null);
+  logEvent(state, `New crisis alert: ${text}`);
   state.closed = false;
   save(state);
   renderSolo(mount);
-  modal({ title: "Crisis alert",
+  modal({ title: "Crisis alert", beat: true,
     body: el("div", {},
       crisisBody({ parts }),
       el("p", { class: "muted small", text: S.SOLO_SETUP.alertNote }),
@@ -2010,7 +2035,7 @@ async function allyCheck(state, ally, mount, inFight) {
       diceRow(r.faces),
       el("p", { text: r.text }),
       r.ones ? el("p", { class: "muted small", text: "Casualties can be deaths, injuries, infighting or being stressed out — ask the Binary Engine if unsure." }) : null),
-    actions: allyDamageActions(r.damage) })
+    actions: allyDamageActions(r.damage), beat: true })
     .promise.then((v) => { if (v === "apply") landAllyDamage(r.damage); });
   renderSolo(mount);
 }
@@ -2529,8 +2554,9 @@ async function startFight(state, mount) {
   Store.saveCombat(combat);
   logEvent(state, `Fight broke out${enemy ? ` against ${enemy.name}` : ""}.`);
   save(state);
-  showToast(enemy ? `${enemy.name} is on the board. Fight it out, then come back here.` : "Add the enemy with Add combatant.", { variant: "good", timeout: 6000 });
-  location.hash = "#/combat";
+  // Crisis Mode plays its fights in the story, turn by turn; the fight board is its drawer.
+  showToast(enemy ? `${enemy.name} steps in. The fight plays out in the story.` : "Add the enemy from the board.", { variant: "good", timeout: 6000 });
+  location.hash = "#/story";
 }
 
 /** Step 9: draw initiative. Starts a real action scene and puts the enemy on the board with you. */
@@ -2558,8 +2584,8 @@ async function drawForEncounter(state, mount, { enemySurprised = false } = {}) {
   showToast(enemy
     ? `Action scene started — ${enemy.name} is on the board.`
     : "Action scene started — add the enemy with Add combatant.", { variant: "good", timeout: 6000 });
-  // The fight happens on the board; send the player there instead of telling them to go.
-  location.hash = "#/combat";
+  // The fight plays out in the story; send the player there instead of telling them to go.
+  location.hash = "#/story";
 }
 
 /** Step 10: reset the timer to fit what just happened. */
