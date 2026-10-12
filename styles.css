@@ -1479,3 +1479,89 @@ body[data-route="settings"] h3.section.with-ico:has(+ .danger-zone) { background
   .screen.cols::before { content: "2" / ""; left: 1.1rem; }
   .screen.cols::after { content: "3" / ""; right: 1.1rem; }
 }
+
+/* ================================================================ the story screen (Play in Crisis Mode) */
+.story { display: grid; gap: 1rem; }
+.story-main { min-width: 0; display: flex; flex-direction: column; gap: .8rem; }
+.story-status { position: sticky; top: calc(var(--hud-h, 58px) + 4px); z-index: 12; display: flex; align-items: center; gap: .6rem;
+  padding: .35rem .6rem; background: var(--panel); border: 2px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.story-dial { width: 58px; flex: 0 0 58px; }
+.story-dial .art, .story-dial svg { display: block; width: 100%; height: auto; }
+.story-stat { display: grid; line-height: 1.05; min-width: 0; }
+.story-stat small { font: 700 .58rem/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.story-stat strong { font: 400 1.05rem/1.1 var(--font-display); letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.story-board-btn { margin-left: auto; display: inline-flex; align-items: center; gap: .25rem; }
+.pulse { animation: story-pulse .9s ease-out 1; }
+@keyframes story-pulse { 0% { transform: scale(1); } 30% { transform: scale(1.18); color: var(--danger); } 100% { transform: scale(1); } }
+body.no-motion .pulse { animation: none; }
+
+.story-stream { display: flex; flex-direction: column; gap: .55rem; }
+.story-cover { padding: .9rem 1rem; border: 3px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  background: linear-gradient(180deg, #0b1a3d, #1b2f6b); color: #fffaee; }
+.story-cover h2 { margin: .1rem 0 .3rem; color: var(--role, var(--accent)); -webkit-text-stroke: 1px #121018; text-shadow: 3px 3px 0 #121018; text-transform: uppercase; font-size: var(--step-2); }
+.story-cover .muted, .story-cover .jr-text { color: #e8e2cf; }
+.story-cover.small { padding: .4rem .7rem; }
+.story-kicker { margin: 0; font: 400 .9rem/1.1 var(--font-display); letter-spacing: .08em; text-transform: uppercase; }
+.story-cover .story-kicker { display: inline-block; background: var(--accent); color: #121018; padding: .1rem .45rem; border: 2px solid #121018; rotate: -1.5deg; }
+.story-prev .jr-text { margin: .2rem 0; font-size: .9rem; }
+
+.beat { display: flex; gap: .55rem; align-items: flex-start; padding: .55rem .65rem; border: 2px solid var(--line); border-left-width: 6px; border-radius: var(--radius);
+  background: var(--panel); box-shadow: 2px 2px 0 var(--shadow-c); animation: panel-in .25s var(--ease) both; }
+.beat-main { min-width: 0; flex: 1; }
+.beat .jr-text { margin: 0; }
+.beat-ico { flex: 0 0 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--line); background: var(--chipbg); }
+.beat-solo { border-left-color: var(--accent-2); }
+.beat-lifecycle { border-left-color: var(--magenta); }
+.beat-state { border-left-color: var(--danger); }
+.beat-roll.ok { border-left-color: var(--good); } .beat-roll.miss { border-left-color: var(--muted); }
+.beat-note { border-left-color: var(--accent); background: var(--paper-2); rotate: -.3deg; }
+.beat-note .beat-ico { background: var(--accent); color: #121018; }
+.beat-roll-burst .beat-roll { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .6rem; margin-top: .3rem; font-size: .9rem; }
+.beat .dice-row.small .die { width: 24px; height: 24px; font-size: .7rem; }
+.beat-kicker { font-weight: 700; }
+.beat-result { display: block; border-color: var(--accent-2); border-left-width: 6px; }
+.beat-result.pending { box-shadow: 0 0 0 3px var(--accent), 3px 3px 0 var(--shadow-c); }
+.beat-title { margin: 0 0 .35rem; font: 400 1.15rem/1.1 var(--font-display); letter-spacing: .04em; }
+.beat-result .modal-body { padding: 0; max-height: none; overflow: visible; }
+.beat-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .55rem; }
+.story-pending:empty { display: none; }
+.story-pending { display: flex; flex-direction: column; gap: .55rem; }
+
+.story-write { padding: .6rem .7rem; border: 2px dashed color-mix(in srgb, var(--line) 55%, transparent); border-radius: var(--radius); background: var(--paper-2); }
+.story-q { display: block; margin: 0 0 .35rem; font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive; font-size: 1.05rem; }
+.story-text { width: 100%; min-height: 3.2rem; resize: vertical; font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive; }
+.story-write .row-actions { align-items: center; margin-top: .4rem; }
+
+.story-choices { display: grid; gap: .5rem; }
+.story-choice { display: grid; gap: .15rem; text-align: left; padding: .7rem .85rem; border: 3px solid var(--line); border-radius: var(--radius);
+  background: var(--panel); color: var(--ink); font: inherit; cursor: pointer; box-shadow: 3px 3px 0 var(--shadow-c); transition: transform .1s, box-shadow .1s; }
+.story-choice strong { font: 400 1.25rem/1.1 var(--font-display); letter-spacing: .04em; }
+.story-choice .small { color: var(--muted); }
+.story-choice.primary { background: var(--accent); color: #121018; }
+.story-choice.primary .small { color: #3a3420; }
+.story-choice:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--shadow-c); }
+.story-choice:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--shadow-c); }
+.story-more { display: flex; flex-wrap: wrap; gap: .35rem; }
+
+/* The board: a drawer on phones, a column beside the story from 900px. */
+.story-board { position: fixed; inset: 0 0 0 auto; z-index: 40; width: min(560px, 100%); overflow-y: auto; padding: .8rem var(--gutter) 6rem;
+  background: var(--paper); border-left: 3px solid var(--line); box-shadow: -8px 0 0 rgba(0,0,0,.18); transform: translateX(105%); transition: transform .25s var(--ease); }
+.story-board:not(.open) { display: none; }
+.story-board.open { transform: none; animation: board-in .25s var(--ease) both; }
+@keyframes board-in { from { transform: translateX(40%); opacity: .4; } }
+.story-board-head { position: sticky; top: -.8rem; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem 0; background: var(--paper); }
+.story-board-head h2 { margin: 0; font-size: var(--step-1); }
+.story-board #solo-next, .story-board .zone-divider { display: none; }
+body.no-motion .story-board { transition: none; }
+@media (min-width: 900px) {
+  .story { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: start; }
+  .story-board, .story-board:not(.open) { display: block; animation: none; position: sticky; top: calc(var(--hud-h, 58px) + 8px); transform: none; width: auto; max-height: calc(100vh - 90px); z-index: 1;
+    border: 2px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: .6rem .7rem 1rem; }
+  .story-board-close, .story-board-btn { display: none; }
+}
+/* Inside the story's board the move card is redundant (the story offers the moves), so the
+   timers come first and the reference chart drops to the foot, one column. */
+.story-board-solo { display: flex; flex-direction: column; }
+.story-board-solo > #solo-move { order: 9; }
+.story-board-solo > #solo-move > .row-actions { display: none; }
+.story-board .timer-chart { grid-template-columns: 1fr; }

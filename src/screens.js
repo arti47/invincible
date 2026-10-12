@@ -405,7 +405,7 @@ export function renderJournal(mount, arg) {
       el("h3", { text: journalView.query ? "Nothing matches" : "Nothing written yet" }),
       el("p", { text: journalView.query ? "Try a different word." : "Start a session, then write the first entry." }),
       journalView.query ? null : el("div", { class: "row-actions" },
-        el("a", { class: "btn primary", href: Settings.soloMode() ? "#/solo" : "#/home" },
+        el("a", { class: "btn primary", href: Settings.soloMode() ? "#/story" : "#/home" },
           Settings.soloMode() ? "Play — the Solo screen" : "Play — start a session on Home"))));
     return;
   }
@@ -560,9 +560,9 @@ const JR_ICONS = { note: "pen", roll: "die", solo: "solo", lifecycle: "play", st
 
 /** Where an automatic entry came from, so the record leads back to the screen that made it. */
 function entrySource(e) {
-  if (e.kind === "solo") return Settings.soloMode() ? ["#/solo", "Go to the Solo screen"] : null;
+  if (e.kind === "solo") return Settings.soloMode() ? ["#/story", "Back to the story"] : null;
   if (e.kind === "roll") return ["#/sheet", "Open the Hero tab"];
-  if (e.kind === "lifecycle") return Settings.soloMode() ? ["#/solo", "Go to the Solo screen"] : ["#/home", "Session controls on Home"];
+  if (e.kind === "lifecycle") return Settings.soloMode() ? ["#/story", "Back to the story"] : ["#/home", "Session controls on Home"];
   return null;
 }
 

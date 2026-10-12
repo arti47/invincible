@@ -20,12 +20,52 @@ function trapFocus(container, e) {
  * Open a themed modal.
  * @returns {{close:(v?:any)=>void, body:HTMLElement, promise:Promise<any>}}
  */
-export function modal({ title, body, actions = [], dismissible = true, size = "" }) {
+/**
+ * Inline beats. While the story screen is showing, a dialog that only REPORTS something (a roll, an
+ * event check, an alert — no field to fill, no list to choose from) lands in the story as a beat
+ * instead of covering it. Its buttons work exactly as they would in the dialog. Anything that asks
+ * a question — a chooser, a prompt, a confirmation with a Cancel — stays a dialog.
+ */
+let beatHost = null;
+export function setBeatHost(host) { beatHost = host; }
+
+function asBeat({ title, bodyWrap, actions, beat, size }) {
+  if (!beatHost || (beatHost.active && !beatHost.active()) || beat === false || size === "help-sheet") return false;
+  if (bodyWrap.querySelector("input, select, textarea, .choice, .choice-list")) return false;
+  if (beat === true) return true;
+  return actions.length <= 1;
+}
+
+export function modal({ title, body, actions = [], dismissible = true, size = "", beat }) {
   lastFocus = document.activeElement;
   const backdrop = el("div", { class: "modal-backdrop" });
   const bodyWrap = el("div", { class: "modal-body" });
   if (typeof body === "string") bodyWrap.innerHTML = body;
   else if (body) bodyWrap.append(body);
+
+  if (asBeat({ title, bodyWrap, actions, beat, size })) {
+    let resolveBeat;
+    const promise = new Promise((res) => { resolveBeat = res; });
+    const footer = el("div", { class: "beat-actions" });
+    const card = el("section", { class: "beat beat-result pending", role: "group", "aria-label": title || "Result" },
+      el("h3", { class: "beat-title", text: title || "" }), bodyWrap, footer);
+    let done = false;
+    const close = (value) => {
+      if (done) return;
+      done = true;
+      footer.remove();
+      card.classList.remove("pending");
+      beatHost?.resolved?.(card);
+      resolveBeat(value);
+    };
+    for (const a of actions) {
+      footer.append(el("button", { class: `btn ${a.variant || ""}`,
+        onclick: () => { const r = a.onClick ? a.onClick(close) : undefined; if (!a.keepOpen) close(r === undefined ? a.value : r); } }, a.label));
+    }
+    if (!actions.length) footer.append(el("button", { class: "btn ghost", onclick: () => close(null) }, "Continue"));
+    beatHost.add(card, close);
+    return { close, body: bodyWrap, promise, dialog: card };
+  }
 
   const footer = el("div", { class: "modal-actions" });
   let resolveFn;
@@ -102,7 +142,7 @@ export function showToast(message, { variant = "", timeout = 3200, action } = {}
 
 export async function confirmModal(message, { title = "Are you sure?", confirmLabel = "Confirm", cancelLabel = "Cancel", variant = "primary" } = {}) {
   const m = modal({
-    title,
+    title, beat: false,
     body: el("p", { text: message }),
     actions: [
       { label: cancelLabel, value: false, variant: "ghost" },
@@ -145,7 +185,7 @@ export async function promptModal(message, { title = "Enter a value", value = ""
 /** A list-of-choices modal. options: [{label, value, hint, icon?}] — icon names an icons.js glyph. */
 export async function chooseModal(title, options, { allowCancel = true } = {}) {
   const list = el("div", { class: "choice-list" });
-  const m = modal({ title, body: list, actions: allowCancel ? [{ label: "Cancel", value: null, variant: "ghost" }] : [] });
+  const m = modal({ title, body: list, beat: false, actions: allowCancel ? [{ label: "Cancel", value: null, variant: "ghost" }] : [] });
   options.forEach((o) => {
     list.append(el("button", { class: `choice ${o.icon ? "has-ico" : ""}`, onclick: () => m.close(o.value) },
       o.icon ? el("span", { class: "choice-ico", "aria-hidden": "true" }, icon(o.icon, { size: 20 })) : null,

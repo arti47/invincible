@@ -774,7 +774,7 @@ async function finish() {
 /** The step after making a hero is playing one: Crisis Mode's loop, or the session controls on Home. */
 function playAction() {
   return Settings.soloMode()
-    ? { label: "Start playing — Solo screen", onClick: () => { location.hash = "#/solo"; } }
+    ? { label: "Start playing — the story", onClick: () => { location.hash = "#/story"; } }
     : { label: "Start playing — session on Home", onClick: () => { location.hash = "#/home"; } };
 }
 

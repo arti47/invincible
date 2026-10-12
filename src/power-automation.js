@@ -245,7 +245,7 @@ export function showRollResult(character, r, { damage = null, power = null, onPu
     body.append(el("p", { class: "muted", text: pushCheck.reason }));
   }
   announce(`${r.label}: ${outcome}.`);
-  return modal({ title: "Roll result", body, actions });
+  return modal({ title: "Roll result", body, actions, beat: true });
 }
 
 async function confirmIndomitable(stress) {

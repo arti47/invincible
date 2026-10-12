@@ -6,6 +6,7 @@ import * as Screens from "./screens.js";
 import * as Sheet from "./sheet.js";
 import * as Combat from "./combat.js";
 import * as Solo from "./solo.js";
+import * as Story from "./story.js";
 import * as GM from "./gm.js";
 import { startWizard, isActive as wizardActive } from "./wizard.js";
 import * as Learn from "./learn.js";
@@ -22,7 +23,8 @@ const ROUTES = [
   { path: "combat", label: "Action", icon: "combat", nav: "more", desc: "Initiative, combatants and challenges", render: (m) => Combat.renderCombat(m) },
   { path: "rules", label: "Rules", icon: "rules", nav: "more", desc: "Glossary and the full rules library", render: (m, arg) => Screens.renderRules(m, arg) },
   { path: "compendium", label: "NPCs", icon: "npcs", nav: "more", desc: "Profiles, creatures, adversaries, heroes", render: (m) => Screens.renderCompendium(m) },
-  { path: "solo", label: "Solo", icon: "solo", nav: "more", desc: "Crisis Mode: your GM when there is none", render: (m) => Solo.renderSolo(m), gate: () => Settings.soloMode() },
+  { path: "story", label: "Story", icon: "journal", nav: "more", desc: "Crisis Mode as a story you play and write", render: (m) => Story.renderStory(m), gate: () => Settings.soloMode() },
+  { path: "solo", label: "Solo", icon: "solo", nav: "more", desc: "The Crisis Mode board: timers, crises, oracles", render: (m) => Solo.renderSolo(m), gate: () => Settings.soloMode() },
   { path: "gm", label: "GM", icon: "gm", nav: "more", desc: "Party panel and every rollable table", render: (m) => GM.renderGM(m), gate: () => Settings.gmScreen() },
   { path: "learn", label: "Learn", icon: "learn", nav: "more", desc: "Tutorials and a worked solo session", render: (m) => Learn.renderLearn(m) },
   { path: "journal", label: "Journal", icon: "journal", nav: "tab", render: (m, arg) => Screens.renderJournal(m, arg) },
@@ -33,7 +35,7 @@ const ROUTES = [
 ];
 
 /** Play is the one surface a session is played on: Crisis Mode when solo, the action scene otherwise. */
-const playPath = () => (Settings.soloMode() ? "solo" : "combat");
+const playPath = () => (Settings.soloMode() ? "story" : "combat");
 
 let mount = null;
 let navHost = null;
