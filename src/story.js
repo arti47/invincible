@@ -275,10 +275,17 @@ function sceneEl(e, hero, { animate }) {
   if (!e) {
     const j = Journal.load();
     const prev = j.entries.filter((x) => x.sessionId && (!x.characterId || x.characterId === hero.id)).sort((a, b) => (a.seq || 0) - (b.seq || 0)).slice(-1)[0];
+    // A crisis already in flight (paused, or carried over) is what the cover shows: saying the
+    // emergency is "one tap away" while one is running read as if the game had not started.
+    const st = soloActions.state();
+    const live = st.alertParts?.headline || st.alert || "";
     card.append(
-      el("p", { class: "story-kicker", text: `Issue #${issueNumber(null)}` }),
+      el("p", { class: "story-kicker", text: `Issue #${issueNumber(null)}${live ? " · in progress" : ""}` }),
       el("h2", { class: "vn-title", text: hero.identity.heroName || hero.identity.realName || "Your hero" }),
-      prev ? el("p", { class: "vn-text", text: `Previously… ${prev.text}` }) : el("p", { class: "vn-text", text: "Tonight's emergency is one tap away." }));
+      live ? el("p", { class: "vn-text", text: `The crisis: ${live}` }) : null,
+      live ? el("p", { class: "vn-text vn-hint", text: "Pick a move below to carry on." })
+        : prev ? el("p", { class: "vn-text", text: `Previously… ${prev.text}` })
+          : el("p", { class: "vn-text", text: "Tonight's emergency is one tap away." }));
   } else {
     const kicker = { note: "You", roll: e.detail?.sixes ? "Success" : "No luck", state: "Ouch", lifecycle: "Scene", solo: "Meanwhile…" }[e.kind] || "Meanwhile…";
     const p = el("p", { class: e.kind === "note" ? "vn-text written" : "vn-text" });
@@ -369,7 +376,7 @@ export function renderStory(mount, { keepScroll = false } = {}) {
     el("div", { class: "story-pending" }, ...pending));
 
   // ---- the balloon: what does your hero do? Tap to write; never required.
-  const q = promptFor(open ? latest : null);
+  const q = open || !(st.alert || st.alertParts) ? promptFor(open ? latest : null) : "Where is your hero right now, and what are they doing?";
   const ta = el("textarea", { class: "input story-text", rows: "3", placeholder: q, "aria-label": q });
   ta.value = draft;
   ta.addEventListener("input", () => { draft = ta.value; });

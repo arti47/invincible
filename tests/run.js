@@ -5170,6 +5170,8 @@ const run = async () => {
     location.hash = "#/home"; await wait(250); location.hash = "#/story"; await wait(400);
     out.noSplashOnReturn = !document.querySelector("#screen .vn-splash");
     out.choices = document.querySelectorAll("#screen .story-choice").length;
+    const cap = document.querySelector("#screen .vn-scene .vn-caption")?.textContent || "";
+    out.cover = /in progress/.test(cap) && /The crisis: A dam is failing/.test(cap) && !/one tap away/.test(cap);
     // Any move that logs reopens a journal session, and the beat reaches the stage.
     const n = J.listSessions().length;
     Solo.soloActions.eventCheck(document.querySelector("#screen .story-board-solo")); await wait(400);
@@ -5186,6 +5188,7 @@ const run = async () => {
   });
   ok("the issue-end splash shows when a session closes, but not on a later return", resume.splashOnClose && resume.noSplashOnReturn && resume.choices > 0, JSON.stringify(resume));
   ok("resuming a paused crisis opens the next journal session", resume.reopened && resume.closedCleared, JSON.stringify(resume));
+  ok("with a crisis in flight the cover names it rather than 'one tap away'", resume.cover, JSON.stringify(resume));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
