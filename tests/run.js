@@ -5190,6 +5190,58 @@ const run = async () => {
   ok("resuming a paused crisis opens the next journal session", resume.reopened && resume.closedCleared, JSON.stringify(resume));
   ok("with a crisis in flight the cover names it rather than 'one tap away'", resume.cover, JSON.stringify(resume));
 
+  // Reported: "Why this when I haven't generated any crisis" — the board is one per app, and a
+  // crisis left by earlier play was handed to a hero who had never rolled it.
+  const left = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const J = await import("/src/journal.js");
+    const W = await import("/src/wizard.js");
+    const Solo = await import("/src/solo.js");
+    const { Settings } = await import("/src/settings.js");
+    const wasSolo = Settings.soloMode(); const before = Store.activeCharacterId();
+    const keep = { solo: localStorage.getItem("invincible:solo"), j: localStorage.getItem("invincible:journal"), chars: Store.listCharacters().map((c) => c.id) };
+    const stale = JSON.stringify({ crisisLevel: 1, alert: "Blackout", alertParts: { headline: "Blackout" }, crises: [],
+      timers: [{ id: "t1", name: "Grid", proximity: "soon" }], allies: [], objectives: [], encounter: null, mode: "alert", log: [], eventChecks: 1, resolved: 0 });
+    const out = {};
+    // Cold Play clears a board nobody owns.
+    for (const ch of Store.listCharacters()) Store.deleteCharacter(ch.id);
+    J.clearAll(); localStorage.setItem("invincible:solo", stale);
+    const S = await import("/src/screens.js");
+    S.firstIssue(); await wait(450);
+    out.coldClears = !Solo.soloActions.state().alert;
+    // An existing hero who never played meets a leftover crisis: asked, not handed it.
+    const other = W.quickHero({ solo: true }); await wait(100);
+    localStorage.setItem("invincible:solo", stale);
+    location.hash = "#/home"; await wait(150); location.hash = "#/story"; await wait(450);
+    const cap = () => document.querySelector("#screen .vn-scene .vn-caption")?.textContent || "";
+    out.leftCover = /still on the board/.test(cap()) && !/in progress/.test(cap());
+    out.leftChoices = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.dataset.choice);
+    document.querySelector('#screen .story-choice[data-choice="fresh"]')?.click(); await wait(400);
+    out.freshCleared = !Solo.soloActions.state().alert;
+    out.freshChoices = Array.from(document.querySelectorAll("#screen .story-choice")).map((b) => b.dataset.choice);
+    out.noNull = !/\bnull\b|undefined/.test(cap());
+    Store.undo(); await wait(300);
+    out.undone = Solo.soloActions.state().alert === "Blackout";
+    // Taking it on makes it this hero's; an alert records whose crisis it is.
+    location.hash = "#/home"; await wait(150); location.hash = "#/story"; await wait(400);
+    document.querySelector('#screen .story-choice[data-choice="adopt"]')?.click(); await wait(400);
+    out.adopted = Solo.soloActions.state().heroId === other.id && !Solo.soloActions.leftover(other)
+      && Array.from(document.querySelectorAll("#screen .story-choice")).some((b) => b.dataset.choice === "zone");
+    out.menuFresh = !!document.querySelector('#screen .vn-menu [data-choice="fresh-menu"]');
+    for (const ch of Store.listCharacters()) if (!keep.chars.includes(ch.id)) Store.deleteCharacter(ch.id);
+    if (keep.solo === null) localStorage.removeItem("invincible:solo"); else localStorage.setItem("invincible:solo", keep.solo);
+    if (keep.j === null) J.clearAll(); else localStorage.setItem("invincible:journal", keep.j);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo); document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; await wait(200);
+    return out;
+  });
+  ok("cold Play starts Issue #1 on a clean board", left.coldClears, JSON.stringify(left));
+  ok("a crisis left by earlier play is named as such, with Start fresh / Take it on", left.leftCover && JSON.stringify(left.leftChoices) === '["fresh","adopt"]', JSON.stringify(left));
+  ok("Start fresh clears the board to the alert, prints no null, and Undo restores it", left.freshCleared && JSON.stringify(left.freshChoices) === '["alert"]' && left.noNull && left.undone, JSON.stringify(left));
+  ok("Take it on makes the crisis this hero's; the menu offers a fresh start", left.adopted && left.menuFresh, JSON.stringify(left));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
