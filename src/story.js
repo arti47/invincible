@@ -16,7 +16,7 @@
 
 import { el, clear, dieEl } from "./core.js";
 import { icon, roleColour } from "./icons.js";
-import { setBeatHost, showToast, chooseModal } from "./ui.js";
+import { setBeatHost, showToast, chooseModal, confirmModal } from "./ui.js";
 import { crisisDial, skyline, heroFigure, villainMask, headquarters, radar } from "./art.js";
 import * as Journal from "./journal.js";
 import * as Store from "./store.js";
@@ -279,13 +279,19 @@ function sceneEl(e, hero, { animate }) {
     // emergency is "one tap away" while one is running read as if the game had not started.
     const st = soloActions.state();
     const live = st.alertParts?.headline || st.alert || "";
-    card.append(
-      el("p", { class: "story-kicker", text: `Issue #${issueNumber(null)}${live ? " · in progress" : ""}` }),
+    const left = live && soloActions.leftover(hero);
+    const owner = left && st.heroId ? Store.getCharacter?.(st.heroId) : null;
+    // Element.append prints a null child as the word "null"; only real nodes go in.
+    card.append(...[
+      el("p", { class: "story-kicker", text: `Issue #${issueNumber(null)}${left ? "" : live ? " · in progress" : ""}` }),
       el("h2", { class: "vn-title", text: hero.identity.heroName || hero.identity.realName || "Your hero" }),
-      live ? el("p", { class: "vn-text", text: `The crisis: ${live}` }) : null,
-      live ? el("p", { class: "vn-text vn-hint", text: "Pick a move below to carry on." })
+      live ? el("p", { class: "vn-text", text: left
+        ? `A crisis is still on the board from ${owner ? `${owner.identity.heroName || "another hero"}'s game` : "earlier play"}: ${live}`
+        : `The crisis: ${live}` }) : null,
+      left ? el("p", { class: "vn-text vn-hint", text: "Take it on, or clear it and sound a fresh alert." })
+        : live ? el("p", { class: "vn-text vn-hint", text: "Pick a move below to carry on." })
         : prev ? el("p", { class: "vn-text", text: `Previously… ${prev.text}` })
-          : el("p", { class: "vn-text", text: "Tonight's emergency is one tap away." }));
+          : el("p", { class: "vn-text", text: "Tonight's emergency is one tap away." })].filter(Boolean));
   } else {
     const kicker = { note: "You", roll: e.detail?.sixes ? "Success" : "No luck", state: "Ouch", lifecycle: "Scene", solo: "Meanwhile…" }[e.kind] || "Meanwhile…";
     const p = el("p", { class: e.kind === "note" ? "vn-text written" : "vn-text" });
@@ -401,7 +407,13 @@ export function renderStory(mount, { keepScroll = false } = {}) {
   const boardMount = el("div", { class: "story-board-solo" });
   const combatMount = el("div", { class: "story-board-combat" });
   const mounts = { board: boardMount, combat: combatMount };
-  const opts = fighting ? fightChoices(combat, mounts) : loopChoices(mounts);
+  // A crisis this hero did not start: ask first, never hand it over as if they had rolled it.
+  const leftover = !fighting && !open && soloActions.leftover(hero);
+  const opts = fighting ? fightChoices(combat, mounts)
+    : leftover ? [
+      choice("Start fresh", () => soloActions.startFresh(), { primary: true, key: "fresh", ico: "alert", hint: "Clear the board; then sound tonight's alert." }),
+      choice("Take it on", () => soloActions.adopt(hero), { key: "adopt", ico: "target", hint: "Carry on with this crisis as your hero's." })]
+    : loopChoices(mounts);
   const run = async (fn) => { closeSheets(); try { await fn(); } catch (err) { console.error(err); showToast(String(err.message || err), { variant: "danger" }); } schedule(); };
   const up = fighting ? currentTurn(combat) : null;
   const choices = el("nav", { class: "story-choices", "aria-label": "What happens next" },
@@ -425,6 +437,10 @@ export function renderStory(mount, { keepScroll = false } = {}) {
       menuItem(fighting ? "The fight board" : "Timers & crises", "map", () => openBoard(fighting ? null : "solo-timers"), { "aria-controls": "story-board", stay: true }),
       menuItem("Which dice do I roll?", "die", () => openAttributeGuide()),
       fighting ? null : menuItem("Something else…", "question", () => soloActions.move(boardMount), { "data-choice": "else" }),
+      !fighting && st.alert ? menuItem("Start a fresh crisis", "alert", async () => {
+        if (await confirmModal("Clear the crisis board — the alert, timers, crises and crisis level — and start again? Your journal is kept, and Undo brings the board back.",
+          { title: "Start a fresh crisis", confirmLabel: "Clear the board", variant: "warn" })) soloActions.startFresh();
+      }, { "data-choice": "fresh-menu" }) : null,
       !fighting && step === 3 && st.alert ? menuItem("Resolve the crisis", "check", () => soloActions.resolve(boardMount), { "data-choice": "resolve" }) : null,
       !fighting && soloActions.inSession() && step !== 5 ? menuItem("Stop for tonight", "clock", () => soloActions.stop(boardMount), { "data-choice": "stop" }) : null,
       menuItem("My hero", "hero", () => { location.hash = "#/sheet"; }),

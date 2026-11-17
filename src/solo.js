@@ -820,6 +820,24 @@ export const soloActions = {
   claim: (mount) => { const st = load(); const o = st.objectives.find((x) => x.status === "reached"); return o ? completeObjective(st, o, mount) : null; },
   encounterWaiting: () => { const e = load().encounter; return !!(e && e.phase && e.phase !== "moving"); },
   inSession: () => inSession(load()),
+  /** A crisis on the board that this hero did not start here: another hero's, or from before a wipe. */
+  leftover: (hero) => {
+    const st = load();
+    if (!st.alert || !hero) return false;
+    if (st.heroId) return st.heroId !== hero.id;
+    // Saved before the board recorded its hero: leftover if this hero has never played a session.
+    return !Journal.listSessions().some((x) => x.characterId === hero.id);
+  },
+  /** This hero takes the crisis on as their own. */
+  adopt: (hero) => { const st = load(); st.heroId = hero?.id || null; save(st); },
+  /** Clear the crisis board (timers, crises, level) — one Undo brings it back. Journal untouched. */
+  startFresh: () => {
+    Store.snapshot("Start a fresh crisis");
+    localStorage.removeItem(KEY);
+    document.dispatchEvent(new CustomEvent("solo-changed"));
+    showToast("The board is clear. Sound the alert when you're ready.", { variant: "good", timeout: 7000,
+      action: { label: "Undo", onClick: () => { Store.undo(); document.dispatchEvent(new CustomEvent("solo-changed")); } } });
+  },
 };
 
 export function renderSolo(mount) {
@@ -1575,6 +1593,9 @@ async function generateAlert(state, mount) {
   // An alert IS the start of a sitting, so the journal opens a session here — before the alert is
   // logged, so the alert itself is the session's first entry rather than an unfiled line before it.
   Journal.startSession(state.alertParts?.headline || text, Store.activeCharacter()?.id || null);
+  // The board is one per app, not one per hero: record whose crisis this is, so another hero (or a
+  // fresh start) is told it was left over rather than handed it as if they had rolled it.
+  state.heroId = Store.activeCharacter()?.id || null;
   logEvent(state, `New crisis alert: ${text}`);
   state.closed = false;
   save(state);

@@ -96,6 +96,9 @@ export function renderHome(mount) {
  * as an explicit choice, and straight into the story. Everything stays editable on the Hero tab.
  */
 export function firstIssue() {
+  // Issue #1 starts clean. Play is only offered with no hero at all, so any crisis still on the
+  // board was left by a deleted hero or earlier play and belongs to nobody.
+  localStorage.removeItem("invincible:solo");
   Settings.set("soloMode", true);
   document.dispatchEvent(new CustomEvent("nav-refresh"));
   const hero = quickHero({ solo: true });
