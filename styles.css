@@ -1703,3 +1703,4 @@ body.no-motion .vn-scene.enter, body.no-motion .vn-hit, body.no-motion .vn-sheet
 body.game-mode .toasts { top: calc(64px + env(safe-area-inset-top)); bottom: auto; }
 .vn .story-pending:not(:empty) { flex: 1 0 auto; justify-content: center; padding: .6rem; border: 3px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); background: linear-gradient(180deg, #0b1a3d 0%, #1b2f6b 70%, #2a2350 100%); }
+.vn-text.vn-hint { margin-top: .35rem; font-size: .95rem; opacity: .85; }
