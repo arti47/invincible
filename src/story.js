@@ -74,6 +74,11 @@ function schedule() {
 }
 document.addEventListener("journal-changed", schedule);
 document.addEventListener("solo-changed", schedule);
+// The splash belongs to the moment a session closes. Leaving the story ends that moment, so a
+// later visit (Home's "Continue issue") opens on the play, not on "The end… for now".
+window.addEventListener("hashchange", () => {
+  if (!/^#\/story/.test(location.hash)) { splash = null; watchedSession = null; }
+});
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !storyMount?.isConnected || document.querySelector(".modal-backdrop")) return;
   if (sheetOpen) closeSheets(); else if (boardOpen) closeBoard();

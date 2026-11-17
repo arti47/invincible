@@ -5146,6 +5146,47 @@ const run = async () => {
   ok("Home with a hero is the cover and one button into the game, no roster", vn.home.cover && vn.home.play && !vn.home.roster && vn.home.primaries === 1, JSON.stringify(vn.home));
   ok("the roster lives on Heroes & team, a More tile", vn.heroesTile && vn.heroesRoster, JSON.stringify([vn.heroesTile, vn.heroesRoster]));
 
+  // Reported: after "Stop for tonight" the story could not start again — the splash survived a
+  // return visit, and resuming a paused crisis never reopened a journal session.
+  const resume = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const J = await import("/src/journal.js");
+    const Solo = await import("/src/solo.js");
+    const { Settings } = await import("/src/settings.js");
+    const wasSolo = Settings.soloMode(); const before = Store.activeCharacterId();
+    const keep = { solo: localStorage.getItem("invincible:solo"), j: localStorage.getItem("invincible:journal"), chars: Store.listCharacters().map((c) => c.id) };
+    const S = await import("/src/screens.js");
+    localStorage.removeItem("invincible:solo"); J.clearAll();
+    S.firstIssue(); await wait(450);
+    // A crisis in flight, then the sitting paused the way Stop for tonight leaves it.
+    localStorage.setItem("invincible:solo", JSON.stringify({ crisisLevel: 2, alert: "A dam is failing", alertParts: { headline: "A dam is failing" },
+      crises: [], timers: [{ id: "t1", name: "Dam", proximity: "soon" }], allies: [], objectives: [], encounter: null, mode: "alert",
+      log: [], eventChecks: 1, awaitingSocial: false, resolved: 0 }));
+    J.startSession("A dam is failing", Store.activeCharacterId()); await wait(200);
+    const st = JSON.parse(localStorage.getItem("invincible:solo")); st.closed = true; localStorage.setItem("invincible:solo", JSON.stringify(st));
+    J.endSession(); await wait(300);
+    const out = { splashOnClose: !!document.querySelector("#screen .vn-splash") };
+    location.hash = "#/home"; await wait(250); location.hash = "#/story"; await wait(400);
+    out.noSplashOnReturn = !document.querySelector("#screen .vn-splash");
+    out.choices = document.querySelectorAll("#screen .story-choice").length;
+    // Any move that logs reopens a journal session, and the beat reaches the stage.
+    const n = J.listSessions().length;
+    Solo.soloActions.eventCheck(document.querySelector("#screen .story-board-solo")); await wait(400);
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove()); document.body.classList.remove("modal-open");
+    out.reopened = !!J.openSession() && J.listSessions().length === n + 1 && /continued/.test(J.openSession().title || "");
+    out.closedCleared = JSON.parse(localStorage.getItem("invincible:solo")).closed === false;
+    for (const ch of Store.listCharacters()) if (!keep.chars.includes(ch.id)) Store.deleteCharacter(ch.id);
+    if (keep.solo === null) localStorage.removeItem("invincible:solo"); else localStorage.setItem("invincible:solo", keep.solo);
+    if (keep.j === null) J.clearAll(); else localStorage.setItem("invincible:journal", keep.j);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo); document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; await wait(200);
+    return out;
+  });
+  ok("the issue-end splash shows when a session closes, but not on a later return", resume.splashOnClose && resume.noSplashOnReturn && resume.choices > 0, JSON.stringify(resume));
+  ok("resuming a paused crisis opens the next journal session", resume.reopened && resume.closedCleared, JSON.stringify(resume));
+
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
   //   npm run probe        (or PROBE=1 npm test)
