@@ -10,7 +10,7 @@ import * as Derived from "./derived.js";
 import * as Store from "./store.js";
 import { Settings, TOGGLES, applyTheme } from "./settings.js";
 import { lifecycleButtons, openLifecycle, stageCard } from "./combat.js";
-import { openTeamWizard, listPregens, instantiatePregen } from "./wizard.js";
+import { openTeamWizard, listPregens, instantiatePregen, quickHero } from "./wizard.js";
 import { showNPC } from "./gm.js";
 import { soloStageCard, crisisNow } from "./solo.js";
 import { buyBaseUpgrade } from "./sheet.js";
@@ -50,32 +50,71 @@ function homeCover(c) {
     barcode);
 }
 
+/**
+ * Home is a title screen. Cold, it is one button — Play — which rolls a legal hero off the book's
+ * own tables, switches Crisis Mode on and opens Issue #1 (`firstIssue`). With a hero, it is the
+ * cover and one button into the game. The roster, the team, pregens and the quick reference live
+ * on the Heroes & team screen (`renderHeroes`), a More tile, so the first thing anyone sees is
+ * never a wall of panels.
+ */
 export function renderHome(mount) {
   clear(mount);
   const c = Store.activeCharacter();
   const chars = Store.listCharacters();
-  const team = Store.getTeam();
+
+  if (!chars.length) {
+    mount.append(el("section", { class: "title-screen span", "aria-label": "Invincible Player" },
+      el("div", { class: "title-art", "aria-hidden": "true" }, skyline(), el("span", { class: "cover-hero" }, heroFigure("#ffd400"))),
+      el("h1", { class: "title-logo" }, "Invincible", el("em", { text: "Player" })),
+      el("p", { class: "title-tag", text: "You are the hero. The app is the Game Master." }),
+      el("button", { class: "btn primary big title-play", "data-action": "first-issue", onclick: () => firstIssue() }, icon("play", { size: 26 }), " Play"),
+      el("div", { class: "title-links" },
+        el("a", { class: "btn ghost", href: "#/create" }, "Build my own hero"),
+        el("button", { class: "btn ghost", onclick: () => openPregens() }, "Play a published hero"),
+        el("a", { class: "btn ghost", href: "#/learn" }, "Learn the rules first"))));
+    return;
+  }
 
   // One spine, not two. A solo player was being told to run the group lifecycle ("Start session"
   // -> "Start action scene") while the engine that actually generates their game sat on another
   // tab. When Crisis Mode is on, the solo thread is the thread.
   if (c) mount.append(homeCover(c));
-  if (chars.length) mount.append(Settings.soloMode() ? soloStageCard() : stageCard());
+  mount.append(Settings.soloMode() ? soloStageCard() : stageCard());
 
-  // With an empty roster, learning the game comes before building a hero for it.
-  if (!chars.length) {
-    mount.append(el("section", { class: "card masthead" },
-      el("h1", { text: "Invincible Player" }),
-      el("h3", { text: "New to the game?" }),
-      el("p", { class: "muted", text: "A step-by-step tutorial for first-time players — dice, fights, damage and karma — plus one for solo play with no GM." }),
-      el("div", { class: "row-actions" },
-        el("a", { class: "btn primary big", href: "#/learn" }, "Start the tutorial"))));
-  }
+  // The table lifecycle stays on Home outside Crisis Mode: a human GM runs those beats from here.
+  // In Crisis Mode the story owns the session (social scene, Stop for tonight, Head home).
+  if (!Settings.soloMode()) mount.append(el("section", { class: "card", id: "session-controls" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
+
+  mount.append(el("nav", { class: "title-links span", "aria-label": "Elsewhere" },
+    el("a", { class: "btn ghost", href: "#/heroes" }, icon("hero", { size: 18 }), " Heroes & team"),
+    el("a", { class: "btn ghost", href: "#/journal" }, icon("journal", { size: 18 }), " Journal")));
+}
+
+/**
+ * Issue #1 from a cold start: a complete, legal hero rolled off the book's own tables (the same
+ * quick build the wizard's "Build one for me" runs, with the Ch.9 solo allowance), Crisis Mode on
+ * as an explicit choice, and straight into the story. Everything stays editable on the Hero tab.
+ */
+export function firstIssue() {
+  Settings.set("soloMode", true);
+  document.dispatchEvent(new CustomEvent("nav-refresh"));
+  const hero = quickHero({ solo: true });
+  location.hash = "#/story";
+  showToast(`Meet ${hero.identity.heroName || "your hero"}. Rename or rebuild them any time on the Hero tab.`, { variant: "good", timeout: 6000 });
+  return hero;
+}
+
+/** The roster, the team and the references that used to crowd Home. */
+export function renderHeroes(mount) {
+  clear(mount);
+  const c = Store.activeCharacter();
+  const chars = Store.listCharacters();
+  const team = Store.getTeam();
 
   // The roster: who you play, then the three ways to get another hero.
   const roster = el("section", { class: "card hero-card" },
     el("h2", { text: chars.length ? "Your heroes" : "Make a hero" }),
-    el("p", { class: "muted", text: "Character creation, live tracking and the dice engine for Invincible — Superhero Roleplaying." }));
+    el("p", { class: "muted", text: "Pick who you play, or add another." }));
   if (chars.length) {
     const list = el("div", { class: "char-list" });
     for (const ch of chars) {
@@ -88,7 +127,7 @@ export function renderHome(mount) {
             el("span", { class: "muted small", text: `${R.findRank(ch.identity.rank)?.name} · H ${ch.state.health}/${s.maxHealth} · R ${ch.state.resolve}/${s.maxResolve} · Karma ${ch.state.karma}` }))),
         el("button", { class: "btn tiny danger", "aria-label": `Delete ${ch.identity.heroName || "this hero"}`, onclick: async () => {
           if (await confirmModal(`Delete ${ch.identity.heroName || "this hero"}? This cannot be undone.`, { title: "Delete hero", variant: "danger", confirmLabel: "Delete" })) {
-            Store.deleteCharacter(ch.id); renderHome(mount);
+            Store.deleteCharacter(ch.id); renderHeroes(mount);
           }
         } }, "Delete")));
     }
@@ -97,7 +136,7 @@ export function renderHome(mount) {
   roster.append(el("div", { class: "row-actions" },
     el("a", { class: `btn ${chars.length ? "" : "primary"}`, href: "#/create" }, c ? "Create another hero" : "Create your hero"),
     el("button", { class: "btn", onclick: () => openPregens() }, "Play a published hero"),
-    el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, team ? "Edit team" : "Create a team")));
+    el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHeroes(mount)) }, team ? "Edit team" : "Create a team")));
   mount.append(roster);
 
   if (team) {
@@ -107,16 +146,11 @@ export function renderHome(mount) {
       team.purpose ? el("p", { text: team.purpose }) : null,
       el("p", { class: "muted small", text: `${team.base?.location || "No base yet"} — ${(team.base?.upgrades || []).map((u) => u.name).join(", ") || "no upgrades"}` }),
       el("div", { class: "row-actions" },
-        el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHome(mount)) }, "Edit team & base"),
+        el("button", { class: "btn ghost", onclick: () => openTeamWizard(() => renderHeroes(mount)) }, "Edit team & base"),
         // The purchase lives in the karma dialog; someone looking at the base should still find it.
-        el("button", { class: "btn ghost", onclick: () => buyBaseUpgrade(() => renderHome(mount)) },
+        el("button", { class: "btn ghost", onclick: () => buyBaseUpgrade(() => renderHeroes(mount)) },
           `Buy an upgrade — ${D.KARMA.costs.baseUpgrade} karma`))));
   }
-
-  // The session lifecycle needs a hero to act on; showing it first is six buttons that cannot help.
-  // In Crisis Mode the Solo screen owns the session (social scene, Stop for tonight, Head home) and the
-  // Action board ends its own scenes, so a second set of session controls here would be a rival spine.
-  if (chars.length && !Settings.soloMode()) mount.append(el("section", { class: "card", id: "session-controls" }, el("h3", { text: "Scene & session" }), lifecycleButtons()));
 
   mount.append(el("section", { class: "card" },
     el("h3", { text: "Quick reference" }),

@@ -113,40 +113,36 @@ export function soloStageCard() {
   // the tools, the moves — lives only on the Play screen, so the two never read as duplicates.
   const card = el("section", { class: "card next-step play-bar", id: "solo-stage" });
 
+  // The issue number: sessions played so far, plus this one if it is not open yet.
+  const issue = Journal.listSessions().length + (Journal.openSession() ? 0 : 1);
   if (!running) {
     // Cold, or between sessions. Say what carried over, then offer the one control that starts play.
     const last = lastClosing(state);
-    put(card, 
-      el("p", { class: "next-step-eyebrow", text: "Now" }),
-      el("h2", { text: last ? "Ready for the next session" : "Ready to play" }),
-      last
-        ? el("p", { class: "next-step-why", text: `Last time: ${last}` })
-        : el("p", { class: "muted small", text: "Crisis Mode is your GM. Play opens on the next step." }),
+    put(card,
+      el("h2", { class: "sr-only", text: `Issue #${issue} — ready to play` }),
+      el("a", { class: "btn primary big title-play", href: "#/story" }, `Start issue #${issue}`),
+      el("p", { class: "muted small", text: last ? `Last time: ${last}` : "Crisis Mode is your Game Master: it rolls what happens, you say what your hero does." }),
       state.crisisLevel > 0
         ? el("p", { class: "muted small", text: `Crisis level ${state.crisisLevel} — ${phase.name} — carries into tonight.` })
         : null,
       el("div", { class: "row-actions" },
-        el("a", { class: "btn primary big", href: "#/story" }, "Start tonight's session"),
-        el("button", { class: "btn ghost", onclick: () => { setLearnTab("walkthrough"); location.hash = "#/learn"; } },
-          "Show me a whole session first"),
+        Journal.listSessions().length ? null
+          : el("button", { class: "btn ghost", onclick: () => { setLearnTab("walkthrough"); location.hash = "#/learn"; } }, "Show me a whole session first"),
         el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
     return card;
   }
 
   // Mid-session, or returning days later. Say where you are and what is owed.
   const step = currentStep(state);
-  const next = NEXT_STEP[step];
   const live = (state.timers || []).length;
-  const bits = [];
-  if (state.alertParts?.headline || state.alert) bits.push(state.alertParts?.headline || state.alert);
-  put(card, 
-    el("p", { class: "next-step-eyebrow", text: `In play — step ${step + 1} of 6` }),
-    el("h2", { text: next ? next.label : "Continue" }),
-    bits.length ? el("p", { class: "muted small", text: `${bits[0]} · crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running` }) : null,
+  const headline = state.alertParts?.headline || state.alert;
+  put(card,
+    el("h2", { class: "sr-only", text: `Issue #${issue} — in play` }),
+    el("a", { class: "btn primary big title-play", href: "#/story" }, `Continue issue #${issue}`),
+    el("p", { class: "muted small", text: `In play — step ${step + 1} of 6${headline ? ` · ${headline}` : ""} · crisis level ${state.crisisLevel} (${phase.name}) · ${live} timer${live === 1 ? "" : "s"} running` }),
     el("div", { class: "row-actions" },
-      el("a", { class: "btn primary big", href: "#/story" }, "Continue the session"),
       // Knowing how to stop matters as much as knowing how to continue.
-      el("button", { class: "btn", onclick: () => stopForTonight(load(), document.querySelector("#screen")) }, "Stop for tonight"),
+      el("button", { class: "btn ghost", onclick: () => stopForTonight(load(), document.querySelector("#screen")) }, "Stop for tonight"),
       el("button", { class: "btn ghost", onclick: () => Combat.howToPlay() }, "How do I play?")));
   return card;
 }

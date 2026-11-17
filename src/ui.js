@@ -95,6 +95,9 @@ export function modal({ title, body, actions = [], dismissible = true, size = ""
   }
 
   function onKey(e) {
+    // A dialog taken out of the page without close() must not keep swallowing Escape for
+    // everything else (the story's sheets, the oracle drawer): drop the stale listener instead.
+    if (!backdrop.isConnected && !dialog.isConnected) { document.removeEventListener("keydown", onKey, true); return; }
     if (e.key === "Escape" && dismissible) { e.stopPropagation(); close(null); }
     else if (e.key === "Tab") trapFocus(dialog, e);
   }

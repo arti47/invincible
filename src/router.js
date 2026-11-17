@@ -22,6 +22,7 @@ const ROUTES = [
   { path: "sheet", label: "Hero", icon: "hero", nav: "tab", render: (m) => Sheet.renderSheet(m) },
   { path: "combat", label: "Action", icon: "combat", nav: "more", desc: "Initiative, combatants and challenges", render: (m) => Combat.renderCombat(m) },
   { path: "rules", label: "Rules", icon: "rules", nav: "more", desc: "Glossary and the full rules library", render: (m, arg) => Screens.renderRules(m, arg) },
+  { path: "heroes", label: "Heroes & team", icon: "hero", nav: "more", desc: "Your roster, published heroes, the team and base", render: (m) => Screens.renderHeroes(m) },
   { path: "compendium", label: "NPCs", icon: "npcs", nav: "more", desc: "Profiles, creatures, adversaries, heroes", render: (m) => Screens.renderCompendium(m) },
   { path: "story", label: "Story", icon: "journal", nav: "more", desc: "Crisis Mode as a story you play and write", render: (m) => Story.renderStory(m), gate: () => Settings.soloMode() },
   { path: "solo", label: "Solo", icon: "solo", nav: "more", desc: "The Crisis Mode board: timers, crises, oracles", render: (m) => Solo.renderSolo(m), gate: () => Settings.soloMode() },
@@ -73,7 +74,7 @@ export function route() {
   mount.scrollTop = 0;
   delete document.body.dataset.crisis;   // the Solo screen sets its phase backdrop while it is shown
   // Wide screens lay these out in columns; reading screens stay one measure wide.
-  mount.classList.toggle("cols", ["home", "sheet", "solo", "gm", "more"].includes(def.path));
+  mount.classList.toggle("cols", ["sheet", "solo", "gm", "more", "heroes"].includes(def.path));
   try {
     def.render(mount, currentArg());
   } catch (e) {
@@ -84,6 +85,8 @@ export function route() {
   if (header) Sheet.renderResourceHeader(header);
   decorate(mount, def);
   document.body.dataset.route = def.path;
+  // Game mode: the story fills the screen; tabs, app header and resource bar step aside.
+  document.body.classList.toggle("game-mode", def.path === "story");
   updateNavState(def.path);
   updateFab();
   document.title = `${def.label} · Invincible Player`;
