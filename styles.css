@@ -1565,3 +1565,141 @@ body.no-motion .story-board { transition: none; }
 .story-board-solo > #solo-move { order: 9; }
 .story-board-solo > #solo-move > .row-actions { display: none; }
 .story-board .timer-chart { grid-template-columns: 1fr; }
+
+/* ================================================================ game mode — the story as a visual novel */
+body.game-mode .bottom-nav, body.game-mode .resource-header, body.game-mode .app-header { display: none !important; }
+body.game-mode { padding-bottom: env(safe-area-inset-bottom); }
+@media (min-width: 900px) { body.game-mode { padding-left: 0; } }
+body.game-mode .screen { padding-top: .5rem; }
+.story.vn .story-main { gap: .6rem; min-height: calc(100dvh - 1.5rem); }
+
+/* HUD: the hero's tracks, the crisis dial, where you are, the menu. */
+.vn-hud { top: calc(env(safe-area-inset-top) + 4px); gap: .45rem; padding: .3rem .45rem; }
+.vn-hud .story-dial { width: 44px; flex: 0 0 44px; }
+.vn-meter { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: .3rem; align-items: center; min-width: 0; flex: 1 1 0; }
+.vn-meter small { grid-column: 1 / -1; font: 700 .55rem/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.vn-meter .vn-bar { grid-row: 2; grid-column: 2; height: 9px; border: 2px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--paper-2); }
+.vn-meter .vn-bar > span { display: block; height: 100%; transition: width .4s var(--ease); }
+.vn-meter.health .vn-bar > span { background: var(--danger); }
+.vn-meter.resolve .vn-bar > span { background: var(--accent-2); }
+.vn-meter strong { grid-row: 2; grid-column: 1; font: 400 1.05rem/1 var(--font-display); }
+.vn-hud .story-stat { flex: 0 0 auto; }
+.vn-hud .story-board-btn { margin-left: 0; padding: .3rem .45rem; }
+.vn-menu-btn { flex: 0 0 auto; }
+
+/* The stage: one scene at a time. */
+.vn-stage { display: flex; flex-direction: column; gap: .55rem; flex: 1 0 auto; }
+.vn-scene { position: relative; overflow: hidden; min-height: 300px; display: flex; flex-direction: column; justify-content: flex-end;
+  border: 3px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); color: #fffaee;
+  background: linear-gradient(180deg, #0b1a3d 0%, #1b2f6b 70%, #2a2350 100%); cursor: default; }
+.vn-scene.mood-danger { background: linear-gradient(180deg, #2a0710 0%, #6b1020 60%, #1b0d24 100%); }
+.vn-scene.mood-good { background: linear-gradient(180deg, #0b2a3d 0%, #1b6b5a 70%, #23442a 100%); }
+.vn-scene.mood-grim { background: linear-gradient(180deg, #111019 0%, #2e2c3a 70%, #19171f 100%); }
+.vn-scene.mood-calm { background: linear-gradient(180deg, #2b1d4d 0%, #6a3d7a 55%, #e0864a 100%); }
+.vn-art { position: absolute; inset: 0; pointer-events: none; }
+.vn-art > .art-skyline, .vn-art > .art { position: absolute; left: 0; right: 0; bottom: 0; }
+.vn-art svg { display: block; width: 100%; height: auto; }
+.vn-figure { position: absolute; right: 6%; bottom: 0; width: 34%; max-width: 170px; filter: drop-shadow(4px 4px 0 rgba(0,0,0,.45)); }
+.vn-mask { position: absolute; left: 50%; top: 10%; width: 46%; max-width: 220px; translate: -50% 0; opacity: .9; filter: drop-shadow(0 0 18px rgba(255,60,80,.55)); }
+.vn-radar { position: absolute; left: 50%; top: 8%; width: 58%; max-width: 260px; translate: -50% 0; opacity: .9; }
+.vn-hq { position: absolute; left: 50%; top: 8%; width: 70%; max-width: 320px; translate: -50% 0; opacity: .85; }
+.vn-burst { position: absolute; left: 50%; top: 6%; translate: -50% 0; color: var(--accent); opacity: .85; filter: drop-shadow(4px 4px 0 rgba(0,0,0,.5)); }
+.mood-grim .vn-burst { color: #8b8799; opacity: .5; }
+.vn-caption { position: relative; margin: 0 .6rem .6rem; padding: .7rem .85rem .8rem; background: rgba(12, 10, 20, .82); border: 2px solid #fffaee;
+  border-radius: 10px; box-shadow: 3px 3px 0 #000; }
+.vn-caption .story-kicker { display: inline-block; background: var(--accent); color: #121018; padding: .1rem .45rem; border: 2px solid #121018; rotate: -1.5deg; margin-bottom: .35rem; }
+.vn-title { margin: .1rem 0 .3rem; color: var(--role, var(--accent)); -webkit-text-stroke: 1px #121018; text-shadow: 3px 3px 0 #121018; text-transform: uppercase; font-size: var(--step-2); }
+.vn-text { margin: 0; font-size: 1.12rem; line-height: 1.45; color: #fffaee; min-height: 1.45em; }
+.vn-text.written { font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive; }
+.vn-text.typing::after { content: "▌"; opacity: .7; animation: vn-caret .7s steps(1) infinite; }
+@keyframes vn-caret { 50% { opacity: 0; } }
+.vn-note { margin-top: .45rem; padding-top: .45rem; border-top: 1px dashed rgba(255,250,238,.4); font-size: 1rem; }
+.vn-caption .dice-row { margin-top: .5rem; }
+.vn-caption .dice-row.small .die { width: 34px; height: 34px; font-size: .95rem; }
+.vn-scene.enter { animation: vn-in .35s var(--ease) both; }
+@keyframes vn-in { from { opacity: 0; transform: translateX(28px) scale(.98); } to { opacity: 1; transform: none; } }
+.vn-tally { display: flex; gap: .6rem; margin: .4rem 0 .7rem; }
+.vn-tally span { flex: 1; display: grid; text-align: center; padding: .35rem; border: 2px solid #fffaee; border-radius: 8px; }
+.vn-tally strong { font: 400 1.8rem/1 var(--font-display); color: var(--accent); }
+.vn-tally small { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; }
+.vn-splash-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.vn-splash .vn-title { font-size: var(--step-3, 2.2rem); }
+.vn-splash .btn.ghost { color: #fffaee; border-color: #fffaee; }
+
+/* A waiting result IS the scene: the choices step back until it is answered. */
+.vn-stage:has(.story-pending > .beat.pending) > .vn-scene { display: none; }
+.story-main:has(.story-pending > .beat.pending) > .story-choices,
+.story-main:has(.story-pending > .beat.pending) > .vn-balloon { display: none; }
+.vn .story-pending .beat-result { font-size: 1.02rem; }
+
+/* The balloon: what does your hero do? */
+.vn-balloon { position: relative; display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left; padding: .6rem .8rem; margin-top: .2rem;
+  background: #fffaee; color: #121018; border: 3px solid #121018; border-radius: 22px; box-shadow: 3px 3px 0 var(--shadow-c); cursor: pointer;
+  font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Neue", "Comic Sans MS", cursive; font-size: 1rem; }
+.vn-balloon::before { content: ""; position: absolute; left: 26px; top: -13px; border: 10px solid transparent; border-bottom-color: #121018; border-top: 0; }
+.vn-balloon.hidden { display: none; }
+.vn .story-write { display: none; }
+.vn .story-write.open { display: block; }
+
+/* Choices: big icon cards. */
+.vn .story-choices { grid-template-columns: 1fr; gap: .45rem; }
+.vn .story-choices > .story-kicker { font-size: .8rem; color: var(--muted); }
+.vn .story-choice { grid-template-columns: 44px 1fr; align-items: center; gap: .65rem; padding: .55rem .7rem; min-height: 60px; }
+.vn .story-choice strong { font-size: 1.3rem; }
+.choice-ico { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--line); background: var(--chipbg); }
+.vn .story-choice.primary .choice-ico { background: #121018; color: var(--accent); border-color: #121018; }
+@media (min-width: 560px) { .vn .story-choices { grid-template-columns: 1fr 1fr; } .vn .story-choices > .story-kicker { grid-column: 1 / -1; } }
+
+/* Menu and backlog: sheets over the stage. */
+.vn-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; max-height: 82dvh; overflow-y: auto; padding: .6rem var(--gutter) calc(1rem + env(safe-area-inset-bottom));
+  background: var(--paper); border-top: 3px solid var(--line); border-radius: 14px 14px 0 0; box-shadow: 0 -8px 0 rgba(0,0,0,.18); }
+.vn-sheet:not(.open) { display: none; }
+.vn-sheet.open { animation: sheet-up .25s var(--ease) both; }
+@keyframes sheet-up { from { transform: translateY(40%); opacity: .3; } }
+@media (min-width: 640px) { .vn-sheet { left: 50%; right: auto; width: min(560px, 100%); translate: -50% 0; } }
+.vn-sheet-head { position: sticky; top: -.6rem; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: .3rem 0 .5rem; background: var(--paper); }
+.vn-sheet-head h2 { margin: 0; font-size: var(--step-1); }
+.vn-menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; }
+.vn-menu-item { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem; text-align: left; font: 700 .95rem/1.15 var(--font-body); color: var(--ink);
+  background: var(--panel); border: 2px solid var(--line); border-radius: var(--radius); box-shadow: 2px 2px 0 var(--shadow-c); cursor: pointer; min-height: 52px; }
+.vn-menu-item .choice-ico { width: 34px; height: 34px; flex: 0 0 34px; }
+.vn-backlog .story-stream { gap: .45rem; }
+
+/* Hit: the screen shakes and flashes red when the hero takes damage. */
+.vn-hit { animation: vn-shake .42s linear 1; }
+.vn-hit .vn-scene::after { content: ""; position: absolute; inset: 0; background: rgba(255, 30, 50, .35); animation: vn-flash .42s ease-out both; pointer-events: none; }
+@keyframes vn-shake { 10%, 90% { transform: translateX(-2px); } 20%, 80% { transform: translateX(4px); } 30%, 50%, 70% { transform: translateX(-7px); } 40%, 60% { transform: translateX(7px); } }
+@keyframes vn-flash { from { opacity: 1; } to { opacity: 0; } }
+
+body.no-motion .vn-scene.enter, body.no-motion .vn-hit, body.no-motion .vn-sheet.open, body.no-motion .vn-text.typing::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .vn-scene.enter, .vn-hit, .vn-sheet.open { animation: none; } }
+
+/* Wide: the stage centred, the board a column beside it (as before). */
+@media (min-width: 900px) {
+  body.game-mode .screen { max-width: 1240px; }
+  .vn-scene { min-height: 380px; }
+}
+
+/* ================================================================ title screen (Home) */
+.title-screen { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: .8rem;
+  min-height: calc(100dvh - 190px); padding: 1.4rem 1rem 1.6rem; text-align: center; color: #fffaee;
+  border: 3px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); background: linear-gradient(180deg, #0b1a3d 0%, #1b2f6b 65%, #2a2350 100%); }
+.title-art { position: absolute; inset: 0; pointer-events: none; }
+.title-art > .art-skyline, .title-art > .art { position: absolute; left: 0; right: 0; bottom: 0; }
+.title-art svg { display: block; width: 100%; height: auto; }
+.title-art .cover-hero { right: 50%; translate: 50% 0; bottom: 18%; width: 40%; max-width: 190px; }
+.title-logo { position: relative; margin: 0; display: grid; font: 400 clamp(2.6rem, 13vw, 4.6rem)/0.9 var(--font-display); letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent); -webkit-text-stroke: 2px #121018; text-shadow: 5px 5px 0 #121018; rotate: -3deg; }
+.title-logo em { font-style: normal; justify-self: center; background: #121018; color: var(--accent); -webkit-text-stroke: 0; text-shadow: none; padding: .05em .35em; font-size: .55em; rotate: 2deg; }
+.title-tag { position: relative; margin: 0; font-weight: 700; background: rgba(12,10,20,.75); padding: .25rem .6rem; border-radius: 6px; }
+.title-play { position: relative; font-size: 1.7rem; min-height: 64px; min-width: 70%; display: inline-flex; align-items: center; justify-content: center; gap: .3rem; }
+.title-links { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem; margin-top: .4rem; }
+.title-screen .title-links .btn.ghost { color: #fffaee; border-color: rgba(255,250,238,.7); background: rgba(12,10,20,.55); }
+.screen > .title-links { justify-content: center; }
+.play-bar .title-play { width: 100%; }
+/* Layout pass: the scene takes the free height; toasts drop in from the top in game mode. */
+.vn-stage { flex: 1 0 auto; }
+.vn-stage > .vn-scene { flex: 1 0 auto; }
+body.game-mode .toasts { top: calc(64px + env(safe-area-inset-top)); bottom: auto; }
+.vn .story-pending:not(:empty) { flex: 1 0 auto; justify-content: center; padding: .6rem; border: 3px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); background: linear-gradient(180deg, #0b1a3d 0%, #1b2f6b 70%, #2a2350 100%); }

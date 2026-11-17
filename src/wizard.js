@@ -142,6 +142,23 @@ export function rollWholeHero(target = draft) {
   return { archetype: arche, occupation: occ };
 }
 
+/**
+ * A whole hero with no wizard on screen — the cold-start "Play" button. The same quick build as
+ * "Build one for me" (book tables only), normalised, saved and made active. Legal by construction:
+ * the build spends the budget exactly; `validateCharacter` is the harness's check of that.
+ */
+export function quickHero({ solo = true } = {}) {
+  const c = blankCharacter();
+  c.identity.solo = !!solo;
+  rollWholeHero(c);
+  const n = normalizeCharacter(c);
+  n.state.health = maxHealth(n);
+  n.state.resolve = maxResolve(n);
+  const saved = Store.saveCharacter(n);
+  Store.setActiveCharacter(saved.id);
+  return saved;
+}
+
 async function quickBuild() {
   const ok = await confirmModal(
     "This rolls a complete, legal hero for you: an archetype, attributes, powers, a power source, talents, an occupation, personality, a drive and a flaw. You can change any of it afterwards — every step stays open.",

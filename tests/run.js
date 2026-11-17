@@ -1833,7 +1833,7 @@ const run = async () => {
   const teamLink = await page.evaluate(async () => {
     const Store = await import("/src/store.js");
     const t = Store.blankTeam(); t.name = "Linked"; Store.saveTeam(t);
-    location.hash = "#/home";
+    location.hash = "#/heroes";
     await new Promise((r) => setTimeout(r, 300));
     return Array.from(document.querySelectorAll("#screen button")).some((b) => /Buy an upgrade/.test(b.textContent));
   });
@@ -1970,12 +1970,15 @@ const run = async () => {
   await page.waitForFunction(() => document.body.dataset.ready === "true");
   await page.waitForTimeout(200);
   const emptyHome = await page.evaluate(() => {
-    const labels = Array.from(document.querySelectorAll("#screen .card a, #screen .card button")).map((b) => b.textContent.trim());
-    return { tutorial: labels.indexOf("Start the tutorial"), create: labels.indexOf("Create your hero"),
+    const title = document.querySelector("#screen .title-screen");
+    const labels = Array.from(document.querySelectorAll("#screen a, #screen button")).map((b) => b.textContent.trim());
+    return { title: !!title, play: !!title?.querySelector('[data-action="first-issue"].primary'),
+      primaries: document.querySelectorAll("#screen .btn.primary").length,
+      create: labels.includes("Build my own hero"), learn: labels.includes("Learn the rules first"),
       lifecycle: labels.includes("Start session") };
   });
-  ok("an empty roster meets the tutorial before the creation card",
-    emptyHome.tutorial >= 0 && emptyHome.tutorial < emptyHome.create, `${emptyHome.tutorial} < ${emptyHome.create}`);
+  ok("an empty roster meets a title screen: one Play, with building and learning beside it",
+    emptyHome.title && emptyHome.play && emptyHome.primaries === 1 && emptyHome.create && emptyHome.learn, JSON.stringify(emptyHome));
   ok("no session controls are shown before there is a hero to use them on", emptyHome.lifecycle === false);
 
   // With a hero present, the lifecycle row itself has to read in session order.
@@ -3666,7 +3669,7 @@ const run = async () => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const wide = await page.evaluate(async () => {
     const wait = (ms) => new Promise((x) => setTimeout(x, ms));
-    location.hash = "#/home"; await wait(250);
+    location.hash = "#/heroes"; await wait(250);
     const roster = document.querySelector("#screen .char-list");
     const rosterCols = roster ? getComputedStyle(roster).gridTemplateColumns.split(" ").length : 1;
     location.hash = "#/compendium"; await wait(250);
@@ -3899,14 +3902,14 @@ const run = async () => {
   ok("a solo player's Home shows the solo spine, not the group lifecycle",
     arc.soloCard && !arc.groupCard, `solo:${arc.soloCard} group:${arc.groupCard}`);
   ok("starting: cold Home offers one control that begins play",
-    /Start tonight's session/.test(arc.cold), arc.cold.slice(0, 90));
+    /Start issue #\d/.test(arc.cold), arc.cold.slice(0, 90));
   ok("starting: a first-timer is offered a whole worked session first",
     /Show me a whole session/.test(arc.cold));
   ok("sustaining: mid-session Home says which step you are on and what is running",
-    /In play — step \d of 6/.test(arc.mid) && /timer/.test(arc.mid) && /Continue the session/.test(arc.mid),
+    /In play — step \d of 6/.test(arc.mid) && /timer/.test(arc.mid) && /Continue issue #\d/.test(arc.mid),
     arc.mid.slice(0, 140));
   ok("sustaining: mid-session Home names the crisis rather than starting over",
-    /dam is failing/i.test(arc.mid) && !/Start tonight/.test(arc.mid));
+    /dam is failing/i.test(arc.mid) && !/Start issue/.test(arc.mid));
   ok("ending: a closed session leaves a foothold the next sitting opens with",
     /Last time:/.test(arc.back) && /cult in the docks/.test(arc.back), arc.back.slice(0, 160));
   ok("ending: a raised crisis level is carried into the next session in words",
@@ -4903,7 +4906,7 @@ const run = async () => {
     const prevVp = page.viewportSize();
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.evaluate(() => { location.hash = "#/more"; }); await page.waitForTimeout(80);
-    await page.evaluate(() => { location.hash = "#/home"; }); await page.waitForTimeout(400);
+    await page.evaluate(() => { location.hash = "#/sheet"; }); await page.waitForTimeout(400);
     const spread = await page.evaluate(() => {
       const m = document.querySelector("#screen.cols") || document.querySelector(".screen.cols");
       return m ? [getComputedStyle(m, "::before").content, getComputedStyle(m, "::after").content] : null;
@@ -5022,6 +5025,126 @@ const run = async () => {
   ok("a blow that lands is written to the record", story.damageLine);
   ok("once one side is down, ending the scene is the move", story.won.length === 1 && /fight is won/i.test(story.won[0]), JSON.stringify(story.won));
   ok("off the story screen, result dialogs stay dialogs", story.boardDialog);
+
+  section("Visual-novel play");
+  const vn = await page.evaluate(async () => {
+    const wait = (ms) => new Promise((x) => setTimeout(x, ms));
+    const Store = await import("/src/store.js");
+    const W = await import("/src/wizard.js");
+    const D = await import("/src/derived.js");
+    const J = await import("/src/journal.js");
+    const C = await import("/src/combat.js");
+    const { Settings } = await import("/src/settings.js");
+    const out = {};
+    const wasSolo = Settings.soloMode();
+    const before = Store.activeCharacterId();
+    const keep = { solo: localStorage.getItem("invincible:solo"), j: localStorage.getItem("invincible:journal"), chars: Store.listCharacters().map((c) => c.id) };
+    // The quick build behind "Play" is legal every time.
+    let illegal = 0;
+    for (let i = 0; i < 40; i++) {
+      const c = W.quickHero({ solo: i % 2 === 0 });
+      if (D.validateCharacter(c).errors.length || D.creationBudget(c).remaining !== 0) illegal++;
+      Store.deleteCharacter(c.id);
+    }
+    out.illegal = illegal;
+    // Cold Play: Crisis Mode on, a hero made, the story open.
+    Settings.set("soloMode", false);
+    const S = await import("/src/screens.js");
+    localStorage.removeItem("invincible:solo"); J.clearAll();
+    const hero = S.firstIssue(); await wait(450);
+    out.cold = { solo: Settings.soloMode(), hash: location.hash, active: Store.activeCharacterId() === hero.id };
+    document.querySelectorAll(".toast").forEach((t) => t.remove());
+    // Game mode: no tab bar, no resource bar; one scene; icon cards with no hint text on screen.
+    out.gameMode = document.body.classList.contains("game-mode")
+      && getComputedStyle(document.querySelector("#bottom-nav")).display === "none"
+      && getComputedStyle(document.querySelector("#resource-header")).display === "none";
+    out.scenes = document.querySelectorAll("#screen .vn-scene").length;
+    const cards = Array.from(document.querySelectorAll("#screen .story-choice"));
+    out.cards = cards.length > 0 && cards.every((b) => b.querySelector(".choice-ico svg") && !b.querySelector(".small") && b.getAttribute("title"));
+    // The balloon: the write box is closed until the balloon is tapped.
+    const write = document.querySelector("#screen .story-write");
+    out.writeClosed = getComputedStyle(write).display === "none";
+    document.querySelector("#screen .vn-balloon").click(); await wait(50);
+    out.writeOpens = getComputedStyle(document.querySelector("#screen .story-write")).display !== "none";
+    const ta = document.querySelector("#screen .story-text"); ta.value = "Rain on the rooftops."; ta.dispatchEvent(new Event("input"));
+    Array.from(document.querySelectorAll("#screen .story-write .btn")).find((b) => /Write it/.test(b.textContent)).click(); await wait(1200);
+    out.sceneText = document.querySelector("#screen .vn-scene .vn-text")?.textContent || "";
+    // The menu holds the less common moves; the backlog holds the session; Escape closes either.
+    document.querySelector("#screen .vn-menu-btn").click(); await wait(60);
+    const menu = document.querySelector("#screen .vn-menu");
+    out.menuOpen = menu.classList.contains("open") && getComputedStyle(menu).display !== "none";
+    out.menuItems = Array.from(menu.querySelectorAll(".vn-menu-item")).map((b) => b.textContent.trim());
+    Array.from(menu.querySelectorAll(".vn-menu-item")).find((b) => /Story so far/.test(b.textContent)).click(); await wait(80);
+    const back = document.querySelector("#screen .vn-backlog");
+    out.backlog = back.classList.contains("open") && Array.from(back.querySelectorAll(".beat")).some((b) => b.textContent.includes("Rain on the rooftops."));
+    out.modalLeft = document.querySelectorAll(".modal-backdrop").length;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })); await wait(50);
+    out.escape = !document.querySelector("#screen .vn-sheet.open");
+    // A waiting result is the scene: the choices step back until it is answered.
+    document.querySelector('#screen .story-choice[data-choice="alert"]').click(); await wait(250);
+    document.querySelector(".modal-backdrop .modal .choice")?.click(); await wait(500);
+    out.pendingHides = !!document.querySelector("#screen .story-pending .beat.pending")
+      && getComputedStyle(document.querySelector("#screen .story-choices")).display === "none";
+    Array.from(document.querySelectorAll("#screen .story-pending .beat.pending .btn")).find((b) => /Later/.test(b.textContent))?.click(); await wait(300);
+    out.choicesBack = getComputedStyle(document.querySelector("#screen .story-choices")).display !== "none";
+    // Damage to the hero shakes the screen.
+    const c = Store.activeCharacter(); c.state.health = Math.max(1, c.state.health - 2); Store.saveCharacter(c); await wait(300);
+    out.hit = !!document.querySelector("#screen .vn-hit") || document.body.classList.contains("no-motion");
+    // Closing the session brings up the issue-end splash; Next issue puts the choices back.
+    J.endSession(); await wait(300);
+    const splash = document.querySelector("#screen .vn-splash");
+    out.splash = !!splash && /Issue #\d+ complete/.test(splash.textContent) && !document.querySelector("#screen .story-choices");
+    splash?.querySelector('[data-choice="next-issue"]')?.click(); await wait(300);
+    out.next = !document.querySelector("#screen .vn-splash") && !!document.querySelector('#screen .story-choice[data-choice]');
+    // Leaving the story leaves game mode.
+    location.hash = "#/home"; await wait(300);
+    out.leftGame = !document.body.classList.contains("game-mode") && getComputedStyle(document.querySelector("#bottom-nav")).display !== "none";
+    // Home with a hero is a title screen: cover, one button into the game, no roster.
+    out.home = { cover: !!document.querySelector("#screen .cover"), play: /Start issue|Continue issue/.test(document.querySelector("#screen .play-bar .title-play")?.textContent || ""),
+      roster: !!document.querySelector("#screen .char-list"), primaries: document.querySelectorAll("#screen .btn.primary").length };
+    location.hash = "#/more"; await wait(250);
+    out.heroesTile = !!document.querySelector('#screen .more-tile[data-path="heroes"]');
+    location.hash = "#/heroes"; await wait(250);
+    out.heroesRoster = !!document.querySelector("#screen .char-list .char-row");
+    // cleanup
+    for (const ch of Store.listCharacters()) if (!keep.chars.includes(ch.id)) Store.deleteCharacter(ch.id);
+    if (keep.solo === null) localStorage.removeItem("invincible:solo"); else localStorage.setItem("invincible:solo", keep.solo);
+    if (keep.j === null) J.clearAll(); else localStorage.setItem("invincible:journal", keep.j);
+    if (before) Store.setActiveCharacter(before);
+    Settings.set("soloMode", wasSolo);
+    document.dispatchEvent(new CustomEvent("nav-refresh"));
+    location.hash = "#/home"; await wait(200);
+    void C;
+    return out;
+  });
+  const staleEsc = await page.evaluate(async () => {
+    const ui = await import("/src/ui.js");
+    ui.modal({ title: "Stale", body: "x", actions: [{ label: "A" }, { label: "B" }] });
+    await new Promise((r) => setTimeout(r, 50));
+    document.querySelectorAll(".modal-backdrop").forEach((m) => m.remove());
+    document.body.classList.remove("modal-open");
+    let heard = 0; const h = (e) => { if (e.key === "Escape") heard++; };
+    document.addEventListener("keydown", h);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    document.removeEventListener("keydown", h);
+    return heard;
+  });
+  ok("a dialog removed without closing no longer swallows Escape", staleEsc === 2, String(staleEsc));
+  ok("the Play button's quick build is legal every time (40 builds)", vn.illegal === 0, String(vn.illegal));
+  ok("cold Play switches Crisis Mode on, makes a hero and opens the story", vn.cold.solo && vn.cold.hash === "#/story" && vn.cold.active, JSON.stringify(vn.cold));
+  ok("the story is game mode: no tab bar, no resource bar", vn.gameMode);
+  ok("the stage shows one scene at a time", vn.scenes === 1, String(vn.scenes));
+  ok("choices are icon cards with their detail off screen", vn.cards);
+  ok("writing waits behind the balloon and lands as the scene", vn.writeClosed && vn.writeOpens && /Rain on the rooftops/.test(vn.sceneText), JSON.stringify([vn.writeClosed, vn.writeOpens, vn.sceneText]));
+  ok("the menu holds the story so far, the board, the dice guide and the rarer moves", vn.menuOpen && ["Story so far", "Timers & crises", "Which dice do I roll?", "Something else…"].every((l) => vn.menuItems.includes(l)), JSON.stringify(vn.menuItems));
+  ok("the story so far holds the session's beats, and Escape closes it", vn.backlog && vn.escape, JSON.stringify([vn.backlog, vn.escape, vn.modalLeft]));
+  ok("a waiting result is the scene; the choices return once it is answered", vn.pendingHides && vn.choicesBack, JSON.stringify([vn.pendingHides, vn.choicesBack]));
+  ok("damage to the hero shakes the screen", vn.hit);
+  ok("closing the session shows the issue-end splash; Next issue carries on", vn.splash && vn.next, JSON.stringify([vn.splash, vn.next]));
+  ok("leaving the story leaves game mode", vn.leftGame);
+  ok("Home with a hero is the cover and one button into the game, no roster", vn.home.cover && vn.home.play && !vn.home.roster && vn.home.primaries === 1, JSON.stringify(vn.home));
+  ok("the roster lives on Heroes & team, a More tile", vn.heroesTile && vn.heroesRoster, JSON.stringify([vn.heroesTile, vn.heroesRoster]));
 
   // The probe clicks every visible control on every route, which is minutes of work — too slow to
   // sit in front of every commit, and a suite people skip catches nothing. It is opt-in:
