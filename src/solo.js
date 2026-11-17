@@ -466,6 +466,15 @@ const diceRow = (faces) => el("div", { class: "dice-row" },
   ...faces.map((f) => el("span", { class: `die ${f === 6 ? "six" : f === 1 ? "one" : ""}`, text: String(f) })));
 
 function logEvent(state, text) {
+  // Resuming a paused crisis IS the start of the next sitting. Only an alert used to open a journal
+  // session, so after "Stop for tonight" every later beat landed unfiled and the story stage never
+  // moved off its cover. The closing line itself is written before the session ends, so it never
+  // reopens one.
+  if (!Journal.openSession() && !/^Session closed/.test(text)) {
+    const headline = state.alertParts?.headline || state.alert || "";
+    Journal.startSession(headline ? `${headline} (continued)` : "", Store.activeCharacter()?.id || null);
+    state.closed = false;
+  }
   state.log.unshift({ id: uid("log"), at: Date.now(), text, note: "" });
   state.log = state.log.slice(0, 60);
   // The crisis log stays as the at-a-glance view of the current crisis; the journal is the record.
